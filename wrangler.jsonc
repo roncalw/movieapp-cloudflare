@@ -13,6 +13,13 @@
 	"upload_source_maps": true,
 	"compatibility_flags": [
 		"nodejs_compat"
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "movieapp-test-db",
+			"database_id": "b888696a-acaf-4925-8c52-243146559175"
+		}
 	]
 	/**
 	 * Smart Placement
