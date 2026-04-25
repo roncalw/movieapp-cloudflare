@@ -1,0 +1,214 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1510" viewBox="0 0 1280 1510" role="img" aria-labelledby="title desc">
+  <title id="title">Cloudflare IMDb ratings queue import flow</title>
+  <desc id="desc">Diagram showing how manual HTTP testing and scheduled runs start the Worker, how the producer helper sends row batches to a Cloudflare Queue, how the queue handler writes those rows into D1, and a detailed left-to-right flow note at the bottom.</desc>
+  <defs>
+    <style>
+      .page { fill: #f7f9fc; }
+      .panel { fill: #ffffff; stroke: #d3dce8; stroke-width: 2; rx: 14; }
+      .box { fill: #ffffff; stroke: #46627f; stroke-width: 2; rx: 12; }
+      .box-blue { fill: #eaf4ff; stroke: #2563a9; stroke-width: 2; rx: 12; }
+      .box-green { fill: #eaf8ef; stroke: #2d7d46; stroke-width: 2; rx: 12; }
+      .box-gold { fill: #fff8e5; stroke: #a66a00; stroke-width: 2; rx: 12; }
+      .box-red { fill: #fff0f0; stroke: #a83d3d; stroke-width: 2; rx: 12; }
+      .label { fill: #172033; font-family: Arial, Helvetica, sans-serif; font-size: 18px; font-weight: 700; }
+      .text { fill: #273142; font-family: Arial, Helvetica, sans-serif; font-size: 15px; }
+      .small { fill: #3f4a5a; font-family: Arial, Helvetica, sans-serif; font-size: 13px; }
+      .mono { fill: #1f2937; font-family: Menlo, Consolas, monospace; font-size: 13px; }
+      .arrow { stroke: #334155; stroke-width: 2.4; fill: none; marker-end: url(#arrowhead); }
+      .note { fill: #ffffff; stroke: #c6cfdb; stroke-width: 1.5; rx: 10; }
+      .foot-panel { fill: #ffffff; stroke: #cfd8e3; stroke-width: 1.5; rx: 12; }
+      .foot-label { fill: #172033; font-family: Arial, Helvetica, sans-serif; font-size: 16px; font-weight: 700; }
+      .foot { fill: #334155; font-family: Arial, Helvetica, sans-serif; font-size: 12.5px; }
+      .foot-mono { fill: #1f2937; font-family: Menlo, Consolas, monospace; font-size: 11.3px; }
+    </style>
+    <marker id="arrowhead" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto">
+      <path d="M0,0 L12,4 L0,8 Z" fill="#334155" />
+    </marker>
+  </defs>
+
+  <rect class="page" x="0" y="0" width="1280" height="1510" />
+
+  <text class="label" x="18" y="42">*</text>
+  <text class="label" x="40" y="42">Cloudflare IMDb Ratings Import: producer, queue, consumer, and D1</text>
+  <text class="text" x="40" y="70">This diagram shows where the code lives in src/index.ts and how rows move from IMDb into the imdb_ratings table.</text>
+
+  <rect class="panel" x="34" y="95" width="1212" height="725" />
+
+  <!-- Entry points -->
+  <rect class="box-blue" x="70" y="135" width="275" height="115" />
+  <text class="label" x="92" y="164">Manual test kickoff</text>
+  <text class="text" x="92" y="190">Temporary admin HTTP route</text>
+  <text class="mono" x="92" y="216">GET /admin/import/...</text>
+  <text class="mono" x="92" y="235">enqueue-test?limit=330</text>
+
+  <rect class="box-blue" x="70" y="285" width="275" height="115" />
+  <text class="label" x="92" y="314">Recurring entry point</text>
+  <text class="text" x="92" y="340">Cloudflare Cron Trigger</text>
+  <text class="small" x="92" y="365">Runs later on the schedule</text>
+  <text class="small" x="92" y="385">we configure in wrangler.jsonc</text>
+
+  <rect class="box" x="395" y="135" width="255" height="115" />
+  <text class="label" x="418" y="164">Worker handler</text>
+  <text class="mono" x="418" y="192">fetch(request, env)</text>
+  <text class="small" x="418" y="220">Cloudflare calls this for</text>
+  <text class="small" x="418" y="239">HTTP requests.</text>
+
+  <rect class="box" x="395" y="285" width="255" height="115" />
+  <text class="label" x="418" y="314">Worker handler</text>
+  <text class="mono" x="418" y="342">scheduled(event, env)</text>
+  <text class="small" x="418" y="370">Cloudflare calls this when</text>
+  <text class="small" x="418" y="389">the Cron Trigger runs.</text>
+
+  <!-- Producer -->
+  <rect class="box-green" x="715" y="168" width="430" height="250" />
+  <text class="label" x="740" y="198">Producer role</text>
+  <text class="mono" x="740" y="225">enqueueImdbRatingRows(env, limit)</text>
+  <text class="small" x="740" y="252">This helper lives in src/index.ts.</text>
+  <text class="small" x="740" y="278">Called by fetch(...) during testing.</text>
+  <text class="small" x="740" y="301">Called by scheduled(...) later.</text>
+  <line x1="740" y1="320" x2="1120" y2="320" stroke="#9ab8a5" stroke-width="1" />
+  <text class="small" x="740" y="346">1. fetch IMDb gzip file</text>
+  <text class="small" x="740" y="369">2. DecompressionStream("gzip")</text>
+  <text class="small" x="740" y="392">3. parse TSV lines into rows</text>
+  <text class="small" x="740" y="415">4. group rows into batches</text>
+
+  <!-- Queue -->
+  <rect class="box-gold" x="390" y="490" width="500" height="145" />
+  <text class="label" x="418" y="520">Cloudflare Queue resource</text>
+  <text class="mono" x="418" y="548">movieapp-imdb-rating-import</text>
+  <text class="small" x="418" y="575">Temporary task storage managed by Cloudflare.</text>
+  <text class="small" x="418" y="599">Each message body contains one row batch.</text>
+  <text class="mono" x="418" y="623">{ rows: [33 IMDb rating rows] }</text>
+
+  <!-- Consumer -->
+  <rect class="box" x="70" y="685" width="390" height="120" />
+  <text class="label" x="94" y="715">Consumer role</text>
+  <text class="mono" x="94" y="742">queue(batch, env)</text>
+  <text class="small" x="94" y="768">This handler lives in src/index.ts.</text>
+  <text class="small" x="94" y="790">Cloudflare calls it when Queue messages are ready.</text>
+
+  <!-- D1 Insert -->
+  <rect class="box-red" x="540" y="685" width="320" height="120" />
+  <text class="label" x="564" y="715">D1 insert code</text>
+  <text class="mono" x="564" y="742">env.DB.prepare(...).bind(...).run()</text>
+  <text class="small" x="564" y="768">INSERT OR REPLACE rows</text>
+  <text class="small" x="564" y="790">33 rows * 3 values = 99 bound params</text>
+
+  <rect class="box-red" x="940" y="685" width="230" height="120" />
+  <text class="label" x="964" y="715">D1 table</text>
+  <text class="mono" x="964" y="742">imdb_ratings</text>
+  <text class="small" x="964" y="768">imdb_id</text>
+  <text class="small" x="964" y="789">average_rating, num_votes</text>
+
+  <!-- Notes -->
+  <rect class="note" x="905" y="458" width="275" height="150" />
+  <text class="label" x="929" y="488">Naming note</text>
+  <text class="small" x="929" y="514">producer and consumer are role labels.</text>
+  <text class="small" x="929" y="538">Cloudflare expects these handler names:</text>
+  <text class="small" x="929" y="561">fetch = HTTP requests</text>
+  <text class="small" x="929" y="583">scheduled = Cron runs</text>
+  <text class="small" x="929" y="605">queue = Queue consumer deliveries</text>
+
+  <!-- Arrows -->
+  <path class="arrow" d="M345 192 L395 192" />
+  <path class="arrow" d="M345 342 L395 342" />
+  <path class="arrow" d="M650 192 C675 192 688 225 715 225" />
+  <path class="arrow" d="M650 342 C675 342 688 302 715 302" />
+  <path class="arrow" d="M930 418 C930 462 780 462 780 490" />
+  <text class="small" x="792" y="458">sendBatch(...)</text>
+  <path class="arrow" d="M390 600 C270 600 270 650 270 685" />
+  <text class="small" x="198" y="640">Cloudflare delivers messages</text>
+  <path class="arrow" d="M460 745 L540 745" />
+  <path class="arrow" d="M860 745 L940 745" />
+
+  <!-- Footer -->
+  <text class="small" x="52" y="840">Main point: fetch(...) or scheduled(...) starts the producer helper; the Queue stores row-batch messages; queue(...) is the consumer handler that inserts into D1.</text>
+
+  <!-- Detailed flow -->
+  <rect class="panel" x="34" y="875" width="1212" height="600" />
+  <text class="foot-label" x="52" y="910">*</text>
+  <text class="foot-label" x="68" y="910">Detailed flow</text>
+  <text class="foot" x="68" y="932">Read left to right. This expands the temporary manual test path through the D1 write.</text>
+
+  <rect class="foot-panel" x="52" y="950" width="280" height="505" />
+  <text class="foot-label" x="70" y="980">1. Manual kickoff</text>
+  <text class="foot" x="70" y="1005">You manually open a temporary admin URL</text>
+  <text class="foot" x="70" y="1024">to start the test import.</text>
+  <text class="foot" x="70" y="1052">Deployed example:</text>
+  <text class="foot-mono" x="70" y="1074">https://your-worker-url</text>
+  <text class="foot-mono" x="70" y="1092">/admin/import/imdb-ratings/</text>
+  <text class="foot-mono" x="70" y="1110">enqueue-test?limit=330</text>
+  <text class="foot" x="70" y="1138">Local example:</text>
+  <text class="foot-mono" x="70" y="1160">http://localhost:8787</text>
+  <text class="foot-mono" x="70" y="1178">/admin/import/imdb-ratings/</text>
+  <text class="foot-mono" x="70" y="1196">enqueue-test?limit=330</text>
+  <text class="foot" x="70" y="1224">Opening that URL sends an HTTP GET</text>
+  <text class="foot" x="70" y="1243">request to the Worker.</text>
+  <text class="foot" x="70" y="1271">This is not a normal page view.</text>
+  <text class="foot" x="70" y="1290">It is a temporary manual trigger for</text>
+  <text class="foot" x="70" y="1309">server-side work.</text>
+
+  <rect class="foot-panel" x="348" y="950" width="280" height="505" />
+  <text class="foot-label" x="366" y="980">2. Cloudflare receives request</text>
+  <text class="foot" x="366" y="1005">Cloudflare receives that GET request</text>
+  <text class="foot" x="366" y="1024">and calls:</text>
+  <text class="foot-mono" x="366" y="1048">fetch(request, env)</text>
+  <text class="foot" x="366" y="1076">File:</text>
+  <text class="foot-mono" x="366" y="1098">src/index.ts</text>
+  <text class="foot" x="366" y="1126">fetch(...) is the main HTTP handler</text>
+  <text class="foot" x="366" y="1145">for this Worker.</text>
+  <text class="foot" x="366" y="1173">It checks the request path to decide</text>
+  <text class="foot" x="366" y="1192">which code path should run.</text>
+  <text class="foot" x="366" y="1220">Example paths:</text>
+  <text class="foot-mono" x="366" y="1242">/movies</text>
+  <text class="foot-mono" x="366" y="1260">/admin/import/imdb-ratings/</text>
+  <text class="foot-mono" x="366" y="1278">enqueue-test</text>
+  <text class="foot" x="366" y="1306">If the admin test path matches,</text>
+  <text class="foot" x="366" y="1325">fetch(...) calls:</text>
+  <text class="foot-mono" x="366" y="1347">enqueueImdbRatingRows(env, limit)</text>
+
+  <rect class="foot-panel" x="644" y="950" width="280" height="505" />
+  <text class="foot-label" x="662" y="980">3. Producer reads IMDb and enqueues</text>
+  <text class="foot-mono" x="662" y="1008">enqueueImdbRatingRows(env, limit)</text>
+  <text class="foot" x="662" y="1036">Helper in:</text>
+  <text class="foot-mono" x="662" y="1058">src/index.ts</text>
+  <text class="foot" x="662" y="1086">What it does:</text>
+  <text class="foot" x="662" y="1108">1. downloads the IMDb gzip file</text>
+  <text class="foot" x="662" y="1127">2. decompresses the file</text>
+  <text class="foot" x="662" y="1146">3. parses the TSV lines</text>
+  <text class="foot" x="662" y="1165">4. skips the header row</text>
+  <text class="foot" x="662" y="1184">5. reads imdb_id, average_rating,</text>
+  <text class="foot" x="662" y="1203">   and num_votes</text>
+  <text class="foot" x="662" y="1222">6. groups rows into small batches</text>
+  <text class="foot" x="662" y="1250">This plan starts with 33 rows per batch.</text>
+  <text class="foot" x="662" y="1278">Each batch is sent to Queue resource:</text>
+  <text class="foot-mono" x="662" y="1300">movieapp-imdb-rating-import</text>
+  <text class="foot" x="662" y="1328">That Queue was created earlier and</text>
+  <text class="foot" x="662" y="1347">connected to this Worker in wrangler.jsonc.</text>
+  <text class="foot" x="662" y="1375">The Worker then returns a small</text>
+  <text class="foot" x="662" y="1394">confirmation response.</text>
+  <text class="foot-mono" x="662" y="1418">{ ok: true, message: "IMDb enqueue" }</text>
+
+  <rect class="foot-panel" x="940" y="950" width="280" height="505" />
+  <text class="foot-label" x="958" y="980">4. Queue messages are written to D1</text>
+  <text class="foot" x="958" y="1005">Cloudflare stores the row batches in</text>
+  <text class="foot-mono" x="958" y="1027">movieapp-imdb-rating-import</text>
+  <text class="foot" x="958" y="1055">Because wrangler.jsonc configures this</text>
+  <text class="foot" x="958" y="1074">Worker as a Queue consumer, Cloudflare</text>
+  <text class="foot" x="958" y="1093">later invokes:</text>
+  <text class="foot-mono" x="958" y="1115">queue(batch, env)</text>
+  <text class="foot" x="958" y="1143">queue(...) is a sibling handler to</text>
+  <text class="foot" x="958" y="1162">fetch(...) and scheduled(...)</text>
+  <text class="foot" x="958" y="1190">in:</text>
+  <text class="foot-mono" x="958" y="1212">src/index.ts</text>
+  <text class="foot" x="958" y="1240">queue(...) reads rows from each message</text>
+  <text class="foot" x="958" y="1259">and writes them into D1 using:</text>
+  <text class="foot-mono" x="958" y="1281">env.DB.prepare(...).bind(...).run()</text>
+  <text class="foot" x="958" y="1309">Each row uses 3 bound values:</text>
+  <text class="foot" x="958" y="1328">imdb_id, average_rating, num_votes</text>
+  <text class="foot" x="958" y="1356">33 rows x 3 values = 99 bound params</text>
+  <text class="foot" x="958" y="1375">Final write target:</text>
+  <text class="foot-mono" x="958" y="1397">imdb_ratings</text>
+  <text class="foot" x="958" y="1425">Naming rule: fetch = HTTP, scheduled =</text>
+  <text class="foot" x="958" y="1444">Cron, queue = Queue consumer handler.</text>
+</svg>
