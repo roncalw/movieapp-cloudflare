@@ -1,5 +1,4 @@
--- Migration number: 0002 	 2026-04-23T23:05:04.839Z
---
+-- Migration number: 0001 	 2026-04-26T22:22:00.081Z
 -- IMDb ratings staging table.
 --
 -- This table stores rows from IMDb's title.ratings.tsv file.
@@ -12,8 +11,8 @@
 -- without changing the final app-facing movie_list_items table shape.
 CREATE TABLE IF NOT EXISTS imdb_ratings_staging (
   imdb_id TEXT PRIMARY KEY,
-  average_rating REAL NOT NULL,
-  num_votes INTEGER NOT NULL,
+  average_rating REAL,
+  num_votes INTEGER,
   imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -23,11 +22,25 @@ CREATE TABLE IF NOT EXISTS imdb_ratings_staging (
 -- final movie list table.
 --
 -- tmdb_id is the TMDB movie id.
--- imdb_id is the external IMDb id that lets us join to imdb_ratings.
+-- imdb_id is the external IMDb id that lets us join to imdb_ratings_staging.
 -- us_certification supports the current MovieApp Rating filter.
 --
 -- poster_path is preferred over storing the full image URL because TMDB
 -- image base URLs and sizes can be selected later by the API/app.
+--
+-- imdb_id is an indexed join key here.
+-- It is not a FOREIGN KEY to imdb_ratings_staging.
+--
+-- Why not:
+--   1. some TMDB movies may not have an IMDb id
+--   2. some TMDB movies may not have a matching IMDb ratings row yet
+--   3. the TMDB load and IMDb load can run independently
+--
+-- The final movie_list_items build is made faster by indexes:
+--   imdb_ratings_staging.imdb_id  -> already indexed by PRIMARY KEY
+--   tmdb_movies_staging.imdb_id   -> indexed below
+--
+-- The foreign key constraint itself would not make the final join faster.
 CREATE TABLE IF NOT EXISTS tmdb_movies_staging (
   tmdb_id INTEGER PRIMARY KEY,
   imdb_id TEXT,
@@ -100,24 +113,41 @@ CREATE TABLE IF NOT EXISTS movie_watch_providers (
 --
 -- It is intentionally narrow.
 -- It is not meant to replace the full movie detail query.
+--
+-- Only promote TMDB movies into this table when there is a matching row in
+-- imdb_ratings_staging.
+--
+-- That means:
+--   imdb_rating
+--   imdb_vote_count
+--
+-- can still be nullable here.
+--
+-- poster_path and release_date are also nullable because TMDB can return
+-- catalog rows that do not have those values yet.
 CREATE TABLE IF NOT EXISTS movie_list_items (
   tmdb_id INTEGER PRIMARY KEY,
   title TEXT NOT NULL,
-  poster_path TEXT NOT NULL,
-  release_date TEXT NOT NULL,
+  poster_path TEXT,
+  release_date TEXT,
   us_certification TEXT,
-  imdb_rating REAL NOT NULL,
-  imdb_vote_count INTEGER NOT NULL,
+  imdb_rating REAL,
+  imdb_vote_count INTEGER,
   popularity REAL NOT NULL DEFAULT 0,
   last_refreshed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Index for sorting by IMDb rating.
+-- Index for the main IMDb sort used by the final movie list.
 --
--- This supports:
---   ORDER BY imdb_rating DESC
-CREATE INDEX IF NOT EXISTS idx_movie_list_items_imdb_rating
-ON movie_list_items (imdb_rating DESC);
+-- Most list queries sort like this:
+--   ORDER BY imdb_rating DESC, imdb_vote_count DESC
+--
+-- A composite index matches that sort better than a rating-only index.
+--
+-- It also still helps with rating-first scans because imdb_rating is the
+-- left-most column in the index.
+CREATE INDEX IF NOT EXISTS idx_movie_list_items_imdb_sort
+ON movie_list_items (imdb_rating DESC, imdb_vote_count DESC);
 
 -- Index for IMDb vote-count threshold filtering.
 --
@@ -194,3 +224,12 @@ ON movie_watch_providers (region, provider_id, tmdb_id);
 -- Index for joining IMDb ratings to TMDB movies by IMDb id.
 CREATE INDEX IF NOT EXISTS idx_tmdb_movies_staging_imdb_id
 ON tmdb_movies_staging (imdb_id);
+
+-- Index for the recurring TMDB refresh cursor.
+--
+-- The weekly TMDB refresh reads:
+--   MAX(release_date)
+--
+-- on tmdb_movies_staging to decide where the next incremental load begins.
+CREATE INDEX IF NOT EXISTS idx_tmdb_movies_staging_release_date
+ON tmdb_movies_staging (release_date DESC);

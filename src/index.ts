@@ -84,6 +84,153 @@ type MovieRow = {
 };
 
 /*
+	This is the remote IMDb gzip file we want Cloudflare to read during the
+	dry-run test.
+
+	Step 4 only proves Cloudflare can fetch, unzip, and parse this file.
+	It does not insert anything into D1 yet.
+*/
+const IMDB_RATINGS_URL = "https://datasets.imdbws.com/title.ratings.tsv.gz";
+
+/*
+	This dry-run sample size matches the later planned queue batch size.
+
+	It is only for the sample we keep in memory and send back in the test
+	response. It does not limit how many rows the helper can process overall.
+*/
+const IMDB_SAMPLE_SIZE = 33;
+
+/*
+	This type describes one parsed row from the IMDb ratings file.
+
+	The TSV columns are:
+
+		tconst
+		averageRating
+		numVotes
+
+	We rename them into the field names we want to use in Worker code:
+
+		imdb_id
+		average_rating
+		num_votes
+
+	The rating and vote count are nullable because your later plan allows a
+	matching IMDb row to exist even if one of those values is blank.
+*/
+type ImdbRatingRow = {
+	imdb_id: string;
+	average_rating: number | null;
+	num_votes: number | null;
+};
+
+/*
+	This helper does the Step 4 dry-run read.
+
+	It:
+
+		1. downloads the IMDb gzip file
+		2. streams the unzip process instead of loading the whole file at once
+		3. reads TSV lines one chunk at a time
+		4. returns a small sample instead of writing anything to D1
+
+	The limit parameter says how many data rows to read before stopping.
+*/
+async function dryRunReadImdbRatings(limit: number) {
+	const response = await fetch(IMDB_RATINGS_URL);
+
+	if (!response.ok || !response.body) {
+		throw new Error(`IMDb download failed with status ${response.status}.`);
+	}
+
+	const decompressedStream = response.body.pipeThrough(
+		new DecompressionStream("gzip"),
+	);
+	const reader = decompressedStream.getReader();
+	const decoder = new TextDecoder();
+
+	let buffer = "";
+	let headerSkipped = false;
+	let rowsRead = 0;
+	const firstRows: ImdbRatingRow[] = [];
+	const lastRows: ImdbRatingRow[] = [];
+
+	while (rowsRead < limit) {
+		const { value, done } = await reader.read();
+
+		if (done) {
+			break;
+		}
+
+		/*
+			Convert the latest binary chunk into text and keep appending it to
+			the unfinished text we already had in buffer.
+		*/
+		buffer += decoder.decode(value, { stream: true });
+
+		const lines = buffer.split("\n");
+
+		/*
+			The last item may be a partial line if the chunk ended in the middle
+			of a row, so keep that piece in buffer for the next loop.
+		*/
+		buffer = lines.pop() ?? "";
+
+		for (const line of lines) {
+			if (!headerSkipped) {
+				headerSkipped = true;
+				continue;
+			}
+
+			if (!line.trim()) {
+				continue;
+			}
+
+			const [imdb_id, averageRating, numVotes] = line.split("\t");
+
+			const parsedRow: ImdbRatingRow = {
+				imdb_id,
+				average_rating: averageRating === "" ? null : Number(averageRating),
+				num_votes: numVotes === "" ? null : Number(numVotes),
+			};
+
+			/*
+				Only keep a bounded sample in memory:
+
+					1. the first IMDB_SAMPLE_SIZE rows we ever see
+					2. the most recent IMDB_SAMPLE_SIZE rows we have seen so far
+
+				This lets the Worker process a large limit without also keeping all
+				parsed rows in RAM.
+			*/
+			if (firstRows.length < IMDB_SAMPLE_SIZE) {
+				firstRows.push(parsedRow);
+			}
+
+			lastRows.push(parsedRow);
+
+			if (lastRows.length > IMDB_SAMPLE_SIZE) {
+				lastRows.shift();
+			}
+
+			rowsRead += 1;
+
+			if (rowsRead >= limit) {
+				break;
+			}
+		}
+	}
+
+	await reader.cancel();
+
+	return {
+		rowsRead,
+		firstRows,
+		lastRows,
+	};
+}
+
+/*
 	This helper makes JSON HTTP responses.
 
 	Response.json(...) is the shorter built-in version. This helper does
@@ -560,6 +707,23 @@ export default {
 				{ error: "Only GET requests are supported." },
 				{ status: 405, headers: { allow: "GET" } },
 			);
+		}
+
+		/*
+			This temporary admin route is the Step 4 dry-run test.
+
+			Example:
+
+				/admin/import/imdb-ratings/dry-run?limit=10000
+
+			It reads a limited number of rows from the remote IMDb file and
+			returns sample JSON so we can prove Cloudflare can process the file
+			before we build the real D1 import.
+		*/
+		if (url.pathname === "/admin/import/imdb-ratings/dry-run") {
+			const limit = Number(url.searchParams.get("limit") ?? 10000);
+			const result = await dryRunReadImdbRatings(limit);
+			return Response.json(result);
 		}
 
 		/*

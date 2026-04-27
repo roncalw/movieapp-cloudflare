@@ -136,7 +136,7 @@
   <rect class="final" x="120" y="1060" width="360" height="130" rx="18"/>
   <text class="box-title" x="145" y="1100">movie_list_items</text>
   <text class="box-text" x="145" y="1135">Built from tmdb_movies_staging</text>
-  <text class="box-text" x="145" y="1159">joined to imdb_ratings_staging</text>
+  <text class="box-text" x="145" y="1159">INNER JOIN imdb_ratings_staging</text>
 
   <rect class="final" x="620" y="1060" width="360" height="130" rx="18"/>
   <text class="box-title" x="645" y="1100">movie_genres</text>
@@ -184,5 +184,5 @@
   <text class="step" x="1040" y="1222">Steps 13-14</text>
 
   <text class="label" x="890" y="790">secondary enrichment updates the same tmdb_id row</text>
-  <text class="label" x="860" y="1020">join on imdb_id / tconst</text>
+  <text class="label" x="840" y="1020">inner join on imdb_id / tconst</text>
 </svg>

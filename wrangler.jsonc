@@ -14,11 +14,46 @@
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
+	"limits": {
+		"cpu_ms": 300000
+	},
+	/**
+	 * These D1 entries describe the remote Cloudflare databases attached to this Worker.
+	 *
+	 * They are not the local D1 database files that Wrangler creates under:
+	 *   .wrangler/state/v3/d1
+	 *
+	 * For local work, Wrangler creates the local database state automatically.
+	 * You do not directly control the local database file name here.
+	 *
+	 * However, even for local migrations, you still have to specify the database
+	 * in commands like:
+	 *   wrangler d1 migrations apply movieapp-db --local
+	 *
+	 * Because Wrangler uses the database name in that command to decide which configured
+	 * database entry you mean. That matters in projects that can have more than
+	 * one D1 database, because Wrangler needs to know which migration set should
+	 * be applied for that database.
+	 *
+	 * If a project had two D1 databases, the migration files would usually be split
+	 * into different folders so each database has its own migration history.
+	 *
+	 * Example shape:
+	 *   migrations/
+	 *     movieapp-db/
+	 *       0001_create_movie_list_schema.sql
+	 *     analytics-db/
+	 *       0001_create_analytics_tables.sql
+	 *
+	 * Then each migration command would point Wrangler at the correct database
+	 * name, and Wrangler would apply the migration files for that database's
+	 * migration folder.
+	 */
 	"d1_databases": [
 		{
 			"binding": "DB",
-			"database_name": "movieapp-test-db",
-			"database_id": "b888696a-acaf-4925-8c52-243146559175"
+			"database_name": "movieapp-db",
+			"database_id": "bfd8c900-38f6-41e2-afcf-37772b5249a2"
 		}
 	]
 	/**

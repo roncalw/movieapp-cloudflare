@@ -9,15 +9,15 @@
 - [Search Page Field Audit](#search-page-field-audit)
 - [Implementation Steps](#implementation-steps)
   - Migration Strategy
-    - [ ] [Step 0: Migration Strategy](#step-0-migration-strategy)
+    - [X] [Step 0: Migration Strategy](#step-0-migration-strategy) - <span class="diagram">DIAGRAM</span>
   - Database Setup
-    - [ ] [Step 1: Create The Migration File](#step-1-create-the-migration-file)
-    - [ ] [Step 2: Paste The Database SQL](#step-2-paste-the-database-sql)
-    - [ ] [Step 3: Apply The Migration](#step-3-apply-the-migration)
+    - [X] [Step 1: Create The Migration File](#step-1-create-the-migration-file)
+    - [X] [Step 2: Paste The Database SQL](#step-2-paste-the-database-sql)
+    - [X] [Step 3: Apply The Migration](#step-3-apply-the-migration)
   - IMDb Stream Proof
     - [ ] [Step 4: Prove Cloudflare Can Stream Read The IMDb File](#step-4-prove-cloudflare-can-stream-read-the-imdb-file)
   - IMDb Setup And Load Into Staging
-    - [ ] [Step 5: Plan The IMDb Queue Job](#step-5-plan-the-imdb-queue-job)
+    - [ ] [Step 5: DB Workflow IMDb Queue Job](#step-5-db-workflow-imdb-queue-job) - <span class="diagram">DIAGRAM</span>
     - [ ] [Step 6: Wire Up The IMDb Queue](#step-6-wire-up-the-imdb-queue)
     - [ ] [Step 7: Load The IMDb Ratings Staging Table](#step-7-load-the-imdb-ratings-staging-table)
   - TMDB Setup And Load Into Staging
@@ -400,8 +400,15 @@ TMDB movie enrichment API
 -> writes movie_watch_providers child rows
 
 Then:
-tmdb_movies_staging + imdb_ratings_staging -> movie_list_items
+tmdb_movies_staging
+INNER JOIN imdb_ratings_staging on imdb_id / tconst
+-> movie_list_items
 ```
+
+The diagram below shows the full source-to-staging-to-final-table flow:
+
+![Migration strategy flow](assets/movieapp-migration-strategy-flow.svg)
+
 
 The TMDB side has two different execution modes:
 
@@ -443,10 +450,6 @@ So the final real-time query surface is three end tables:
 `movie_list_items` is the parent movie row.
 
 `movie_genres` and `movie_watch_providers` are the child filter tables that repeat `tmdb_id` when one movie has many genres or many providers.
-
-The diagram below shows the full source-to-staging-to-final-table flow:
-
-![Migration strategy flow](/Users/croncallo/repo/MovieApp-Cloudflare/.codex/assets/movieapp-migration-strategy-flow.svg)
 
 <a id="phase-1-create-the-migration-file"></a>
 ## Step 1: Create The Migration File
@@ -512,8 +515,8 @@ DROP TABLE
 -- without changing the final app-facing movie_list_items table shape.
 CREATE TABLE IF NOT EXISTS imdb_ratings_staging (
   imdb_id TEXT PRIMARY KEY,
-  average_rating REAL NOT NULL,
-  num_votes INTEGER NOT NULL,
+  average_rating REAL,
+  num_votes INTEGER,
   imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -615,14 +618,14 @@ CREATE TABLE IF NOT EXISTS movie_watch_providers (
 -- It is intentionally narrow.
 -- It is not meant to replace the full movie detail query.
 --
--- Keep all accepted TMDB movies in this table, even when IMDb data is
--- missing for some rows.
+-- Only promote TMDB movies into this table when there is a matching row in
+-- imdb_ratings_staging.
 --
 -- That means:
 --   imdb_rating
 --   imdb_vote_count
 --
--- are nullable here.
+-- can still be nullable here.
 --
 -- poster_path and release_date are also nullable because TMDB can return
 -- catalog rows that do not have those values yet.
@@ -745,7 +748,7 @@ ON tmdb_movies_staging (release_date DESC);
 npm run db:migrate:local
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Confirm that the local tables exist.</div>
+<div><span class="ooo">[</span> X  <span class="ooo">]</span> Confirm that the local tables exist.</div>
 
 ```bash
 npx wrangler d1 execute movieapp-test-db --local --command "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;"
@@ -761,13 +764,13 @@ movie_watch_providers
 tmdb_movies_staging
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Apply the same migration to remote D1 before testing Cloudflare-side imports.</div>
+<div><span class="ooo">[</span> X  <span class="ooo">]</span> Apply the same migration to remote D1 before testing Cloudflare-side imports.</div>
 
 ```bash
 npm run db:migrate:remote
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Confirm that the remote tables exist.</div>
+<div><span class="ooo">[</span> X  <span class="ooo">]</span> Confirm that the remote tables exist.</div>
 
 ```bash
 npx wrangler d1 execute movieapp-test-db --remote --command "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;"
@@ -850,7 +853,7 @@ The route name means:
 <a id="phase-4b-add-the-helper-code"></a>
 ### Step 4B: Add The Helper Code
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> In `src/index.ts`, paste this helper code below your type definitions and above the `export default { ... }` Worker object.</div>
+<div><span class="ooo">[</span> X  <span class="ooo">]</span> In `src/index.ts`, paste this helper code below your type definitions and above the `export default { ... }` Worker object.</div>
 
 Do not paste this inside the `fetch(...)` function.
 
@@ -871,8 +874,8 @@ const IMDB_RATINGS_URL = "https://datasets.imdbws.com/title.ratings.tsv.gz";
 
 type ImdbRatingRow = {
   imdb_id: string;
-  average_rating: number;
-  num_votes: number;
+  average_rating: number | null;
+  num_votes: number | null;
 };
 
 async function dryRunReadImdbRatings(limit: number) {
@@ -946,8 +949,8 @@ async function dryRunReadImdbRatings(limit: number) {
 
       sampleRows.push({
         imdb_id,
-        average_rating: Number(averageRating),
-        num_votes: Number(numVotes),
+        average_rating: averageRating === "" ? null : Number(averageRating),
+        num_votes: numVotes === "" ? null : Number(numVotes),
       });
 
       rowsRead += 1;
@@ -987,7 +990,7 @@ Inside `fetch(...)`, you should already have this line:
 const url = new URL(request.url);
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Add the temporary dry-run route after that `url` line and before the normal `/movies` route logic.</div>
+<div><span class="ooo">[</span> X  <span class="ooo">]</span> Add the temporary dry-run route after that `url` line and before the normal `/movies` route logic.</div>
 
 ```ts
 if (url.pathname === "/admin/import/imdb-ratings/dry-run") {
@@ -1013,7 +1016,7 @@ Open a VS Code terminal in the Cloudflare repo:
 /Users/croncallo/repo/MovieApp-Cloudflare
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Run the local Worker dev server.</div>
+<div><span class="ooo">[</span> X  <span class="ooo">]</span> Run the local Worker dev server.</div>
 
 ```bash
 npm run dev
@@ -1072,7 +1075,7 @@ rowsRead should equal the limit you asked for.
 <a id="phase-4e-deploy-and-test-on-cloudflare"></a>
 ### Step 4E: Deploy And Test On Cloudflare
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> After the local dev-server test works, deploy the Worker.</div>
+<div><span class="ooo">[</span> X  <span class="ooo">]</span> After the local dev-server test works, deploy the Worker.</div>
 
 ```bash
 npm run deploy
@@ -1091,13 +1094,13 @@ This proves Cloudflare's deployed Worker runtime can fetch, stream-decompress, a
 <a id="phase-4f-try-a-larger-limit"></a>
 ### Step 4F: Try A Larger Limit
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> If `limit=10000` works, try:</div>
+<div><span class="ooo">[</span> X  <span class="ooo">]</span> If `limit=10000` works, try:</div>
 
 ```text
 https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/dry-run?limit=100000
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Then try:</div>
+<div><span class="ooo">[</span>  X <span class="ooo">]</span> Then try:</div>
 
 ```text
 https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/dry-run?limit=500000
@@ -1110,7 +1113,7 @@ It only proves whether Cloudflare can keep streaming and parsing larger parts of
 <a id="phase-4g-pass-or-fail-decision"></a>
 ### Step 4G: Pass Or Fail Decision
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Decide whether this step passed before continuing.</div>
+<div><span class="ooo">[</span> X <span class="ooo">]</span> Decide whether this step passed before continuing.</div>
 
 Pass condition:
 
@@ -1126,8 +1129,8 @@ Cloudflare cannot stream/decompress/parse even a limited row count reliably.
 
 If this fails, do not continue to D1 import work until the Cloudflare-side file processing problem is solved.
 
-<a id="phase-5-plan-the-imdb-queue-job"></a>
-## Step 5: Plan The IMDb Queue Job
+<a id="step-5-db-workflow-imdb-queue-job"></a>
+## Step 5: DB Workflow IMDb Queue Job
 
 This is a planning step only. There is no implementation work in this step and nothing to check off. Its purpose is to explain why the IMDb load uses Cloudflare's advanced
 features before you start wiring them up in Step 6.
@@ -1821,8 +1824,8 @@ async function enqueueImdbRatingRows(env: Env, limit?: number) {
 
       batch.push({
         imdb_id,
-        average_rating: Number(averageRating),
-        num_votes: Number(numVotes),
+        average_rating: averageRating === "" ? null : Number(averageRating),
+        num_votes: numVotes === "" ? null : Number(numVotes),
       });
 
       rowsSeen += 1;
@@ -2457,16 +2460,25 @@ The name means:
 one row = one movie item that can appear in the MovieApp list/search results
 ```
 
-Use a `LEFT JOIN` here on purpose.
+Use an `INNER JOIN` here on purpose.
 
-That keeps the TMDB movie row even when `imdb_ratings_staging` does not have a
-matching IMDb row yet.
-
-When there is no IMDb match yet:
+That means the final table only keeps TMDB rows that have a matching row in
+`imdb_ratings_staging`.
 
 ```text
-imdb_rating      -> NULL
-imdb_vote_count  -> NULL
+tmdb movie has matching imdb_id / tconst row:
+  keep it
+
+tmdb movie has no matching imdb_id / tconst row:
+  skip it
+```
+
+Important:
+
+```text
+matching IMDb row required
+rating value itself not required
+vote-count value itself not required
 ```
 
 <div><span class="ooo">[</span>   <span class="ooo">]</span> For a small proof, run this manually against remote D1:</div>
@@ -2495,7 +2507,7 @@ SELECT
   COALESCE(t.popularity, 0),
   CURRENT_TIMESTAMP
 FROM tmdb_movies_staging t
-LEFT JOIN imdb_ratings_staging i
+INNER JOIN imdb_ratings_staging i
   ON i.imdb_id = t.imdb_id
 ;
 "
@@ -2639,8 +2651,11 @@ Example URLs:
 }
 ```
 
-If a TMDB movie does not have an IMDb match yet, the response can still return
-that movie with:
+This endpoint reads `movie_list_items`, so it only returns TMDB movies that
+already have a matching IMDb staging row.
+
+If the matching IMDb staging row exists but its rating or vote count is blank,
+the response can still return:
 
 ```json
 {
