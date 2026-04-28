@@ -55,7 +55,23 @@
 			"database_name": "movieapp-db",
 			"database_id": "bfd8c900-38f6-41e2-afcf-37772b5249a2"
 		}
-	]
+	],
+	"queues": {
+		"producers": [
+			{
+				"binding": "IMDB_RATING_QUEUE",
+				"queue": "movieapp-imdb-rating-import-queue"
+			}
+		],
+		"consumers": [
+			{
+				"queue": "movieapp-imdb-rating-import-queue",
+				"max_batch_size": 100,
+				"max_batch_timeout": 10,
+				"max_retries": 5
+			}
+		]
+	}
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

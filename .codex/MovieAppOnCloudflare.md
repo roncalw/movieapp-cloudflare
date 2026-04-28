@@ -15,10 +15,10 @@
     - [X] [Step 2: Paste The Database SQL](#step-2-paste-the-database-sql)
     - [X] [Step 3: Apply The Migration](#step-3-apply-the-migration)
   - IMDb Stream Proof
-    - [ ] [Step 4: Prove Cloudflare Can Stream Read The IMDb File](#step-4-prove-cloudflare-can-stream-read-the-imdb-file)
+    - [X] [Step 4: Prove Cloudflare Can Stream Read The IMDb File](#step-4-prove-cloudflare-can-stream-read-the-imdb-file)
   - IMDb Setup And Load Into Staging
-    - [ ] [Step 5: DB Workflow IMDb Queue Job](#step-5-db-workflow-imdb-queue-job) - <span class="diagram">DIAGRAM</span>
-    - [ ] [Step 6: Wire Up The IMDb Queue](#step-6-wire-up-the-imdb-queue)
+    - [X] [Step 5: DB Workflow IMDb Queue Job](#step-5-db-workflow-imdb-queue-job) - <span class="diagram">DIAGRAM</span>
+    - [X] [Step 6: Wire Up The IMDb Queue](#step-6-wire-up-the-imdb-queue)
     - [ ] [Step 7: Load The IMDb Ratings Staging Table](#step-7-load-the-imdb-ratings-staging-table)
   - TMDB Setup And Load Into Staging
     - [ ] [Step 8: Add The TMDB API Token As A Secret](#step-8-add-the-tmdb-api-token-as-a-secret)
@@ -166,20 +166,20 @@ Cloudflare Worker repo:
 Current Cloudflare D1 database:
 
 ```text
-database_name: movieapp-test-db
+database_name: movieapp-db
 binding: DB
 ```
 
 Current Cloudflare repo scripts already include:
 
 ```json
-"db:migration:create": "wrangler d1 migrations create movieapp-test-db",
-"db:migrate:local": "wrangler d1 migrations apply movieapp-test-db --local",
-"db:seed:local": "wrangler d1 execute movieapp-test-db --local --file seed/seed-test-movies.sql",
-"db:query:local": "wrangler d1 execute movieapp-test-db --local --command \"SELECT * FROM movies ORDER BY id LIMIT 5;\"",
-"db:migrate:remote": "wrangler d1 migrations apply movieapp-test-db --remote",
-"db:seed:remote": "wrangler d1 execute movieapp-test-db --remote --file seed/seed-test-movies.sql",
-"db:query:remote": "wrangler d1 execute movieapp-test-db --remote --command \"SELECT * FROM movies ORDER BY id LIMIT 5;\""
+"db:migration:create": "wrangler d1 migrations create movieapp-db",
+"db:migrate:local": "wrangler d1 migrations apply movieapp-db --local",
+"db:seed:local": "wrangler d1 execute movieapp-db --local --file seed/seed-test-movies.sql",
+"db:query:local": "wrangler d1 execute movieapp-db --local --command \"SELECT * FROM movies ORDER BY id LIMIT 5;\"",
+"db:migrate:remote": "wrangler d1 migrations apply movieapp-db --remote",
+"db:seed:remote": "wrangler d1 execute movieapp-db --remote --file seed/seed-test-movies.sql",
+"db:query:remote": "wrangler d1 execute movieapp-db --remote --command \"SELECT * FROM movies ORDER BY id LIMIT 5;\""
 ```
 
 ## Important Data Sources
@@ -751,7 +751,7 @@ npm run db:migrate:local
 <div><span class="ooo">[</span> X  <span class="ooo">]</span> Confirm that the local tables exist.</div>
 
 ```bash
-npx wrangler d1 execute movieapp-test-db --local --command "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;"
+npx wrangler d1 execute movieapp-db --local --command "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;"
 ```
 
 Expected table names should include:
@@ -773,7 +773,7 @@ npm run db:migrate:remote
 <div><span class="ooo">[</span> X  <span class="ooo">]</span> Confirm that the remote tables exist.</div>
 
 ```bash
-npx wrangler d1 execute movieapp-test-db --remote --command "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;"
+npx wrangler d1 execute movieapp-db --remote --command "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;"
 ```
 
 <a id="phase-4-prove-cloudflare-can-stream-read-the-imdb-file"></a>
@@ -1151,7 +1151,7 @@ Now that Cloudflare can read the file, how should Cloudflare save about 1.6M row
 Recommended plan:
 
 ```text
-Cron Trigger or manual test route
+Manual initial route to Cron Job
 -> producer reads the IMDb file
 -> producer groups rows into small batches
 -> producer sends row batches to a Cloudflare Queue
@@ -1192,7 +1192,7 @@ Task buffer:
 Handler names Cloudflare expects:
   fetch(...)
     Cloudflare calls this when an HTTP request reaches the Worker.
-    In this plan, fetch(...) is the manual test entry point.
+    In this plan, fetch(...) is the manual entry point.
 
   scheduled(...)
     Cloudflare calls this when a Cron Trigger fires.
@@ -1210,11 +1210,14 @@ Producer role:
     Cloudflare does not call a special producer(...) handler.
     One of our real handlers calls this helper instead:
 
-    during testing:
-      fetch(...) calls enqueueImdbRatingRows(...)
+    during manual kickoff:
+      if fetch(...) sees the manual IMDb enqueue path
+      /admin/import/imdb-ratings/enqueue-manual
+      then that matching route block calls enqueueImdbRatingRows(...)
 
     during the recurring job:
-      scheduled(...) calls enqueueImdbRatingRows(...)
+      when the Cron Trigger fires, Cloudflare calls scheduled(...)
+      and the scheduled(...) job block calls enqueueImdbRatingRows(...)
 
     Step 4 proved Cloudflare can:
       fetch the IMDb file
@@ -1377,27 +1380,145 @@ Consumer path:
   succeeds or retries independently
 ```
 
-Important Cloudflare limits:
+Important Cloudflare limits - Free subscription:
 
 ```text
-Worker memory:
-  128 MB
+Workers plan:
+  Free
+  $0
+  For personal use and simple applications
 
-Cron Trigger wall time:
-  15 minutes
+MovieApp calls to Cloudflare Worker:
+  Plain meaning:
+    Each MovieApp search, page change, or detail request calls a Worker endpoint.
+    Example: GET /movies/search?page=3&pageSize=20 is 1 Workers request.
 
-Queue consumer wall time:
-  15 minutes
+  Workers & Pages Functions requests:
+    Up to 100,000 per day (UTC+0)
 
-D1 queries per Worker invocation:
-  Free: 50
-  Paid: 1000
+  Workers & Pages Functions CPU time:
+    10 ms per invocation
 
-D1 bound parameters per query:
-  100
+  Worker memory:
+    128 MB
 
-Cloudflare Queue message size:
-  128 KB
+D1 queries the Worker is allowed to run while answering one app request:
+  D1 queries per Worker invocation:
+    50
+    One MovieApp request can cause the Worker to ask D1 for data.
+    On the Free plan, that one Worker run can ask D1 up to 50 times.
+
+  D1 bound parameters per query:
+    100
+
+  D1 daily usage included:
+    Up to 5 million rows read per day
+    Up to 100,000 rows written per day
+    5 GB total storage
+
+Background import jobs:
+  Cron Trigger wall time:
+    15 minutes
+
+  Queue consumer wall time:
+    15 minutes
+
+  Cloudflare Queue message size:
+    128 KB
+
+  Cloudflare Queue operations:
+    Up to 10,000 operations per day
+
+  Cloudflare Queue message retention:
+    24 hours, non-configurable
+```
+
+Important Cloudflare limits - Paid subscription:
+
+```text
+Workers plan:
+  Paid
+  $5 per month plus additional usage
+  For business use and scaling applications
+
+MovieApp calls to Cloudflare Worker:
+  Plain meaning:
+    Each MovieApp search, page change, or detail request calls a Worker endpoint.
+    Example: GET /movies/search?page=3&pageSize=20 is 1 Workers request.
+
+  Workers & Pages Functions requests:
+    10 million included per month
+    + $0.30 per additional million requests
+    No hard request cap like Free; overage becomes billable usage
+
+  Workers & Pages Functions CPU time:
+    30 million CPU milliseconds included per month
+    + $0.02 per additional million CPU milliseconds
+    HTTP requests: default 30 seconds, configurable up to 5 minutes
+
+  Worker memory:
+    128 MB
+
+D1 queries the Worker is allowed to run while answering one app request:
+  D1 queries per Worker invocation:
+    1000
+    One MovieApp request can cause the Worker to ask D1 for data.
+    On the Paid plan, that one Worker run can ask D1 up to 1000 times.
+
+  D1 bound parameters per query:
+    100
+
+  MovieApp search example:
+    User opens page 3 of search results in MovieApp.
+    App request:
+      GET /movies/search?page=3&pageSize=20
+
+    Best shape:
+      1 Workers request from the app
+      1 D1 query to fetch the 20 movie rows
+      optional 1 extra D1 query to fetch total count / total pages
+
+    Expected D1 query count:
+      usually 1 or 2 D1 queries
+
+    Bad shape:
+      1 Workers request from the app
+      20 D1 queries, one query for each movie row
+
+    What 1000 is not:
+      not 1000 users
+      not 1000 movies
+      not 1000 app searches per day
+      not 1000 monthly requests
+
+  D1 monthly usage included:
+    First 25 billion rows read per month included
+    + $0.001 per additional million rows read
+    First 50 million rows written per month included
+    + $1.00 per additional million rows written
+    First 5 GB storage included
+    + $0.75 per GB-month
+
+Background import jobs:
+  Cron Trigger wall time:
+    15 minutes
+
+  Queue consumer wall time:
+    15 minutes
+
+  Cron Triggers and Queue Consumers CPU time:
+    Up to 15 minutes CPU per invocation
+
+  Cloudflare Queue message size:
+    128 KB
+
+  Cloudflare Queue operations:
+    1 million operations included per month
+    + $0.40 per additional million operations
+    Operations are counted per 64 KB written, read, or deleted
+
+  Cloudflare Queue message retention:
+    4 days by default, configurable up to 14 days
 ```
 
 Row shape:
@@ -1421,15 +1542,6 @@ Starting batch size:
 ```
 
 Tune this later only after you have real D1 timing.
-
-Plan decision:
-
-```text
-Workers Free is probably too small for the full recurring IMDb job because:
-  1. Workers Free has much smaller CPU limits
-  2. D1 Free has 100,000 rows written per day
-  3. the IMDb ratings file has about 1.6M rows
-```
 
 The paid Workers plan is the realistic starting point for this recurring import design.
 
@@ -1489,7 +1601,9 @@ Consumer side:
   the Worker receives those row batches from the Queue and writes them to D1
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Create the Cloudflare Queue resource.</div>
+Create the Cloudflare Queue resource.
+
+This command creates the real Queue resource in your Cloudflare account.
 
 Run it from the Cloudflare repo terminal:
 
@@ -1497,16 +1611,57 @@ Run it from the Cloudflare repo terminal:
 /Users/croncallo/repo/MovieApp-Cloudflare
 ```
 
-Run:
+<div><span class="ooo">[</span> X  <span class="ooo">]</span> Create the Queue - Run:
 
 ```bash
-npx wrangler queues create movieapp-imdb-rating-import
+npx wrangler queues create movieapp-imdb-rating-import-queue
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> After the Queue exists in Cloudflare, connect it to this Worker by editing:</div>
+This creates the Queue itself (only in the remote, not locally), but it does not automatically edit your Worker project.
+
+That is intentional.
+
+Cloudflare can have:
 
 ```text
-/Users/croncallo/repo/MovieApp-Cloudflare/wrangler.jsonc
+many Queues
+many Workers
+many environments
+```
+
+Creating a Queue only says:
+
+```text
+this Queue exists in the Cloudflare account, to see the Queue, run the following command:
+```
+<div><span class="ooo">[</span> X  <span class="ooo">]</span> Validate the Queue - Run:
+
+```bash
+npx wrangler queues list
+```
+
+
+It does not tell Cloudflare:
+
+```text
+which Worker is allowed to send messages to it
+which Worker should receive messages from it
+what env property name the Worker code should use
+what batch size or retry behavior this Worker wants
+```
+
+Those Worker-specific decisions belong in this repo's `wrangler.jsonc`.
+
+Now that the queue exists in Cloudflare, we will connect it to this Worker by editing the wrangler.jsonc file in the next section, but 1st some context:
+
+For this Queue, `wrangler.jsonc` must say two things:
+
+```text
+1. Producer binding:
+   let this Worker send messages to movieapp-imdb-rating-import-queue
+
+2. Consumer binding:
+   deliver messages from movieapp-imdb-rating-import-queue back to this Worker
 ```
 
 <a id="phase-6a-what-the-imdb-queue-binding-does"></a>
@@ -1516,16 +1671,69 @@ Creating the Queue in Cloudflare is not enough by itself.
 
 The Worker code also needs a way to access that Queue.
 
+In this repo, "the Worker" means the Cloudflare Worker program whose entry file is:
+
+```text
+/Users/croncallo/repo/MovieApp-Cloudflare/src/index.ts
+```
+
+The whole `MovieApp-Cloudflare` folder is the Worker project.
+
+The main code Cloudflare runs is `src/index.ts`.
+
+Other files support that Worker:
+
+```text
+wrangler.jsonc
+  tells Cloudflare which resources this Worker connects to
+
+package.json
+  gives local commands such as npm run dev and npm test
+
+migrations/
+  contains D1 database schema changes
+```
+
 That connection is called a Queue binding.
 
 In plain English:
 
 ```text
 Queue resource:
-  the real Cloudflare Queue named movieapp-imdb-rating-import
+  the real Cloudflare Queue named movieapp-imdb-rating-import-queue
 
 Queue binding:
   the name your Worker code uses to talk to that Queue
+```
+
+The Queue resource name and the Worker code name are different on purpose:
+
+```text
+Cloudflare Queue resource name:
+  movieapp-imdb-rating-import-queue
+
+Worker code binding name:
+  IMDB_RATING_QUEUE
+```
+
+The resource name is the actual Queue in Cloudflare.
+
+The binding name is the property that appears inside Worker code:
+
+```ts
+env.IMDB_RATING_QUEUE
+```
+
+So when Worker code calls:
+
+```ts
+await env.IMDB_RATING_QUEUE.sendBatch(...);
+```
+
+Cloudflare knows that `IMDB_RATING_QUEUE` means:
+
+```text
+send these messages to the Queue named movieapp-imdb-rating-import-queue
 ```
 
 The producer binding gives Worker code a property on `env`:
@@ -1557,7 +1765,7 @@ Open:
 /Users/croncallo/repo/MovieApp-Cloudflare/wrangler.jsonc
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Find the existing `d1_databases` section.</div>
+Find the existing `d1_databases` section.
 
 Right now it looks like this:
 
@@ -1565,15 +1773,59 @@ Right now it looks like this:
 "d1_databases": [
   {
     "binding": "DB",
-    "database_name": "movieapp-test-db",
-    "database_id": "b888696a-acaf-4925-8c52-243146559175"
+    "database_name": "movieapp-db",
+    "database_id": "bfd8c900-38f6-41e2-afcf-37772b5249a2"
   }
 ]
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Add a comma after the closing `]`, then add the `queues` section after it.</div>
+That section connects the Worker to D1.
 
-The important punctuation is:
+Now add a second top-level section named `queues`.
+
+This new `queues` section connects the same Worker to the Cloudflare Queue.
+
+<div><span class="ooo">[</span> X  <span class="ooo">]</span> Change the end of the `d1_databases` section from this:</div>
+
+```jsonc
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "movieapp-db",
+      "database_id": "bfd8c900-38f6-41e2-afcf-37772b5249a2"
+    }
+  ]
+```
+
+To this:
+
+```jsonc
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "movieapp-db",
+      "database_id": "bfd8c900-38f6-41e2-afcf-37772b5249a2"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "IMDB_RATING_QUEUE",
+        "queue": "movieapp-imdb-rating-import-queue"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "movieapp-imdb-rating-import-queue",
+        "max_batch_size": 100,
+        "max_batch_timeout": 10,
+        "max_retries": 5
+      }
+    ]
+  }
+```
+
+The important punctuation change is the comma after the `d1_databases` closing bracket:
 
 ```text
 ],
@@ -1582,7 +1834,16 @@ The important punctuation is:
 }
 ```
 
-The result should look like this:
+Why that comma matters:
+
+```text
+d1_databases and queues are sibling top-level settings.
+
+JSON/JSONC needs a comma between sibling settings.
+Without that comma, wrangler.jsonc will not parse.
+```
+
+The relevant part of the final file should look like this:
 
 ```jsonc
 {
@@ -1600,20 +1861,20 @@ The result should look like this:
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "movieapp-test-db",
-      "database_id": "b888696a-acaf-4925-8c52-243146559175"
+      "database_name": "movieapp-db",
+      "database_id": "bfd8c900-38f6-41e2-afcf-37772b5249a2"
     }
   ],
   "queues": {
     "producers": [
       {
         "binding": "IMDB_RATING_QUEUE",
-        "queue": "movieapp-imdb-rating-import"
+        "queue": "movieapp-imdb-rating-import-queue"
       }
     ],
     "consumers": [
       {
-        "queue": "movieapp-imdb-rating-import",
+        "queue": "movieapp-imdb-rating-import-queue",
         "max_batch_size": 100,
         "max_batch_timeout": 10,
         "max_retries": 5
@@ -1622,33 +1883,107 @@ The result should look like this:
   }
 }
 ```
-
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Do not remove the existing `d1_databases` section.</div>
+Do not remove the existing `d1_databases` section.
 
 You are adding `queues` as another top-level config section next to `d1_databases`.
 
 <a id="phase-6c-what-each-imdb-queue-config-part-means"></a>
 ### Step 6C: What Each IMDb Queue Config Part Means
 
+Important current-code note:
+
+```text
+src/index.ts currently has the IMDb dry-run helper:
+  dryRunReadImdbRatings(...)
+
+src/index.ts does not yet have the real Queue producer helper:
+  enqueueImdbRatingRows(...)
+
+src/index.ts does not yet have the Queue consumer handler:
+  queue(batch, env)
+
+This Step 6 config prepares the Worker for those next code additions.
+```
+
+There are two jobs involved in the Queue flow:
+
+```text
+Producer job:
+  reads IMDb rows
+  packages rows into Queue messages
+  sends those messages into the Queue
+
+Consumer job:
+  receives Queue messages later
+  writes the rows from those messages into D1
+```
+
+In this project, both jobs live in the same Worker codebase.
+
+That is why the same `wrangler.jsonc` file needs both `producers` and `consumers`.
+
+#### Producers
+
 ```jsonc
 "producers": [
   {
     "binding": "IMDB_RATING_QUEUE",
-    "queue": "movieapp-imdb-rating-import"
+    "queue": "movieapp-imdb-rating-import-queue"
   }
 ]
 ```
 
-Means:
+Plain meaning:
 
 ```text
-Inside Worker code, env.IMDB_RATING_QUEUE points to the Cloudflare Queue named movieapp-imdb-rating-import.
+Connect this Worker to the Queue named:
+
+  movieapp-imdb-rating-import-queue
+
+Inside Worker code, expose that Queue as:
+
+  env.IMDB_RATING_QUEUE
 ```
+
+That is not a normal variable we create with `const`.
+
+Cloudflare creates `env.IMDB_RATING_QUEUE` at runtime because `wrangler.jsonc` contains this producer binding.
+
+Why the Worker needs this:
+
+```text
+The future IMDb producer helper will live in src/index.ts.
+It will probably be named enqueueImdbRatingRows(...).
+
+That helper will read rows from the IMDb file.
+Every 33 rows, it will create a Queue message.
+Then it will call env.IMDB_RATING_QUEUE.sendBatch(...).
+```
+
+Plain flow:
+
+```text
+src/index.ts receives an admin request
+-> fetch(...) route matches /admin/import/imdb-ratings/enqueue-manual
+-> fetch(...) calls enqueueImdbRatingRows(env, limit)
+-> enqueueImdbRatingRows(...) reads IMDb rows
+-> enqueueImdbRatingRows(...) sends row batches to env.IMDB_RATING_QUEUE
+-> Cloudflare stores those messages in movieapp-imdb-rating-import-queue
+```
+
+Without this producer binding:
+
+```text
+env.IMDB_RATING_QUEUE would not exist in Worker code,
+so the Worker would have no way to send IMDb row batches into the Queue.
+```
+
+#### Consumers
 
 ```jsonc
 "consumers": [
   {
-    "queue": "movieapp-imdb-rating-import",
+    "queue": "movieapp-imdb-rating-import-queue",
     "max_batch_size": 100,
     "max_batch_timeout": 10,
     "max_retries": 5
@@ -1656,10 +1991,37 @@ Inside Worker code, env.IMDB_RATING_QUEUE points to the Cloudflare Queue named m
 ]
 ```
 
-Means:
+Plain meaning:
 
 ```text
-When movieapp-imdb-rating-import has messages, Cloudflare should send them to this Worker.
+When the Queue named movieapp-imdb-rating-import-queue has messages,
+Cloudflare should deliver those messages back to this Worker.
+```
+
+Why the Worker needs this:
+
+```text
+The Queue is only temporary task storage.
+It does not write to D1 by itself.
+
+The consumer config tells Cloudflare:
+  "When messages are waiting in this Queue, call this Worker's queue(...) handler."
+```
+
+That future Worker handler will look conceptually like this:
+
+```ts
+async queue(batch, env) {
+  // read row batches from batch.messages
+  // insert those rows into env.DB
+}
+```
+
+Without this consumer config:
+
+```text
+messages could be sent into the Queue,
+but this Worker would not be registered as the code that processes them.
 ```
 
 `max_batch_size: 100` means:
@@ -1689,9 +2051,11 @@ Each message becomes one D1 INSERT.
 That is intended for the paid-plan D1 invocation limit.
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> If testing on the free plan, use a smaller consumer batch size first.</div>
+If testing on the free plan, use a smaller consumer batch size first.
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Add a Cron Trigger later, after the dry-run and queue consumer both work:</div>
+Add the Cron Trigger only after the manual Queue import path is working:
+  1. the manual enqueue endpoint sends IMDb row batches to the Queue
+  2. the Queue consumer writes those batches into D1
 
 ```jsonc
 {
@@ -1721,13 +2085,14 @@ This is still the IMDb side of the pipeline.
 
 Do not switch to TMDB yet.
 
-After the dry-run endpoint works and the Queue wiring is in place, add the real queue producer and queue consumer.
+After the manual Queue import path is working and the Queue wiring is in place, add the real queue producer and queue consumer.
 
 The producer reads the IMDb file and sends small row batches to the Queue.
 
 The consumer receives those row batches and writes them to D1.
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Add these types:</div>
+Step 7A
+<div><span class="ooo">[</span> X <span class="ooo">]</span> Add these types:</div>
 
 ```ts
 type ImdbRatingQueueMessage = {
@@ -1740,7 +2105,9 @@ export interface Env extends Cloudflare.Env {
 }
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Add the producer helper:</div>
+Step 7B
+
+<div><span class="ooo">[</span> X  <span class="ooo">]</span> Add the producer helper:</div>
 
 ```ts
 const IMDB_QUEUE_ROWS_PER_MESSAGE = 33;
@@ -1850,17 +2217,21 @@ async function enqueueImdbRatingRows(env: Env, limit?: number) {
 }
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Add the temporary endpoint to enqueue a small test:</div>
+Step 7C
+
+<div><span class="ooo">[</span> X  <span class="ooo">]</span> Add the temporary endpoint to enqueue a small manual kickoff:</div>
 
 ```ts
-if (url.pathname === "/admin/import/imdb-ratings/enqueue-test") {
+if (url.pathname === "/admin/import/imdb-ratings/enqueue-manual") {
   const limit = Number(url.searchParams.get("limit") ?? 330);
   const result = await enqueueImdbRatingRows(env, limit);
   return Response.json(result);
 }
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Add the queue consumer:</div>
+Step 7D
+
+<div><span class="ooo">[</span> X  <span class="ooo">]</span> Add the queue consumer:</div>
 
 ```ts
 export default {
@@ -1924,7 +2295,29 @@ Important:
 Do not start by importing all 1.6M IMDb rows.
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Start with these test sizes:</div>
+Step 7E
+
+This is the first step that actually runs the Queue import path.
+
+Do it in two stages:
+
+```text
+1. local first
+2. remote after local works
+```
+
+Why:
+
+```text
+Local first proves the code path works without touching the real remote D1 data.
+Remote second proves the deployed Cloudflare path can write to the real D1 database.
+```
+
+Start with small limits.
+
+Do not start by importing the full IMDb file.
+
+Test sizes:
 
 ```text
 330 rows
@@ -1933,17 +2326,282 @@ Do not start by importing all 1.6M IMDb rows.
 then decide whether to run the full job
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Call this test endpoint:</div>
+Important:
 
 ```text
-/admin/import/imdb-ratings/enqueue-test?limit=330
+The import uses INSERT OR REPLACE by imdb_id.
+
+That means you do not need to delete rows between these test sizes.
+
+If you run limit=330 first, then limit=3300 later:
+  the first 330 rows are replaced/updated
+  the next 2,970 rows are added
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Confirm that remote D1 received rows:</div>
+### Step 7E-1: Test Locally First
+
+Open terminal 1 in the Cloudflare repo:
 
 ```bash
-npx wrangler d1 execute movieapp-test-db --remote --command "SELECT COUNT(*) AS rating_count FROM imdb_ratings_staging;"
+cd /Users/croncallo/repo/MovieApp-Cloudflare
 ```
+
+<div><span class="ooo">[</span> X  <span class="ooo">]</span> Start the local Worker:
+
+```bash
+npm run dev
+```
+
+Leave that terminal running.
+
+Open terminal 2 in the same repo:
+
+```bash
+cd /Users/croncallo/repo/MovieApp-Cloudflare
+```
+
+<div><span class="ooo">[</span> X  <span class="ooo">]</span> Call the local manual enqueue endpoint:
+
+```bash
+curl "http://localhost:8787/admin/import/imdb-ratings/enqueue-manual?limit=330"
+```
+
+Expected response shape:
+
+```json
+{
+  "rowsSeen": 330,
+  "rowsQueued": 330
+}
+```
+
+<div><span class="ooo">[</span> X  <span class="ooo">]</span> Confirm local D1 received rows:
+
+```bash
+npx wrangler d1 execute movieapp-db --local --command "SELECT COUNT(*) AS rating_count FROM imdb_ratings_staging;"
+```
+
+Expected count:
+
+```text
+330
+```
+
+<div><span class="ooo">[</span> X  <span class="ooo">]</span> Then try the next local size:
+
+```bash
+curl "http://localhost:8787/admin/import/imdb-ratings/enqueue-manual?limit=3300"
+```
+
+<div><span class="ooo">[</span> X  <span class="ooo">]</span> Confirm local D1 count again:
+
+```bash
+npx wrangler d1 execute movieapp-db --local --command "SELECT COUNT(*) AS rating_count FROM imdb_ratings_staging;"
+```
+
+Expected count:
+
+```text
+3300
+```
+
+If local fails:
+
+```text
+Stop here.
+Fix local before deploying or touching remote D1.
+```
+
+### Step 7E-2: Test Remote After Local Works
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> Deploy the Worker:
+
+```bash
+npm run deploy
+```
+
+Call the deployed manual enqueue endpoint.
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> Use your deployed Worker URL:
+
+```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual?limit=330"
+```
+
+Expected response shape:
+
+```json
+{
+  "rowsSeen": 330,
+  "rowsQueued": 330
+}
+```
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> Confirm remote D1 received rows:
+
+```bash
+npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS rating_count FROM imdb_ratings_staging;"
+```
+
+Expected count:
+
+```text
+330
+```
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> Then try the next remote size:
+
+```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual?limit=3300"
+```
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> Confirm remote D1 count again:
+
+```bash
+npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS rating_count FROM imdb_ratings_staging;"
+```
+
+*Expected count:
+
+```text
+3300
+```
+
+
+*Important Queue timing note:
+
+```text
+rowsQueued means the producer Worker successfully placed rows into Cloudflare Queue messages.
+It does not mean the Queue consumer has already inserted every row into D1.
+
+The Queue consumer keeps running after the enqueue request returns.
+So the D1 count can be lower at first, then climb as Cloudflare delivers Queue messages to the consumer.
+
+This importer puts 33 IMDb rows in each Queue message.
+If D1 shows 2904 rows, that means 88 Queue messages have already been inserted:
+
+88 messages x 33 rows = 2904 D1 rows
+```
+Important Queue timing note:
+
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> Only after the small remote tests pass, consider:
+
+```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual?limit=33000"
+```
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> Then check:
+
+```bash
+npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS rating_count FROM imdb_ratings_staging;"
+```
+
+Expected count:
+
+```text
+33000
+```
+
+Stop before the full IMDb file unless:
+
+```text
+local 330 works
+local 3300 works
+remote 330 works
+remote 3300 works
+remote 33000 works
+Cloudflare Worker logs show no Queue retry or D1 write errors
+```
+
+### Step 7F: Monitor The Queue Load
+
+After running a large enqueue command, there are two separate things happening:
+
+```text
+1. Producer:
+   the HTTP endpoint reads the IMDb file and places row batches into the Queue
+
+2. Consumer:
+   Cloudflare later calls the Worker's queue(...) handler to insert those batches into D1
+```
+
+The curl response only proves the producer finished.
+
+Example:
+
+```json
+{
+  "rowsSeen": 1665567,
+  "rowsQueued": 1665567
+}
+```
+
+That means the rows were placed into Queue messages.
+
+It does not mean D1 has already inserted every row.
+
+Watch live Worker events from the terminal:
+
+```bash
+npx wrangler tail
+```
+
+Expected healthy Queue consumer lines look like this:
+
+```text
+Queue movieapp-imdb-rating-import-queue (100 messages) - Ok
+```
+
+Plain meaning:
+
+```text
+Cloudflare delivered a batch of 100 Queue messages to this Worker's queue(...) handler.
+The handler finished successfully for that batch.
+```
+
+Because this importer puts 33 IMDb rows in each Queue message:
+
+```text
+100 Queue messages x 33 rows = about 3300 D1 rows per successful consumer batch
+```
+
+Also keep checking the remote D1 count:
+
+```bash
+npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS rating_count FROM imdb_ratings_staging;"
+```
+
+For the full IMDb ratings file, the expected final count is the `rowsSeen` value from the full enqueue response.
+
+Dashboard places to watch:
+
+```text
+Queue backlog:
+  Cloudflare Dashboard
+  -> Build
+  -> Compute
+  -> Queues
+  -> movieapp-imdb-rating-import-queue
+
+  Watch:
+    Messages queued
+    Average backlog
+    Average lag time
+
+Worker logs:
+  Cloudflare Dashboard
+  -> Build
+  -> Compute
+  -> Workers & Pages
+  -> movieapp-cloudflare
+  -> Observability
+  -> Logs / Real-time logs
+```
+
+Use the dashboard Queue metrics for backlog and lag.
+
+Use `npx wrangler tail` or the Worker dashboard logs to see whether the Queue consumer batches are succeeding or throwing errors.
 
 At this point, the IMDb side has a real Cloudflare path into D1.
 
@@ -2166,10 +2824,10 @@ refresh that same-date boundary again
 
 That protects the refresh from missing movies that share the same release date.
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Start with an admin test endpoint:</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Start with an admin manual endpoint:</div>
 
 ```text
-/admin/import/tmdb/load-test?limit=100&beginDate=2000-01-01&endDate=2000-12-31
+/admin/import/tmdb/load-manual?limit=100&beginDate=2000-01-01&endDate=2000-12-31
 ```
 
 <div><span class="ooo">[</span>   <span class="ooo">]</span> The first Cloudflare primary-load version should do all of this:</div>
@@ -2484,7 +3142,7 @@ vote-count value itself not required
 <div><span class="ooo">[</span>   <span class="ooo">]</span> For a small proof, run this manually against remote D1:</div>
 
 ```bash
-npx wrangler d1 execute movieapp-test-db --remote --command "
+npx wrangler d1 execute movieapp-db --remote --command "
 INSERT OR REPLACE INTO movie_list_items (
   tmdb_id,
   title,
@@ -2538,13 +3196,13 @@ Workflow steps if we choose Cloudflare Workflows later
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Confirm the final row count:</div>
 
 ```bash
-npx wrangler d1 execute movieapp-test-db --remote --command "SELECT COUNT(*) AS movie_list_count FROM movie_list_items;"
+npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS movie_list_count FROM movie_list_items;"
 ```
 
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Preview the best IMDb-rated rows:</div>
 
 ```bash
-npx wrangler d1 execute movieapp-test-db --remote --command "SELECT tmdb_id, title, imdb_rating, imdb_vote_count, release_date, us_certification FROM movie_list_items ORDER BY imdb_rating DESC, imdb_vote_count DESC LIMIT 20;"
+npx wrangler d1 execute movieapp-db --remote --command "SELECT tmdb_id, title, imdb_rating, imdb_vote_count, release_date, us_certification FROM movie_list_items ORDER BY imdb_rating DESC, imdb_vote_count DESC LIMIT 20;"
 ```
 
 <a id="phase-11-test-genre-filtering"></a>
@@ -2559,7 +3217,7 @@ npx wrangler d1 execute movieapp-test-db --remote --command "SELECT tmdb_id, tit
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Run this example query for one genre:</div>
 
 ```bash
-npx wrangler d1 execute movieapp-test-db --remote --command "
+npx wrangler d1 execute movieapp-db --remote --command "
 SELECT
   m.tmdb_id,
   m.title,
@@ -2588,7 +3246,7 @@ LIMIT 20;
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Run this example query for one provider:</div>
 
 ```bash
-npx wrangler d1 execute movieapp-test-db --remote --command "
+npx wrangler d1 execute movieapp-db --remote --command "
 SELECT
   m.tmdb_id,
   m.title,
@@ -2954,19 +3612,19 @@ Verification:
 <div><span class="ooo">[</span>   <span class="ooo">]</span> After each scale step, check the IMDb rating count:</div>
 
 ```bash
-npx wrangler d1 execute movieapp-test-db --remote --command "SELECT COUNT(*) AS rating_count FROM imdb_ratings_staging;"
+npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS rating_count FROM imdb_ratings_staging;"
 ```
 
 <div><span class="ooo">[</span>   <span class="ooo">]</span> After each scale step, check the TMDB staging count:</div>
 
 ```bash
-npx wrangler d1 execute movieapp-test-db --remote --command "SELECT COUNT(*) AS tmdb_count FROM tmdb_movies_staging;"
+npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS tmdb_count FROM tmdb_movies_staging;"
 ```
 
 <div><span class="ooo">[</span>   <span class="ooo">]</span> After each scale step, check the final movie list count:</div>
 
 ```bash
-npx wrangler d1 execute movieapp-test-db --remote --command "SELECT COUNT(*) AS movie_list_count FROM movie_list_items;"
+npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS movie_list_count FROM movie_list_items;"
 ```
 
 Cloudflare monitoring:
@@ -3056,7 +3714,7 @@ IMDb path:
 TMDB path:
 
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Add the TMDB API token locally and in Cloudflare.</div>
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Build the Cloudflare TMDB movie-list load test endpoint.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Build the Cloudflare TMDB movie-list load endpoint for manual kickoff.</div>
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Load a small TMDB sample into remote D1.</div>
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Run the one-time manual TMDB historical backfill in date windows.</div>
 
@@ -3112,19 +3770,19 @@ npm run db:query:remote
 List local tables:
 
 ```bash
-npx wrangler d1 execute movieapp-test-db --local --command "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;"
+npx wrangler d1 execute movieapp-db --local --command "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;"
 ```
 
 List remote tables:
 
 ```bash
-npx wrangler d1 execute movieapp-test-db --remote --command "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;"
+npx wrangler d1 execute movieapp-db --remote --command "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;"
 ```
 
 Get the current TMDB release-date cursor:
 
 ```bash
-npx wrangler d1 execute movieapp-test-db --remote --command "SELECT MAX(release_date) AS max_release_date FROM tmdb_movies_staging;"
+npx wrangler d1 execute movieapp-db --remote --command "SELECT MAX(release_date) AS max_release_date FROM tmdb_movies_staging;"
 ```
 
 <a id="phase-19-data-usage-notes"></a>

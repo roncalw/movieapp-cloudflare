@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1510" viewBox="0 0 1280 1510" role="img" aria-labelledby="title desc">
   <title id="title">Cloudflare IMDb ratings queue import flow</title>
-  <desc id="desc">Diagram showing how manual HTTP testing and scheduled runs start the Worker, how the producer helper sends row batches to a Cloudflare Queue, how the queue handler writes those rows into D1, and a detailed left-to-right flow note at the bottom.</desc>
+  <desc id="desc">Diagram showing how manual HTTP kickoff and scheduled runs start the Worker, how the producer helper sends row batches to a Cloudflare Queue, how the queue handler writes those rows into D1, and a detailed left-to-right flow note at the bottom.</desc>
   <defs>
     <style>
       .page { fill: #f7f9fc; }
@@ -36,10 +36,10 @@
 
   <!-- Entry points -->
   <rect class="box-blue" x="70" y="135" width="275" height="115" />
-  <text class="label" x="92" y="164">Manual test kickoff</text>
+  <text class="label" x="92" y="164">Manual kickoff</text>
   <text class="text" x="92" y="190">Temporary admin HTTP route</text>
   <text class="mono" x="92" y="216">GET /admin/import/...</text>
-  <text class="mono" x="92" y="235">enqueue-test?limit=330</text>
+  <text class="mono" x="92" y="235">enqueue-manual?limit=330</text>
 
   <rect class="box-blue" x="70" y="285" width="275" height="115" />
   <text class="label" x="92" y="314">Recurring entry point</text>
@@ -64,7 +64,7 @@
   <text class="label" x="740" y="198">Producer role</text>
   <text class="mono" x="740" y="225">enqueueImdbRatingRows(env, limit)</text>
   <text class="small" x="740" y="252">This helper lives in src/index.ts.</text>
-  <text class="small" x="740" y="278">Called by fetch(...) during testing.</text>
+  <text class="small" x="740" y="278">Called by fetch(...) during manual kickoff.</text>
   <text class="small" x="740" y="301">Called by scheduled(...) later.</text>
   <line x1="740" y1="320" x2="1120" y2="320" stroke="#9ab8a5" stroke-width="1" />
   <text class="small" x="740" y="346">1. fetch IMDb gzip file</text>
@@ -75,7 +75,7 @@
   <!-- Queue -->
   <rect class="box-gold" x="390" y="490" width="500" height="145" />
   <text class="label" x="418" y="520">Cloudflare Queue resource</text>
-  <text class="mono" x="418" y="548">movieapp-imdb-rating-import</text>
+  <text class="mono" x="418" y="548">movieapp-imdb-rating-import-queue</text>
   <text class="small" x="418" y="575">Temporary task storage managed by Cloudflare.</text>
   <text class="small" x="418" y="599">Each message body contains one row batch.</text>
   <text class="mono" x="418" y="623">{ rows: [33 IMDb rating rows] }</text>
@@ -128,20 +128,20 @@
   <rect class="panel" x="34" y="875" width="1212" height="600" />
   <text class="foot-label" x="52" y="910">*</text>
   <text class="foot-label" x="68" y="910">Detailed flow</text>
-  <text class="foot" x="68" y="932">Read left to right. This expands the temporary manual test path through the D1 write.</text>
+  <text class="foot" x="68" y="932">Read left to right. This expands the temporary manual kickoff path through the D1 write.</text>
 
   <rect class="foot-panel" x="52" y="950" width="280" height="505" />
   <text class="foot-label" x="70" y="980">1. Manual kickoff</text>
   <text class="foot" x="70" y="1005">You manually open a temporary admin URL</text>
-  <text class="foot" x="70" y="1024">to start the test import.</text>
+  <text class="foot" x="70" y="1024">to start the manual import.</text>
   <text class="foot" x="70" y="1052">Deployed example:</text>
   <text class="foot-mono" x="70" y="1074">https://your-worker-url</text>
   <text class="foot-mono" x="70" y="1092">/admin/import/imdb-ratings/</text>
-  <text class="foot-mono" x="70" y="1110">enqueue-test?limit=330</text>
+  <text class="foot-mono" x="70" y="1110">enqueue-manual?limit=330</text>
   <text class="foot" x="70" y="1138">Local example:</text>
   <text class="foot-mono" x="70" y="1160">http://localhost:8787</text>
   <text class="foot-mono" x="70" y="1178">/admin/import/imdb-ratings/</text>
-  <text class="foot-mono" x="70" y="1196">enqueue-test?limit=330</text>
+  <text class="foot-mono" x="70" y="1196">enqueue-manual?limit=330</text>
   <text class="foot" x="70" y="1224">Opening that URL sends an HTTP GET</text>
   <text class="foot" x="70" y="1243">request to the Worker.</text>
   <text class="foot" x="70" y="1271">This is not a normal page view.</text>
@@ -162,8 +162,8 @@
   <text class="foot" x="366" y="1220">Example paths:</text>
   <text class="foot-mono" x="366" y="1242">/movies</text>
   <text class="foot-mono" x="366" y="1260">/admin/import/imdb-ratings/</text>
-  <text class="foot-mono" x="366" y="1278">enqueue-test</text>
-  <text class="foot" x="366" y="1306">If the admin test path matches,</text>
+  <text class="foot-mono" x="366" y="1278">enqueue-manual</text>
+  <text class="foot" x="366" y="1306">If the admin manual path matches,</text>
   <text class="foot" x="366" y="1325">fetch(...) calls:</text>
   <text class="foot-mono" x="366" y="1347">enqueueImdbRatingRows(env, limit)</text>
 
@@ -182,7 +182,7 @@
   <text class="foot" x="662" y="1222">6. groups rows into small batches</text>
   <text class="foot" x="662" y="1250">This plan starts with 33 rows per batch.</text>
   <text class="foot" x="662" y="1278">Each batch is sent to Queue resource:</text>
-  <text class="foot-mono" x="662" y="1300">movieapp-imdb-rating-import</text>
+  <text class="foot-mono" x="662" y="1300">movieapp-imdb-rating-import-queue</text>
   <text class="foot" x="662" y="1328">That Queue was created earlier and</text>
   <text class="foot" x="662" y="1347">connected to this Worker in wrangler.jsonc.</text>
   <text class="foot" x="662" y="1375">The Worker then returns a small</text>
@@ -192,7 +192,7 @@
   <rect class="foot-panel" x="940" y="950" width="280" height="505" />
   <text class="foot-label" x="958" y="980">4. Queue messages are written to D1</text>
   <text class="foot" x="958" y="1005">Cloudflare stores the row batches in</text>
-  <text class="foot-mono" x="958" y="1027">movieapp-imdb-rating-import</text>
+  <text class="foot-mono" x="958" y="1027">movieapp-imdb-rating-import-queue</text>
   <text class="foot" x="958" y="1055">Because wrangler.jsonc configures this</text>
   <text class="foot" x="958" y="1074">Worker as a Queue consumer, Cloudflare</text>
   <text class="foot" x="958" y="1093">later invokes:</text>
