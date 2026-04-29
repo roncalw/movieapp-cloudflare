@@ -57,6 +57,7 @@
 export interface Env extends Cloudflare.Env {
 	DB: D1Database;
 	IMDB_RATING_QUEUE: Queue<ImdbRatingQueueMessage>;
+	TMDB_API_KEY: string;
 }
 
 /*
@@ -129,8 +130,34 @@ type ImdbRatingQueueMessage = {
 	rows: ImdbRatingRow[];
 };
 
+type TmdbDiscoverResult = {
+	id: number;
+	title?: string;
+	poster_path?: string | null;
+	release_date?: string;
+	popularity?: number;
+	genre_ids?: unknown;
+	adult?: boolean;
+};
+
+type TmdbDiscoverPage = {
+	page: number;
+	total_pages: number;
+	results: TmdbDiscoverResult[];
+};
+
+type TmdbDateWindow = {
+	beginDate: string;
+	endDate: string;
+};
+
 const IMDB_QUEUE_ROWS_PER_MESSAGE = 33;
 const IMDB_QUEUE_MESSAGES_PER_SEND_BATCH = 100;
+const TMDB_MAX_REQUESTS_PER_SECOND = 35;
+const TMDB_MAX_RETRIES = 3;
+const TMDB_DISCOVER_MAX_PAGE = 500;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const tmdbRequestTimestamps: number[] = [];
 
 /*
 	This helper does the Step 4 dry-run read.
@@ -336,6 +363,322 @@ async function enqueueImdbRatingRows(env: Env, limit?: number) {
 	await reader.cancel();
 
 	return { rowsSeen, rowsQueued };
+}
+
+function sleep(ms: number) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForTmdbRequestSlot() {
+	while (true) {
+		const now = Date.now();
+		const oneSecondAgo = now - 1000;
+
+		while (
+			tmdbRequestTimestamps.length > 0 &&
+			tmdbRequestTimestamps[0] <= oneSecondAgo
+		) {
+			tmdbRequestTimestamps.shift();
+		}
+
+		if (tmdbRequestTimestamps.length < TMDB_MAX_REQUESTS_PER_SECOND) {
+			tmdbRequestTimestamps.push(now);
+			return;
+		}
+
+		const oldestRequest = tmdbRequestTimestamps[0];
+		const waitMs = Math.max(1000 - (now - oldestRequest), 50);
+		await sleep(waitMs);
+	}
+}
+
+async function fetchTmdbJson<T>(url: URL, env: Env): Promise<T> {
+	for (let attempt = 0; attempt <= TMDB_MAX_RETRIES; attempt += 1) {
+		await waitForTmdbRequestSlot();
+
+		if (!env.TMDB_API_KEY) {
+			throw new Error("TMDB_API_KEY is missing.");
+		}
+
+		url.searchParams.set("api_key", env.TMDB_API_KEY);
+
+		const response = await fetch(url, {
+			headers: {
+				accept: "application/json",
+			},
+		});
+
+		if (response.status !== 429 && response.status < 500) {
+			if (!response.ok) {
+				throw new Error(
+					`TMDB request failed: ${response.status} ${response.statusText}`,
+				);
+			}
+
+			return response.json();
+		}
+
+		if (attempt === TMDB_MAX_RETRIES) {
+			throw new Error(
+				`TMDB request failed after retries: ${response.status} ${response.statusText}`,
+			);
+		}
+
+		const retryAfterSeconds = Number(response.headers.get("Retry-After"));
+		const retryAfterMs = Number.isFinite(retryAfterSeconds)
+			? retryAfterSeconds * 1000
+			: 1000 * (attempt + 1);
+
+		await sleep(retryAfterMs);
+	}
+
+	throw new Error("TMDB request failed unexpectedly.");
+}
+
+async function getTmdbDiscoverPage(
+	page: number,
+	beginDate: string,
+	env: Env,
+	endDate?: string,
+) {
+	const url = new URL("https://api.themoviedb.org/3/discover/movie");
+	url.searchParams.set("page", String(page));
+	url.searchParams.set("sort_by", "popularity.desc");
+	url.searchParams.set("primary_release_date.gte", beginDate);
+	url.searchParams.set("watch_region", "US");
+	url.searchParams.set("include_adult", "false");
+	url.searchParams.set("include_video", "false");
+
+	if (endDate) {
+		url.searchParams.set("primary_release_date.lte", endDate);
+	}
+
+	return fetchTmdbJson<TmdbDiscoverPage>(url, env);
+}
+
+async function getTmdbRefreshStartDate(
+	env: Env,
+	fallbackBeginDate = "2000-01-01",
+) {
+	const result = await env.DB.prepare(
+		`SELECT MAX(release_date) AS max_release_date
+		 FROM tmdb_movies_staging`,
+	).first<{ max_release_date: string | null }>();
+
+	return result?.max_release_date ?? fallbackBeginDate;
+}
+
+function isoDateToTime(value: string) {
+	const [year, month, day] = value.split("-").map(Number);
+	return Date.UTC(year, month - 1, day);
+}
+
+function timeToIsoDate(value: number) {
+	return new Date(value).toISOString().slice(0, 10);
+}
+
+function isIsoDate(value: string) {
+	return /^\d{4}-\d{2}-\d{2}$/.test(value) && timeToIsoDate(isoDateToTime(value)) === value;
+}
+
+function splitDateWindow(window: TmdbDateWindow) {
+	const beginTime = isoDateToTime(window.beginDate);
+	const endTime = isoDateToTime(window.endDate);
+
+	if (beginTime >= endTime) {
+		return null;
+	}
+
+	const daysBetween = Math.floor((endTime - beginTime) / ONE_DAY_MS);
+	const leftEndTime = beginTime + Math.floor(daysBetween / 2) * ONE_DAY_MS;
+	const rightBeginTime = leftEndTime + ONE_DAY_MS;
+
+	return {
+		left: {
+			beginDate: window.beginDate,
+			endDate: timeToIsoDate(leftEndTime),
+		},
+		right: {
+			beginDate: timeToIsoDate(rightBeginTime),
+			endDate: window.endDate,
+		},
+	};
+}
+
+function buildTmdbPrimaryStatements(
+	discoverResult: TmdbDiscoverResult,
+	env: Env,
+) {
+	const tmdbId = discoverResult.id;
+	const genreIds = Array.isArray(discoverResult.genre_ids)
+		? [...new Set(discoverResult.genre_ids.filter((genreId) => typeof genreId === "number"))]
+		: [];
+	const statements = [
+		env.DB.prepare(
+			`INSERT OR REPLACE INTO tmdb_movies_staging (
+				tmdb_id,
+				imdb_id,
+				title,
+				poster_path,
+				release_date,
+				us_certification,
+				popularity,
+				imported_at
+			)
+			VALUES (?, NULL, ?, ?, ?, NULL, ?, CURRENT_TIMESTAMP)`,
+		).bind(
+			tmdbId,
+			discoverResult.title ?? "",
+			discoverResult.poster_path ?? null,
+			discoverResult.release_date ?? null,
+			discoverResult.popularity ?? 0,
+		),
+		env.DB.prepare("DELETE FROM movie_genres WHERE tmdb_id = ?").bind(tmdbId),
+	];
+
+	for (const genreId of genreIds) {
+		statements.push(
+			env.DB.prepare(
+				`INSERT INTO movie_genres (tmdb_id, genre_id)
+				 VALUES (?, ?)`,
+			).bind(tmdbId, genreId),
+		);
+	}
+
+	return statements;
+}
+
+async function loadTmdbPrimaryRowsManual(
+	env: Env,
+	beginDate: string,
+	endDate: string,
+	limit: number,
+) {
+	let pagesRead = 0;
+	let rowsSeen = 0;
+	let rowsInserted = 0;
+	let totalPagesSeen: number | null = null;
+	let windowsLoaded = 0;
+	let windowsSplit = 0;
+	let stopReason:
+		| "limit_reached"
+		| "end_of_windows"
+		| "single_day_page_cap_reached" = "end_of_windows";
+	let stoppedWindow: TmdbDateWindow | null = null;
+	const pendingWindows: TmdbDateWindow[] = [{ beginDate, endDate }];
+
+	while (pendingWindows.length > 0 && rowsInserted < limit) {
+		const currentWindow = pendingWindows.shift();
+
+		if (!currentWindow) {
+			break;
+		}
+
+		const firstPage = await getTmdbDiscoverPage(
+			1,
+			currentWindow.beginDate,
+			env,
+			currentWindow.endDate,
+		);
+
+		pagesRead += 1;
+		totalPagesSeen = Math.max(totalPagesSeen ?? 0, firstPage.total_pages);
+
+		if (firstPage.total_pages > TMDB_DISCOVER_MAX_PAGE) {
+			const splitWindow = splitDateWindow(currentWindow);
+
+			if (!splitWindow) {
+				stopReason = "single_day_page_cap_reached";
+				stoppedWindow = currentWindow;
+				console.log(
+					JSON.stringify({
+						event: "tmdb-window-single-day-cap",
+						beginDate: currentWindow.beginDate,
+						endDate: currentWindow.endDate,
+						totalPagesSeen: firstPage.total_pages,
+						tmdbDiscoverMaxPage: TMDB_DISCOVER_MAX_PAGE,
+					}),
+				);
+				break;
+			}
+
+			windowsSplit += 1;
+			console.log(
+				JSON.stringify({
+					event: "tmdb-window-split",
+					beginDate: currentWindow.beginDate,
+					endDate: currentWindow.endDate,
+					totalPagesSeen: firstPage.total_pages,
+					tmdbDiscoverMaxPage: TMDB_DISCOVER_MAX_PAGE,
+					leftWindow: splitWindow.left,
+					rightWindow: splitWindow.right,
+				}),
+			);
+
+			pendingWindows.unshift(splitWindow.right);
+			pendingWindows.unshift(splitWindow.left);
+			continue;
+		}
+
+		windowsLoaded += 1;
+
+		for (let page = 1; page <= firstPage.total_pages; page += 1) {
+			const discoverPage =
+				page === 1
+					? firstPage
+					: await getTmdbDiscoverPage(
+							page,
+							currentWindow.beginDate,
+							env,
+							currentWindow.endDate,
+						);
+
+			if (page !== 1) {
+				pagesRead += 1;
+			}
+
+			const pageStatements: D1PreparedStatement[] = [];
+
+			for (const discoverResult of discoverPage.results) {
+				rowsSeen += 1;
+
+				if (discoverResult.adult) {
+					continue;
+				}
+
+				pageStatements.push(...buildTmdbPrimaryStatements(discoverResult, env));
+				rowsInserted += 1;
+
+				if (rowsInserted >= limit) {
+					break;
+				}
+			}
+
+			if (pageStatements.length > 0) {
+				await env.DB.batch(pageStatements);
+			}
+
+			if (rowsInserted >= limit) {
+				stopReason = "limit_reached";
+				break;
+			}
+		}
+	}
+
+	return {
+		beginDate,
+		endDate: endDate ?? null,
+		pagesRead,
+		rowsSeen,
+		rowsInserted,
+		totalPagesSeen,
+		tmdbDiscoverMaxPage: TMDB_DISCOVER_MAX_PAGE,
+		windowsLoaded,
+		windowsSplit,
+		pendingWindows: pendingWindows.length,
+		stoppedWindow,
+		stopReason,
+	};
 }
 
 /*
@@ -840,6 +1183,99 @@ export default {
 			return Response.json(result);
 		}
 
+			if (url.pathname === "/admin/import/tmdb/load-manual") {
+				const startedAtMs = Date.now();
+				const startedAt = new Date(startedAtMs).toISOString();
+				const limit = Number(url.searchParams.get("limit") ?? 100);
+				const beginDate =
+					url.searchParams.get("beginDate") ??
+					(await getTmdbRefreshStartDate(env));
+				const endDate = url.searchParams.get("endDate");
+
+				if (!Number.isInteger(limit) || limit < 1) {
+					return Response.json(
+						{ error: "limit must be a positive integer." },
+						{ status: 400 },
+					);
+				}
+
+				if (!isIsoDate(beginDate)) {
+					return Response.json(
+						{ error: "beginDate must use YYYY-MM-DD format.", beginDate },
+						{ status: 400 },
+					);
+				}
+
+				if (!endDate || !isIsoDate(endDate)) {
+					return Response.json(
+						{ error: "endDate is required and must use YYYY-MM-DD format.", endDate },
+						{ status: 400 },
+					);
+				}
+
+				if (beginDate > endDate) {
+					return Response.json(
+						{
+							error: "beginDate must be less than or equal to endDate.",
+							beginDate,
+							endDate,
+						},
+						{ status: 400 },
+					);
+				}
+
+				console.log(
+					JSON.stringify({
+						event: "tmdb-load-manual-start",
+						startedAt,
+						limit,
+						beginDate,
+						endDate,
+					}),
+				);
+
+				const result = await loadTmdbPrimaryRowsManual(
+					env,
+					beginDate,
+					endDate,
+					limit,
+				);
+
+				const endedAtMs = Date.now();
+				const endedAt = new Date(endedAtMs).toISOString();
+				const durationMs = endedAtMs - startedAtMs;
+				const responseBody = {
+					...result,
+					startedAt,
+					endedAt,
+					durationMs,
+				};
+
+				console.log(
+					JSON.stringify({
+						event: "tmdb-load-manual-end",
+						startedAt,
+						endedAt,
+						durationMs,
+						limit,
+						beginDate,
+						endDate,
+						pagesRead: result.pagesRead,
+						rowsSeen: result.rowsSeen,
+						rowsInserted: result.rowsInserted,
+						totalPagesSeen: result.totalPagesSeen,
+						tmdbDiscoverMaxPage: result.tmdbDiscoverMaxPage,
+						windowsLoaded: result.windowsLoaded,
+						windowsSplit: result.windowsSplit,
+						pendingWindows: result.pendingWindows,
+						stoppedWindow: result.stoppedWindow,
+						stopReason: result.stopReason,
+					}),
+				);
+
+				return Response.json(responseBody);
+			}
+
 		/*
 			This creates a simple GET API route.
 
@@ -937,4 +1373,4 @@ export default {
 			message.ack();
 		}
 	},
-} satisfies ExportedHandler<Env>;
+} satisfies ExportedHandler<Env, ImdbRatingQueueMessage>;

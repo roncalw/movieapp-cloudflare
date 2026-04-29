@@ -19,9 +19,9 @@
   - IMDb Setup And Load Into Staging
     - [X] [Step 5: DB Workflow IMDb Queue Job](#step-5-db-workflow-imdb-queue-job) - <span class="diagram">DIAGRAM</span>
     - [X] [Step 6: Wire Up The IMDb Queue](#step-6-wire-up-the-imdb-queue)
-    - [ ] [Step 7: Load The IMDb Ratings Staging Table](#step-7-load-the-imdb-ratings-staging-table)
+    - [X] [Step 7: Load The IMDb Ratings Staging Table](#step-7-load-the-imdb-ratings-staging-table)
   - TMDB Setup And Load Into Staging
-    - [ ] [Step 8: Add The TMDB API Token As A Secret](#step-8-add-the-tmdb-api-token-as-a-secret)
+    - [ ] [Step 8: Add The TMDB API Key As A Secret](#step-8-add-the-tmdb-api-key-as-a-secret)
     - [ ] [Step 9: Load The TMDB Staging Tables](#step-9-load-the-tmdb-staging-tables)
   - Final Movie List Build And Filter Checks
     - [ ] [Step 10: Build The Final Movie List Table](#step-10-build-the-final-movie-list-table)
@@ -338,7 +338,18 @@ credits
 
 `adult` is a TMDB source flag for adult content. We should use that flag only during import to reject those records before they reach D1. We should not store it.
 
-`video` is also a TMDB source flag. We should use it only during import to reject records that are not useful for the MovieApp movie list. We should not store it.
+`video` is also a TMDB source flag on movie-list result objects, but it is not a trailer URL and it is not the same thing as the `/movie/{id}/videos` endpoint. The Cloudflare import should not store it, and it should not reject an otherwise valid movie only because `video` is true. Instead, the discover/movie request should explicitly ask TMDB not to include video-only results:
+
+```text
+include_video=false
+```
+
+TMDB's discover/movie API also defaults `include_adult` to false, and the current MovieApp and legacy MovieApp queries rely on that default. For the Cloudflare import, be explicit:
+
+```text
+include_adult=false
+include_video=false
+```
 
 `popularity` is the only extra TMDB field kept in the final table for now because the current MovieApp sort control still has a Popularity option. If the MovieApp sort control later removes Popularity, remove this column too.
 
@@ -2387,6 +2398,12 @@ Expected count:
 330
 ```
 
+Preview the first 50 local IMDb staging rows to make sure the data shape looks normal:
+
+```bash
+npx wrangler d1 execute movieapp-db --local --command "SELECT imdb_id, average_rating, num_votes FROM imdb_ratings_staging ORDER BY imdb_id LIMIT 50;"
+```
+
 <div><span class="ooo">[</span> X  <span class="ooo">]</span> Then try the next local size:
 
 ```bash
@@ -2403,6 +2420,12 @@ Expected count:
 
 ```text
 3300
+```
+
+Preview the first 50 local IMDb staging rows again:
+
+```bash
+npx wrangler d1 execute movieapp-db --local --command "SELECT imdb_id, average_rating, num_votes FROM imdb_ratings_staging ORDER BY imdb_id LIMIT 50;"
 ```
 
 If local fails:
@@ -2449,6 +2472,12 @@ Expected count:
 330
 ```
 
+Preview the first 50 remote IMDb staging rows to make sure the data shape looks normal:
+
+```bash
+npx wrangler d1 execute movieapp-db --remote --command "SELECT imdb_id, average_rating, num_votes FROM imdb_ratings_staging ORDER BY imdb_id LIMIT 50;"
+```
+
 <div><span class="ooo">[</span> X <span class="ooo">]</span> Then try the next remote size:
 
 ```bash
@@ -2465,6 +2494,12 @@ npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS ratin
 
 ```text
 3300
+```
+
+Preview the first 50 remote IMDb staging rows again:
+
+```bash
+npx wrangler d1 execute movieapp-db --remote --command "SELECT imdb_id, average_rating, num_votes FROM imdb_ratings_staging ORDER BY imdb_id LIMIT 50;"
 ```
 
 
@@ -2607,46 +2642,155 @@ At this point, the IMDb side has a real Cloudflare path into D1.
 
 Only after that do we switch over to the TMDB side.
 
-<a id="phase-8-add-the-tmdb-api-token-as-a-secret"></a>
-## Step 8: Add The TMDB API Token As A Secret
+<a id="phase-8-add-the-tmdb-api-key-as-a-secret"></a>
+## Step 8: Add The TMDB API Key As A Secret
 
 This is the handoff from IMDb work to TMDB work.
 
 TMDB starts here.
 
-Do not hard-code the TMDB token in source code.
+Do not hard-code the TMDB API key in source code.
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> For local development, create:</div>
+Use the same TMDB authentication style the current MovieApp and legacy MovieApp already use:
+
+```text
+api_key=your_key_goes_here
+```
+
+Do not use `Authorization: Bearer ...` for this Worker code.
+
+That is a different TMDB credential style. This guide is using the existing MovieApp API-key style so the Cloudflare importer matches the app we already have.
+
+There are two places to store the same TMDB API key:
+
+```text
+local development:
+  .dev.vars file on your Mac
+
+deployed Worker:
+  Cloudflare secret stored in your Cloudflare account
+```
+
+They both use the same key name:
+
+```text
+TMDB_API_KEY
+```
+
+That name is not a Cloudflare default.
+
+We choose that name because the Worker code will read:
+
+```ts
+env.TMDB_API_KEY
+```
+
+So the local `.dev.vars` key, the deployed Cloudflare secret name, and the Worker `Env` type all need to match.
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> For local development, create this file:</div>
 
 ```text
 /Users/croncallo/repo/MovieApp-Cloudflare/.dev.vars
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Add:</div>
+Important:
 
 ```text
-TMDB_API_TOKEN=your_tmdb_read_access_token_here
+.dev.vars is a hidden file, not a folder.
+
+The leading dot makes it look less obvious in file explorers.
+Wrangler automatically reads this exact file name during local development.
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> For the deployed Worker, add it as a Cloudflare secret later:</div>
+If the file does not exist yet, create it in the root of the Cloudflare repo:
+
+```text
+/Users/croncallo/repo/MovieApp-Cloudflare
+```
+
+So the final local file path is:
+
+```text
+/Users/croncallo/repo/MovieApp-Cloudflare/.dev.vars
+```
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> Inside that `.dev.vars` file, add this key/value line:</div>
+
+```text
+TMDB_API_KEY=your_tmdb_api_key_here
+```
+
+Do not put quotes around the API key unless the API key itself actually contains quotes.
+
+Do not commit `.dev.vars`.
+
+This repo already ignores it:
+
+```text
+.dev.vars*
+```
+
+<div><span class="ooo">[</span>X<span class="ooo">]</span> For the deployed Worker, add the same value as a Cloudflare secret:</div>
 
 ```bash
-npx wrangler secret put TMDB_API_TOKEN
+npx wrangler secret put TMDB_API_KEY
 ```
 
 Wrangler will ask you to paste the value.
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Also add the secret to the Worker `Env` type when the TMDB job is implemented:</div>
+This command does not read from `.dev.vars`.
+
+Plain meaning:
+
+```text
+.dev.vars:
+  local-only file used by npm run dev / wrangler dev
+
+wrangler secret put TMDB_API_KEY:
+  uploads a remote secret named TMDB_API_KEY to Cloudflare
+  used by the deployed Worker
+```
+
+<div><span class="ooo">[</span>X<span class="ooo">]</span> Also add the API key secret to the Worker `Env` type.</div>
+
+Open:
+
+```text
+/Users/croncallo/repo/MovieApp-Cloudflare/src/index.ts
+```
+
+Near the top of the file, find:
+
+```text
+export interface Env extends Cloudflare.Env
+```
+
+In the current file, that interface starts around line 57.
+
+Add this one line inside the existing `Env` interface:
+
+```ts
+TMDB_API_KEY: string;
+```
+
+The final interface should look like this:
 
 ```ts
 export interface Env extends Cloudflare.Env {
   DB: D1Database;
   IMDB_RATING_QUEUE: Queue<ImdbRatingQueueMessage>;
-  TMDB_API_TOKEN: string;
+  TMDB_API_KEY: string;
 }
 ```
 
-You need this in place before the TMDB load step in Step 9.
+Why this is needed:
+
+```text
+Wrangler makes the runtime value available as env.TMDB_API_KEY.
+TypeScript still needs the Env type updated so the code is allowed to read env.TMDB_API_KEY.
+```
+
+You need this in place before adding the TMDB loading code in Step 9.
 
 <a id="phase-9-load-the-tmdb-movie-list-data-into-d1"></a>
 <a id="step-9-load-the-tmdb-movie-list-data-into-d1"></a>
@@ -2689,7 +2833,8 @@ Manual Load for One Time Initial Load
   source:
     call paginated TMDB discover/movie
   filter:
-    reject adult/video rows before D1
+    request include_adult=false and include_video=false
+    reject adult rows before D1 if TMDB still returns one
   staging row:
     insert base movie fields into tmdb_movies_staging
   genre child rows:
@@ -2709,7 +2854,8 @@ Weekly Cron Job to Add New Movies
   source:
     call paginated TMDB discover/movie starting from that lower bound
   filter:
-    reject adult/video rows before D1
+    request include_adult=false and include_video=false
+    reject adult rows before D1 if TMDB still returns one
   staging row:
     insert or update base movie fields in tmdb_movies_staging
   genre child rows:
@@ -2777,7 +2923,7 @@ This pass is responsible for:
 
 ```text
 1. reading discover/movie pages
-2. rejecting adult/video rows
+2. rejecting adult rows
 3. inserting the base tmdb_movies_staging row
 4. inserting movie_genres rows from genre_ids
 ```
@@ -2824,28 +2970,256 @@ refresh that same-date boundary again
 
 That protects the refresh from missing movies that share the same release date.
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Start with an admin manual endpoint:</div>
+For example:
+
+```text
+Current latest release_date in D1:
+  2024-06-15
+
+Next refresh should start at:
+  primary_release_date.gte=2024-06-15
+
+Do not start at:
+  2024-06-16
+
+Reason:
+  TMDB may have more movies with release_date 2024-06-15 that were not loaded last time.
+  Re-reading 2024-06-15 is safe because the import uses upserts.
+```
+
+Start with an admin manual endpoint.
+
+This will be another route inside the existing `fetch(...)` handler in:
+
+```text
+/Users/croncallo/repo/MovieApp-Cloudflare/src/index.ts
+```
+
+It is not a new file.
+
+The route path should be:
 
 ```text
 /admin/import/tmdb/load-manual?limit=100&beginDate=2000-01-01&endDate=2000-12-31
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> The first Cloudflare primary-load version should do all of this:</div>
+The first Cloudflare primary-load version should do all of this:
 
 ```text
 1. call TMDB discover/movie
 2. page through results
 3. start from configurable beginDate, default 2000-01-01
 4. end at a matching window endDate
-5. skip adult/video rows
-6. insert tmdb_movies_staging base rows
-7. insert movie_genres rows from genre_ids
-8. collect the accepted tmdb_id values for Step 9B
+5. explicitly request include_adult=false and include_video=false
+6. skip adult rows if TMDB still returns one
+7. insert tmdb_movies_staging base rows
+8. insert movie_genres rows from genre_ids
+9. return summary counts only, not every accepted tmdb_id
 ```
 
-If one date window still returns too many discover/movie pages, shrink the window and retry.
+The Worker preflights each date window before loading it:
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Add a Worker-side TMDB discover helper like this:</div>
+```text
+1. request page 1 for that beginDate/endDate window
+2. read total_pages
+3. if total_pages <= 500, load that window
+4. if total_pages > 500, split the window into two smaller date windows
+5. repeat until each loaded window is under the TMDB page cap
+```
+
+What the code had to do because of TMDB's 500-page cap:
+
+```text
+The old version tried to load the caller's date range directly.
+
+That worked for small windows, but a large window like 2000-01-01 through
+2002-12-31 can have more than 500 Discover pages.
+
+TMDB may report that larger total_pages value, but it will not allow the Worker
+to request page 501. Page 501 returns a 400 Bad Request.
+
+So the Worker no longer waits until page 501 fails.
+It checks page 1 first, reads total_pages, and splits oversized date windows
+before loading them.
+```
+
+Plain example:
+
+```text
+Requested:
+  2000-01-01..2002-12-31
+
+If page 1 says this window has too many pages:
+  split into two smaller windows
+
+Then each smaller window is checked the same way.
+
+Only windows with 500 pages or fewer are actually paged through and inserted.
+```
+
+Why this does not miss part of the date range:
+
+```text
+When a window splits, the code creates two adjacent windows:
+
+left:
+  beginDate through midDate
+
+right:
+  dayAfter(midDate) through endDate
+
+There is no gap between the two windows and no overlapping date.
+```
+
+TMDB Discover page cap:
+
+```text
+TMDB Discover returns up to 20 rows per page.
+TMDB Discover cannot be read past page 500.
+That means one Discover query window can expose at most about 10,000 rows.
+```
+
+If a broad request has to be split, the logs show:
+
+```text
+tmdb-window-split
+```
+
+The response includes `windowsSplit`, so you can see how many splits happened.
+
+If one single day is still over 500 pages, the Worker stops and returns:
+
+```text
+stopReason: "single_day_page_cap_reached"
+```
+
+That gives a precise resume/debug point in `stoppedWindow`.
+
+TMDB rate-limit rule:
+
+```text
+TMDB disabled the old hard limit of 40 requests per 10 seconds.
+TMDB still says there are upper limits somewhere around 40 requests per second.
+TMDB also says to respect 429 responses.
+```
+
+Engineering rule for this Worker:
+
+```text
+Do not fire TMDB requests as fast as JavaScript can schedule them.
+Do not use unbounded Promise.all(...) across TMDB movie ids.
+
+Use a small request gate:
+  target no more than 35 TMDB requests per rolling 1-second window
+  pause before sending the next request if the gate is full
+  if TMDB returns 429, wait and retry with backoff
+```
+
+This is not meant to be alarming.
+
+Our current plan does not run multiple TMDB load jobs at the same time:
+
+```text
+1. one manual initial TMDB load
+2. one weekly Cron refresh later
+```
+
+So a simple in-memory request gate is acceptable for this first version.
+
+Plain meaning:
+
+```text
+The limiter keeps one running TMDB job from sending requests too fast.
+That matches the current plan because we only intend to run one TMDB job at a time.
+```
+
+Only revisit this if the plan changes to allow overlapping TMDB jobs.
+
+Step 9A-1
+<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add these new TMDB request helper functions before the discover/enrichment helpers.</div>
+
+Open:
+
+```text
+/Users/croncallo/repo/MovieApp-Cloudflare/src/index.ts
+```
+
+Place these helper functions above the `export default { ... }` Worker object, near the other helper functions.
+
+```ts
+const TMDB_MAX_REQUESTS_PER_SECOND = 35;
+const TMDB_MAX_RETRIES = 3;
+const tmdbRequestTimestamps: number[] = [];
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForTmdbRequestSlot() {
+  while (true) {
+    const now = Date.now();
+    const oneSecondAgo = now - 1000;
+
+    while (
+      tmdbRequestTimestamps.length > 0 &&
+      tmdbRequestTimestamps[0] <= oneSecondAgo
+    ) {
+      tmdbRequestTimestamps.shift();
+    }
+
+    if (tmdbRequestTimestamps.length < TMDB_MAX_REQUESTS_PER_SECOND) {
+      tmdbRequestTimestamps.push(now);
+      return;
+    }
+
+    const oldestRequest = tmdbRequestTimestamps[0];
+    const waitMs = Math.max(1000 - (now - oldestRequest), 50);
+    await sleep(waitMs);
+  }
+}
+
+async function fetchTmdbJson(url: URL, env: Env) {
+  for (let attempt = 0; attempt <= TMDB_MAX_RETRIES; attempt += 1) {
+    await waitForTmdbRequestSlot();
+
+    if (!env.TMDB_API_KEY) {
+      throw new Error("TMDB_API_KEY is missing.");
+    }
+
+    url.searchParams.set("api_key", env.TMDB_API_KEY);
+
+    const response = await fetch(url, {
+      headers: {
+        accept: "application/json",
+      },
+    });
+
+    if (response.status !== 429 && response.status < 500) {
+      if (!response.ok) {
+        throw new Error(`TMDB request failed: ${response.status} ${response.statusText}`);
+      }
+
+      return response.json();
+    }
+
+    if (attempt === TMDB_MAX_RETRIES) {
+      throw new Error(`TMDB request failed after retries: ${response.status} ${response.statusText}`);
+    }
+
+    const retryAfterSeconds = Number(response.headers.get("Retry-After"));
+    const retryAfterMs = Number.isFinite(retryAfterSeconds)
+      ? retryAfterSeconds * 1000
+      : 1000 * (attempt + 1);
+
+    await sleep(retryAfterMs);
+  }
+
+  throw new Error("TMDB request failed unexpectedly.");
+}
+
+```
+Step 9A-2
+<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add this new Worker-side TMDB discover helper after `fetchTmdbJson(...)`.</div>
 
 ```ts
 async function getTmdbDiscoverPage(
@@ -2859,23 +3233,14 @@ async function getTmdbDiscoverPage(
   url.searchParams.set("sort_by", "popularity.desc");
   url.searchParams.set("primary_release_date.gte", beginDate);
   url.searchParams.set("watch_region", "US");
+  url.searchParams.set("include_adult", "false");
+  url.searchParams.set("include_video", "false");
 
   if (endDate) {
     url.searchParams.set("primary_release_date.lte", endDate);
   }
 
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${env.TMDB_API_TOKEN}`,
-      accept: "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`TMDB discover page ${page} failed: ${response.status} ${response.statusText}`);
-  }
-
-  return response.json();
+  return fetchTmdbJson(url, env);
 }
 ```
 
@@ -2892,7 +3257,10 @@ call getTmdbDiscoverPage(...) with the current max release date as beginDate
 and no endDate
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Add a helper that reads the current TMDB release-date cursor from D1:</div>
+Step 9A-3
+<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add this new helper that reads the current TMDB release-date cursor from D1.</div>
+
+Place it near `getTmdbDiscoverPage(...)`, before the route handler that will call it.
 
 ```ts
 async function getTmdbRefreshStartDate(env: Env, fallbackBeginDate = "2000-01-01") {
@@ -2907,62 +3275,450 @@ async function getTmdbRefreshStartDate(env: Env, fallbackBeginDate = "2000-01-01
 }
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Use the same import-time gatekeeper rule during the primary load:</div>
+Step 9A-4
+<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, use this import-time adult gatekeeper inside the loop that processes each `discover/movie` result.</div>
+
+This is not a standalone helper. It belongs inside the future `/admin/import/tmdb/load-manual` route logic, before adding that row's statements to the current page batch.
 
 ```ts
-if (discoverResult.adult || discoverResult.video) {
+if (discoverResult.adult) {
   continue;
 }
 ```
 
-That means adult/video records are rejected before D1.
+That means adult records are rejected before D1.
+
+Do not reject a row only because `discoverResult.video` is true.
+
+Plain meaning:
+
+```text
+include_video=false asks TMDB not to include video-only results.
+If a normal movie row still has video=true, keep the movie.
+The MovieApp does not need the video flag, so we do not store it.
+```
 
 They are not stored as columns.
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Add the primary TMDB-side D1 writes like this:</div>
+Step 9A-5
+<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add this new helper for the primary TMDB-side D1 write statements.</div>
+
+### Special Section: Why TMDB D1 Writes Use Batching
+
+This section is important in the same way the IMDb Queue section was important.
+
+The first TMDB version worked locally, but remote Cloudflare was much slower.
+
+Why:
+
+```text
+Local D1:
+  Worker -> local Miniflare/Wrangler D1 -> SQLite file on your Mac
+
+Remote D1:
+  Worker -> Cloudflare D1 service -> remote database work -> Worker
+```
+
+The code was doing the same logical SQL either way, but remote D1 made the repeated Worker-to-D1 trips expensive.
+
+Old non-batched mental model:
+
+```text
+for each TMDB page:
+  for each movie on that page:
+    await insert movie into tmdb_movies_staging
+    await delete old genres for that movie
+
+    for each genre for that movie:
+      await insert genre into movie_genres
+```
+
+Plain meaning:
+
+```text
+The Worker called D1 separately for every movie insert,
+every genre delete,
+and every genre insert.
+```
+
+New batched mental model:
+
+```text
+for each TMDB page:
+  pageStatements = []
+
+  for each movie on that page:
+    add movie insert statement to pageStatements
+    add genre delete statement to pageStatements
+
+    for each genre for that movie:
+      add genre insert statement to pageStatements
+
+  await env.DB.batch(pageStatements)
+```
+
+Plain meaning:
+
+```text
+The SQL statements still run in order.
+But the Worker sends the page's whole stack of statements to D1 together.
+```
+
+SQL-side mental model for one TMDB page:
+
+```sql
+BEGIN;
+
+INSERT OR REPLACE INTO tmdb_movies_staging (...)
+VALUES (...movie 1...);
+
+DELETE FROM movie_genres
+WHERE tmdb_id = movie_1_tmdb_id;
+
+INSERT INTO movie_genres (tmdb_id, genre_id)
+VALUES (movie_1_tmdb_id, genre_1);
+
+INSERT INTO movie_genres (tmdb_id, genre_id)
+VALUES (movie_1_tmdb_id, genre_2);
+
+INSERT OR REPLACE INTO tmdb_movies_staging (...)
+VALUES (...movie 2...);
+
+DELETE FROM movie_genres
+WHERE tmdb_id = movie_2_tmdb_id;
+
+INSERT INTO movie_genres (tmdb_id, genre_id)
+VALUES (movie_2_tmdb_id, genre_1);
+
+COMMIT;
+```
+
+That is not one giant SQL string.
+
+It is a stack of ordered prepared statements handed to Cloudflare D1 with:
 
 ```ts
-async function insertTmdbPrimaryRows(discoverResult: any, env: Env) {
+await env.DB.batch(pageStatements);
+```
+
+Why it became faster:
+
+```text
+Slow:
+  Worker calls D1 thousands of times and waits after each call.
+
+Fast:
+  Worker calls D1 once per TMDB page and D1 runs that page's statements internally.
+```
+
+Restaurant analogy:
+
+```text
+Slow:
+  call the restaurant 80 times and order one item each call
+
+Fast:
+  call once and order 80 items
+
+The kitchen may still cook items in order,
+but you avoided 79 extra phone calls.
+```
+
+Place it near the TMDB discover helper. The manual TMDB route will call this helper once for each accepted `discover/movie` result, collect the returned statements for the current TMDB page, then write that page with `env.DB.batch(...)`.
+
+```ts
+function buildTmdbPrimaryStatements(discoverResult: any, env: Env) {
   const tmdbId = discoverResult.id;
   const genreIds = Array.isArray(discoverResult.genre_ids)
-    ? discoverResult.genre_ids
+    ? [...new Set(discoverResult.genre_ids.filter((genreId) => typeof genreId === "number"))]
     : [];
-
-  await env.DB.prepare(
-    `INSERT OR REPLACE INTO tmdb_movies_staging (
-      tmdb_id,
-      imdb_id,
-      title,
-      poster_path,
-      release_date,
-      us_certification,
-      popularity,
-      imported_at
-    )
-    VALUES (?, NULL, ?, ?, ?, NULL, ?, CURRENT_TIMESTAMP)`
-  )
-    .bind(
+  const statements = [
+    env.DB.prepare(
+      `INSERT OR REPLACE INTO tmdb_movies_staging (
+        tmdb_id,
+        imdb_id,
+        title,
+        poster_path,
+        release_date,
+        us_certification,
+        popularity,
+        imported_at
+      )
+      VALUES (?, NULL, ?, ?, ?, NULL, ?, CURRENT_TIMESTAMP)`
+    ).bind(
       tmdbId,
-      discoverResult.title,
-      discoverResult.poster_path,
-      discoverResult.release_date,
+      discoverResult.title ?? "",
+      discoverResult.poster_path ?? null,
+      discoverResult.release_date ?? null,
       discoverResult.popularity ?? 0
-    )
-    .run();
-
-  await env.DB.prepare(`DELETE FROM movie_genres WHERE tmdb_id = ?`)
-    .bind(tmdbId)
-    .run();
+    ),
+    env.DB.prepare("DELETE FROM movie_genres WHERE tmdb_id = ?").bind(tmdbId),
+  ];
 
   for (const genreId of genreIds) {
-    await env.DB.prepare(
-      `INSERT INTO movie_genres (tmdb_id, genre_id)
-       VALUES (?, ?)`
-    )
-      .bind(tmdbId, genreId)
-      .run();
+    statements.push(
+      env.DB.prepare(
+        `INSERT INTO movie_genres (tmdb_id, genre_id)
+         VALUES (?, ?)`
+      ).bind(tmdbId, genreId)
+    );
   }
+
+  return statements;
 }
+```
+
+Why this helper returns statements instead of running them immediately:
+
+```text
+Local D1 is fast even when every statement runs one by one.
+Remote D1 is much slower when every statement is awaited separately.
+
+So the Worker collects all D1 statements for one TMDB page, then sends them
+with env.DB.batch(...).
+```
+
+Why `genreIds` is de-duplicated before inserting:
+
+```text
+movie_genres has a primary key on (tmdb_id, genre_id).
+Each different genre for the same movie is still inserted.
+Only exact repeated genre ids from the same TMDB result are removed before D1.
+The INSERT stays strict so an unexpected database conflict still fails loudly.
+```
+
+Step 9A-6: Test The Primary TMDB Load Locally
+
+Do not deploy first.
+
+Local first proves the route, TMDB request code, adult gate, and D1 upserts work against the local D1 database before touching remote D1.
+
+<div><span class="ooo">[</span>X<span class="ooo">]</span> Open terminal 1 in the Cloudflare repo and run the app locally:
+
+```bash
+cd /Users/croncallo/repo/MovieApp-Cloudflare
+npm run dev
+```
+
+Leave that terminal running.
+
+Open terminal 2 in the same repo:
+
+```bash
+cd /Users/croncallo/repo/MovieApp-Cloudflare
+```
+
+<div><span class="ooo">[</span>X<span class="ooo">]</span> Call the local TMDB primary-load endpoint with a small limit:</div>
+
+```bash
+curl "http://localhost:8787/admin/import/tmdb/load-manual?limit=100&beginDate=2000-01-01&endDate=2000-12-31"
+```
+
+Expected response shape:
+
+```json
+{
+  "beginDate": "2000-01-01",
+  "endDate": "2000-12-31",
+  "pagesRead": 1,
+  "rowsSeen": 100,
+  "rowsInserted": 100,
+  "totalPagesSeen": 422,
+  "tmdbDiscoverMaxPage": 500,
+  "windowsLoaded": 1,
+  "windowsSplit": 0,
+  "pendingWindows": 0,
+  "stoppedWindow": null,
+  "stopReason": "limit_reached",
+  "startedAt": "2026-04-28T00:00:00.000Z",
+  "endedAt": "2026-04-28T00:00:01.000Z",
+  "durationMs": 1000
+}
+```
+
+The response intentionally does not return every inserted `tmdb_id`.
+
+Plain meaning:
+
+```text
+For small tests, returning every id is convenient.
+For real loads, returning thousands or hundreds of thousands of ids makes the HTTP response huge and slow.
+Use D1 count/preview queries to inspect the inserted rows instead.
+```
+
+<div><span class="ooo">[</span>X<span class="ooo">]</span> Confirm local TMDB staging rows were inserted:</div>
+
+```bash
+npx wrangler d1 execute movieapp-db --local --command "SELECT COUNT(*) AS tmdb_count FROM tmdb_movies_staging;"
+```
+
+Expected count:
+
+```text
+100
+```
+
+<div><span class="ooo">[</span>X<span class="ooo">]</span> Preview the first 50 local TMDB staging rows to make sure the data shape looks normal:</div>
+
+```bash
+npx wrangler d1 execute movieapp-db --local --command "SELECT tmdb_id, title, release_date, popularity FROM tmdb_movies_staging ORDER BY release_date, tmdb_id LIMIT 50;"
+```
+
+<div><span class="ooo">[</span>X<span class="ooo">]</span> Confirm local genre child rows were inserted:</div>
+
+```bash
+npx wrangler d1 execute movieapp-db --local --command "SELECT COUNT(*) AS genre_count FROM movie_genres;"
+```
+
+Expected result:
+
+```text
+greater than 0
+```
+
+<div><span class="ooo">[</span>X<span class="ooo">]</span> Preview the first 50 local TMDB staging rows again if you want a wider sample:</div>
+
+```bash
+npx wrangler d1 execute movieapp-db --local --command "SELECT tmdb_id, title, release_date, popularity FROM tmdb_movies_staging ORDER BY release_date, tmdb_id LIMIT 50;"
+```
+
+If local fails:
+
+```text
+Stop here.
+Fix local before deploying or touching remote D1.
+```
+
+Step 9A-7: Deploy Before Remote Testing
+
+<div><span class="ooo">[</span>X<span class="ooo">]</span> Only after the local test works, deploy the Worker.
+
+```bash
+npm run deploy
+```
+
+Plain meaning:
+
+```text
+Local wrangler dev runs the code on your Mac.
+Remote testing calls the deployed Worker on Cloudflare.
+
+The remote Worker will not have the Step 9A code until you deploy.
+```
+
+Step 9A-8: Test The Primary TMDB Load Remotely
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Call the deployed TMDB primary-load endpoint with the same small limit:</div>
+
+```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/load-manual?limit=100&beginDate=2000-01-01&endDate=2000-12-31"
+```
+
+Expected response shape:
+
+```json
+{
+  "beginDate": "2000-01-01",
+  "endDate": "2000-12-31",
+  "pagesRead": 1,
+  "rowsSeen": 100,
+  "rowsInserted": 100,
+  "totalPagesSeen": 422,
+  "tmdbDiscoverMaxPage": 500,
+  "windowsLoaded": 1,
+  "windowsSplit": 0,
+  "pendingWindows": 0,
+  "stoppedWindow": null,
+  "stopReason": "limit_reached",
+  "startedAt": "2026-04-28T00:00:00.000Z",
+  "endedAt": "2026-04-28T00:00:01.000Z",
+  "durationMs": 1000
+}
+```
+
+While testing remotely, keep a separate terminal open:
+
+```bash
+npx wrangler tail
+```
+
+The Worker logs should show one start line and one end line:
+
+```text
+tmdb-load-manual-start
+tmdb-load-manual-end
+```
+
+The end log includes `durationMs`, `pagesRead`, `rowsSeen`, and `rowsInserted`.
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Confirm remote TMDB staging rows were inserted:</div>
+
+```bash
+npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS tmdb_count FROM tmdb_movies_staging;"
+```
+
+Expected count after the first remote `limit=100` test:
+
+```text
+100
+```
+
+Preview the first 50 remote TMDB staging rows to make sure the data shape looks normal:
+
+```bash
+npx wrangler d1 execute movieapp-db --remote --command "SELECT tmdb_id, title, release_date, popularity FROM tmdb_movies_staging ORDER BY release_date, tmdb_id LIMIT 50;"
+```
+
+<div><span class="ooo">[</span> <span class="ooo">]</span> Confirm remote genre child rows were inserted:</div>
+
+```bash
+npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS genre_count FROM movie_genres;"
+```
+
+Expected result:
+
+```text
+greater than 0
+```
+
+Preview the first 50 remote TMDB staging rows again if you want a wider sample:
+
+```bash
+npx wrangler d1 execute movieapp-db --remote --command "SELECT tmdb_id, title, release_date, popularity FROM tmdb_movies_staging ORDER BY release_date, tmdb_id LIMIT 50;"
+```
+
+If the remote test works, try a slightly larger same-window run:
+
+```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/load-manual?limit=1000&beginDate=2000-01-01&endDate=2000-12-31"
+```
+
+Important:
+
+```text
+beginDate and endDate must be real YYYY-MM-DD dates.
+beginDate must be less than or equal to endDate.
+
+Example valid window:
+  beginDate=2000-01-01&endDate=2000-12-31
+
+Example invalid window:
+  beginDate=10000-01-01&endDate=2000-12-31
+```
+
+Then re-check:
+
+```bash
+npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS tmdb_count FROM tmdb_movies_staging;"
+```
+
+Stop before a historical backfill until:
+
+```text
+local limit=100 works
+remote limit=100 works
+remote limit=1000 works
+Cloudflare Worker logs show no TMDB 429 or D1 write errors
 ```
 
 ### Step 9B: TMDB Enrichment Pass
@@ -2997,25 +3753,16 @@ So this pass should:
 3. read watch providers from the enrichment response and write movie_watch_providers
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Add a Worker-side TMDB enrichment helper like this:</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> In `src/index.ts`, add this new Worker-side TMDB enrichment helper.</div>
+
+Place it after `getTmdbDiscoverPage(...)`. It uses the same shared `fetchTmdbJson(...)` request gate.
 
 ```ts
 async function getTmdbMovieDetails(tmdbId: number, env: Env) {
   const url = new URL(`https://api.themoviedb.org/3/movie/${tmdbId}`);
   url.searchParams.set("append_to_response", "external_ids,watch/providers,release_dates");
 
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${env.TMDB_API_TOKEN}`,
-      accept: "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`TMDB ${tmdbId} failed: ${response.status} ${response.statusText}`);
-  }
-
-  return response.json();
+  return fetchTmdbJson(url, env);
 }
 ```
 
@@ -3029,7 +3776,9 @@ plus 0-to-many rows in movie_watch_providers from Step 9B
 
 That is why `tmdb_id` repeats in the child tables.
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Add the TMDB enrichment writes like this:</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> In `src/index.ts`, add this new helper for the TMDB enrichment writes.</div>
+
+Place it near `getTmdbMovieDetails(...)`. The manual TMDB route will call this helper after it fetches details for one accepted `tmdb_id`.
 
 ```ts
 async function enrichTmdbMovieSideTables(tmdbId: number, details: any, env: Env) {
@@ -3100,6 +3849,50 @@ Step 9B:
   5. DELETE old movie_watch_providers rows for that tmdb_id and region
   6. INSERT the current provider rows from the enrichment response
 ```
+
+Step 9B Test And Verification Plan
+
+After the Step 9B enrichment code and endpoint are added, do the same local-then-remote verification pattern as Step 9A.
+
+Local first:
+
+```text
+1. run npm run dev
+2. call the local enrichment endpoint
+3. verify local D1 was updated
+```
+
+Remote second:
+
+```text
+1. deploy with npm run deploy
+2. call the deployed enrichment endpoint
+3. verify remote D1 was updated
+```
+
+The future Step 9B endpoint should verify these effects:
+
+```text
+tmdb_movies_staging.imdb_id is filled for rows where TMDB has an IMDb id
+tmdb_movies_staging.us_certification is filled where TMDB has a US certification
+movie_watch_providers has provider child rows for movies with US flatrate providers
+```
+
+Expected verification commands:
+
+```bash
+npx wrangler d1 execute movieapp-db --local --command "SELECT COUNT(*) AS enriched_count FROM tmdb_movies_staging WHERE imdb_id IS NOT NULL;"
+```
+
+```bash
+npx wrangler d1 execute movieapp-db --local --command "SELECT COUNT(*) AS certified_count FROM tmdb_movies_staging WHERE us_certification IS NOT NULL AND us_certification <> '';"
+```
+
+```bash
+npx wrangler d1 execute movieapp-db --local --command "SELECT COUNT(*) AS provider_count FROM movie_watch_providers;"
+```
+
+Then repeat the same checks with `--remote` after deploying and running the remote enrichment endpoint.
 
 <a id="phase-10-build-the-final-movie-list-table"></a>
 ## Step 10: Build The Final Movie List Table
@@ -3592,9 +4385,10 @@ TMDB recurring helper shape:
 ```text
 1. reads MAX(release_date) from tmdb_movies_staging
 2. calls getTmdbDiscoverPage(...)
-3. calls insertTmdbPrimaryRows(...)
-4. calls getTmdbMovieDetails(...) for accepted tmdb_id values
-5. calls enrichTmdbMovieSideTables(...)
+3. calls buildTmdbPrimaryStatements(...) for accepted TMDB rows
+4. writes those statements with env.DB.batch(...)
+5. calls getTmdbMovieDetails(...) for accepted tmdb_id values
+6. calls enrichTmdbMovieSideTables(...)
 ```
 
 Recurring-job split:
@@ -3713,7 +4507,7 @@ IMDb path:
 
 TMDB path:
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Add the TMDB API token locally and in Cloudflare.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Add the TMDB API key locally and in Cloudflare.</div>
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Build the Cloudflare TMDB movie-list load endpoint for manual kickoff.</div>
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Load a small TMDB sample into remote D1.</div>
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Run the one-time manual TMDB historical backfill in date windows.</div>
