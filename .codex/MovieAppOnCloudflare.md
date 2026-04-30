@@ -3608,7 +3608,7 @@ The remote Worker will not have the Step 9A code until you deploy.
 
 Step 9A-8: Test The Primary TMDB Load Remotely
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Call the deployed TMDB primary-load endpoint with the same small limit:</div>
+<div><span class="ooo">[</span>X<span class="ooo">]</span> Call the deployed TMDB primary-load endpoint with the same small limit:</div>
 
 ```bash
 curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/load-manual?limit=100&beginDate=2000-01-01&endDate=2000-12-31"
@@ -3636,7 +3636,7 @@ Expected response shape:
 }
 ```
 
-While testing remotely, keep a separate terminal open:
+<div><span class="ooo">[</span>X<span class="ooo">]</span> While testing remotely, keep a separate terminal open:
 
 ```bash
 npx wrangler tail
@@ -3651,7 +3651,7 @@ tmdb-load-manual-end
 
 The end log includes `durationMs`, `pagesRead`, `rowsSeen`, and `rowsInserted`.
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Confirm remote TMDB staging rows were inserted:</div>
+<div><span class="ooo">[</span> X<span class="ooo">]</span> Confirm remote TMDB staging rows were inserted:</div>
 
 ```bash
 npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS tmdb_count FROM tmdb_movies_staging;"
@@ -3663,13 +3663,13 @@ Expected count after the first remote `limit=100` test:
 100
 ```
 
-Preview the first 50 remote TMDB staging rows to make sure the data shape looks normal:
+<div><span class="ooo">[</span>X<span class="ooo">]</span> Preview the first 50 remote TMDB staging rows to make sure the data shape looks normal:
 
 ```bash
 npx wrangler d1 execute movieapp-db --remote --command "SELECT tmdb_id, title, release_date, popularity FROM tmdb_movies_staging ORDER BY release_date, tmdb_id LIMIT 50;"
 ```
 
-<div><span class="ooo">[</span> <span class="ooo">]</span> Confirm remote genre child rows were inserted:</div>
+<div><span class="ooo">[</span>X<span class="ooo">]</span> Confirm remote genre child rows were inserted:</div>
 
 ```bash
 npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS genre_count FROM movie_genres;"
@@ -3681,13 +3681,13 @@ Expected result:
 greater than 0
 ```
 
-Preview the first 50 remote TMDB staging rows again if you want a wider sample:
+<div><span class="ooo">[</span>X<span class="ooo">]</span> Preview the first 50 remote TMDB staging rows again if you want a wider sample:
 
 ```bash
 npx wrangler d1 execute movieapp-db --remote --command "SELECT tmdb_id, title, release_date, popularity FROM tmdb_movies_staging ORDER BY release_date, tmdb_id LIMIT 50;"
 ```
 
-If the remote test works, try a slightly larger same-window run:
+<div><span class="ooo">[</span>X<span class="ooo">]</span> If the remote test works, try a slightly larger same-window run:
 
 ```bash
 curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/load-manual?limit=1000&beginDate=2000-01-01&endDate=2000-12-31"
@@ -3706,7 +3706,7 @@ Example invalid window:
   beginDate=10000-01-01&endDate=2000-12-31
 ```
 
-Then re-check:
+<div><span class="ooo">[</span>X<span class="ooo">]</span> Then re-check:
 
 ```bash
 npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS tmdb_count FROM tmdb_movies_staging;"
@@ -3721,111 +3721,270 @@ remote limit=1000 works
 Cloudflare Worker logs show no TMDB 429 or D1 write errors
 ```
 
+<div><span class="ooo">[</span>X<span class="ooo">]</span>  Complete the historical backfills for 2000 and greater by three years at a time; then by decade prior to 2000
+
+
 ### Step 9B: TMDB Enrichment Pass
 
-This pass happens after Step 9A.
+Step 9B happens after Step 9A.
 
-This is the point where the TMDB movie ids accepted by the primary load are enriched with the fields discover/movie does not return.
+Step 9A loaded the primary TMDB rows from `discover/movie`.
 
-This pass is responsible for:
-
-```text
-1. loading imdb_id
-2. loading us_certification
-3. loading watch providers
-4. updating tmdb_movies_staging
-5. writing movie_watch_providers
-```
-
-The TMDB movie-details API response gives us:
+Step 9B refreshes each already-loaded `tmdb_id` through TMDB movie details:
 
 ```text
-details.external_ids.imdb_id
-details.release_dates
-details["watch/providers"]
+/movie/{tmdb_id}?append_to_response=external_ids,release_dates,watch/providers
 ```
 
-So this pass should:
+That one TMDB call refreshes all critical enrichment data together:
 
 ```text
-1. read imdb_id from the enrichment response and update tmdb_movies_staging
-2. read certification from the enrichment response and update tmdb_movies_staging
-3. read watch providers from the enrichment response and write movie_watch_providers
+imdb_id                -> joins TMDB rows to IMDb ratings
+us_certification       -> supports PG, PG-13, R, etc.
+US flatrate providers  -> supports the app's streamer filters
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> In `src/index.ts`, add this new Worker-side TMDB enrichment helper.</div>
+Important design decision:
 
-Place it after `getTmdbDiscoverPage(...)`. It uses the same shared `fetchTmdbJson(...)` request gate.
+```text
+Do not use TMDB /movie/changes as the main refresh driver.
+
+Reason:
+  provider/streamer changes are the critical freshness problem,
+  and TMDB change logs do not reliably include watch-provider changes.
+
+Instead:
+  select rows from our own D1 table based on tmdb_enriched_at.
+  refresh those movies through the same full enrichment function every time.
+```
+
+This means initial backfill and recurring refresh use the same code and the same SQL shape.
+
+The selector is:
+
+```sql
+SELECT tmdb_id
+FROM tmdb_movies_staging
+WHERE tmdb_enriched_at IS NULL
+   OR tmdb_enriched_at < datetime('now', '-' || ? || ' days')
+ORDER BY
+  tmdb_enriched_at IS NOT NULL,
+  tmdb_enriched_at,
+  tmdb_id
+LIMIT ?
+```
+
+Plain meaning:
+
+```text
+1. first pick movies that have never been enriched
+2. then pick the oldest enriched movies whose enrichment is stale
+3. stop at the limit for this run
+```
+
+The cool part while testing:
+
+```text
+Each test run updates only rows that still qualify.
+
+If you run limit=1000, those 1000 rows get tmdb_enriched_at.
+The next limit=1000 run does not redo those same rows.
+It moves on to the next qualifying rows.
+```
+
+Step 9B also writes structured `console.log(...)` events so progress is visible in:
+
+```text
+Cloudflare Dashboard
+Workers & Pages
+movieapp-cloudflare
+Observability
+Events
+```
+
+and in:
+
+```bash
+npx wrangler tail
+```
+
+Expected event names:
+
+```text
+tmdb-enrich-start
+tmdb-enrich-progress
+tmdb-enrich-row-error
+tmdb-enrich-end
+```
+
+### Step 9B-1: Add The Enrichment Tracking Column
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> Add migration `migrations/0002_add_tmdb_enriched_at.sql`.</div>
+
+Why:
+
+```text
+tmdb_enriched_at is the single field that says:
+  this movie has gone through the full Step 9B enrichment refresh.
+
+Do not use imdb_id IS NULL or us_certification IS NULL to decide whether
+a movie still needs enrichment.
+
+Those nulls can be valid:
+  some movies genuinely have no IMDb id
+  some movies genuinely have no US certification
+  some movies genuinely have no US flatrate providers
+```
+
+Migration:
+
+```sql
+ALTER TABLE tmdb_movies_staging
+ADD COLUMN tmdb_enriched_at TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_tmdb_movies_staging_enriched_at
+ON tmdb_movies_staging (tmdb_enriched_at, tmdb_id);
+```
+
+Apply locally before local tests:
+
+```bash
+npm run db:migrate:local
+```
+
+Apply remotely before remote tests:
+
+```bash
+npm run db:migrate:remote
+```
+
+### Step 9B-2: Add The TMDB Enrichment Types And Constants
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add the Step 9B TMDB response types near the Step 9A TMDB types.</div>
+
+Why:
+
+```text
+The Worker needs to understand the shape of:
+  external_ids
+  release_dates
+  watch/providers
+
+The code only keeps the fields the app needs.
+```
+
+Also add:
+
+```ts
+const TMDB_ENRICH_D1_BATCH_MOVIES = 100;
+const TMDB_ENRICH_TMDB_CONCURRENCY = 25;
+```
+
+Why:
+
+```text
+The whole run may process 1000, 5000, 10000, or 20000 movies.
+But D1 writes should still flush in smaller groups.
+
+So:
+  run limit = how many movies this invocation tries
+  D1 batch size = how many movies worth of SQL statements are sent at once
+  TMDB concurrency = how many movie detail requests can be in flight at once
+```
+
+The TMDB concurrency setting does not remove the rate governor.
+
+The governor still controls request starts:
+
+```text
+fetchTmdbJson(...)
+-> waitForTmdbRequestSlot()
+-> no more than 35 TMDB request starts per rolling second
+```
+
+Why concurrency is still needed:
+
+```text
+Without concurrency, the Worker waits for one movie detail request to finish
+before starting the next one.
+
+That can be much slower than the 35-per-second cap because each request has
+network round-trip time.
+
+With controlled concurrency, several movie detail requests can be in flight,
+but the shared governor still prevents request starts from exceeding the cap.
+```
+
+### Step 9B-3: Add The TMDB Movie Detail Helper
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add `getTmdbMovieDetails(...)` after the Step 9A TMDB helpers.</div>
+
+Why:
+
+```text
+This is the one TMDB request per movie.
+It uses append_to_response so we do not make three separate TMDB calls.
+It calls fetchTmdbJson(...), so it uses the same 35-requests-per-second governor.
+```
+
+Code shape:
 
 ```ts
 async function getTmdbMovieDetails(tmdbId: number, env: Env) {
   const url = new URL(`https://api.themoviedb.org/3/movie/${tmdbId}`);
-  url.searchParams.set("append_to_response", "external_ids,watch/providers,release_dates");
+  url.searchParams.set(
+    "append_to_response",
+    "external_ids,release_dates,watch/providers",
+  );
 
-  return fetchTmdbJson(url, env);
+  return fetchTmdbJson<TmdbMovieDetails>(url, env);
 }
 ```
 
-One TMDB movie still ends up as:
+### Step 9B-4: Add The Enrichment Parsing Helpers
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add helpers that pull US certification and US flatrate provider ids from the TMDB detail response.</div>
+
+Why:
 
 ```text
-1 base row in tmdb_movies_staging from Step 9A
-plus 0-to-many rows in movie_genres from Step 9A
-plus 0-to-many rows in movie_watch_providers from Step 9B
+The TMDB response has nested sections.
+Keeping the parsing in small helpers makes the write logic easier to read.
 ```
 
-That is why `tmdb_id` repeats in the child tables.
+Helpers added:
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> In `src/index.ts`, add this new helper for the TMDB enrichment writes.</div>
+```text
+getUsCertification(details)
+getUsFlatrateProviderIds(details)
+```
 
-Place it near `getTmdbMovieDetails(...)`. The manual TMDB route will call this helper after it fetches details for one accepted `tmdb_id`.
+### Step 9B-5: Add The D1 Statement Builder
 
-```ts
-async function enrichTmdbMovieSideTables(tmdbId: number, details: any, env: Env) {
-  const imdbId = details.external_ids?.imdb_id ?? null;
-  const usFlatrateProviders =
-    details["watch/providers"]?.results?.US?.flatrate ?? [];
+<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add `buildTmdbEnrichmentStatements(...)`.</div>
 
-  const usReleaseDates = details.release_dates?.results ?? [];
-  const usReleaseBlock = usReleaseDates.find(
-    (entry: any) => entry.iso_3166_1 === "US"
-  );
-  const usCertification =
-    usReleaseBlock?.release_dates?.find(
-      (entry: any) => typeof entry.certification === "string" && entry.certification.length > 0
-    )?.certification ?? null;
+Why:
 
-  await env.DB.prepare(
-    `UPDATE tmdb_movies_staging
-     SET imdb_id = ?,
-         us_certification = ?,
-         imported_at = CURRENT_TIMESTAMP
-     WHERE tmdb_id = ?`
-  )
-    .bind(
-      imdbId,
-      usCertification,
-      tmdbId
-    )
-    .run();
+```text
+Do not run one D1 request for every SQL statement.
+Build prepared statements first, then send them with env.DB.batch(...).
+```
 
-  await env.DB.prepare(
-      `DELETE FROM movie_watch_providers
-     WHERE tmdb_id = ?
-       AND region = ?`
-  )
-    .bind(tmdbId, "US")
-    .run();
+For one movie, the SQL intent is:
 
-  for (const provider of usFlatrateProviders) {
-    await env.DB.prepare(
-      `INSERT INTO movie_watch_providers (tmdb_id, provider_id, region)
-       VALUES (?, ?, ?)`
-    )
-      .bind(tmdbId, provider.provider_id, "US")
-      .run();
-  }
-}
+```sql
+UPDATE tmdb_movies_staging
+SET imdb_id = ?,
+    us_certification = ?,
+    tmdb_enriched_at = CURRENT_TIMESTAMP
+WHERE tmdb_id = ?;
+
+DELETE FROM movie_watch_providers
+WHERE tmdb_id = ?
+  AND region = 'US';
+
+INSERT INTO movie_watch_providers (tmdb_id, provider_id, region)
+VALUES (?, ?, 'US');
 ```
 
 Why the provider-child-table logic starts with `DELETE`:
@@ -3836,52 +3995,265 @@ If we only INSERT new rows, old rows could be left behind.
 Deleting the old provider rows for that tmdb_id first keeps the child table exact.
 ```
 
-So the practical Step 9 load pattern for one TMDB movie is:
+### Step 9B-6: Add The Shared Enrichment Runner
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add `getTmdbEnrichmentRows(...)` and `runTmdbEnrichment(...)`.</div>
+
+Why:
 
 ```text
-Step 9A:
-  1. INSERT OR REPLACE the base tmdb_movies_staging row
-  2. DELETE old movie_genres rows for that tmdb_id
-  3. INSERT the current genre_ids from discover/movie
-
-Step 9B:
-  4. UPDATE that same tmdb_movies_staging row with imdb_id and certification
-  5. DELETE old movie_watch_providers rows for that tmdb_id and region
-  6. INSERT the current provider rows from the enrichment response
+Manual runs, cron runs, initial backfill, and recurring refresh should all use
+the same code path.
 ```
 
-Step 9B Test And Verification Plan
+The row selector:
 
-After the Step 9B enrichment code and endpoint are added, do the same local-then-remote verification pattern as Step 9A.
+```sql
+SELECT tmdb_id
+FROM tmdb_movies_staging
+WHERE tmdb_enriched_at IS NULL
+   OR tmdb_enriched_at < datetime('now', '-' || ? || ' days')
+ORDER BY
+  tmdb_enriched_at IS NOT NULL,
+  tmdb_enriched_at,
+  tmdb_id
+LIMIT ?
+```
 
-Local first:
+The runner:
 
 ```text
-1. run npm run dev
-2. call the local enrichment endpoint
-3. verify local D1 was updated
+1. selects the next rows needing enrichment
+2. calls TMDB once per selected movie
+3. builds D1 prepared statements
+4. flushes D1 batches
+5. logs progress at the configured progressEvery interval
+6. returns a JSON summary
 ```
 
-Remote second:
+Progress logs are intentionally structured JSON.
+
+Start:
+
+```json
+{
+  "event": "tmdb-enrich-start",
+  "trigger": "manual",
+  "limit": 20000,
+  "refreshOlderThanDays": 7,
+  "selected": 20000
+}
+```
+
+Progress:
+
+```json
+{
+  "event": "tmdb-enrich-progress",
+  "processed": 5000,
+  "selected": 20000,
+  "updated": 5000,
+  "errors": 0,
+  "imdbIdsFound": 4200,
+  "certificationsFound": 3100,
+  "providerMoviesFound": 1800,
+  "providerRowsInserted": 4300,
+  "durationMs": 150000
+}
+```
+
+End:
+
+```json
+{
+  "event": "tmdb-enrich-end",
+  "selected": 20000,
+  "processed": 20000,
+  "updated": 20000,
+  "errors": 0,
+  "durationMs": 612000
+}
+```
+
+### Step 9B-7: Add The Manual Endpoint
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add the manual route.</div>
+
+Route:
 
 ```text
-1. deploy with npm run deploy
-2. call the deployed enrichment endpoint
-3. verify remote D1 was updated
+/admin/import/tmdb/enrich-manual
 ```
 
-The future Step 9B endpoint should verify these effects:
-
-```text
-tmdb_movies_staging.imdb_id is filled for rows where TMDB has an IMDb id
-tmdb_movies_staging.us_certification is filled where TMDB has a US certification
-movie_watch_providers has provider child rows for movies with US flatrate providers
-```
-
-Expected verification commands:
+Example:
 
 ```bash
-npx wrangler d1 execute movieapp-db --local --command "SELECT COUNT(*) AS enriched_count FROM tmdb_movies_staging WHERE imdb_id IS NOT NULL;"
+curl "http://localhost:8787/admin/import/tmdb/enrich-manual?limit=1000&refreshOlderThanDays=7&progressEvery=1000&tmdbConcurrency=25"
+```
+
+Parameters:
+
+```text
+limit:
+  how many movies this run should try
+
+refreshOlderThanDays:
+  rows with tmdb_enriched_at older than this can be refreshed again
+  null tmdb_enriched_at rows always qualify
+
+progressEvery:
+  how often the Worker writes a progress event
+
+tmdbConcurrency:
+  optional tuning knob for how many TMDB movie detail requests can be in flight
+  default is 25
+```
+
+### Step 9B-8: Add The Scheduled Handler
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add a `scheduled(...)` handler that calls the same enrichment runner.</div>
+
+Why:
+
+```text
+The cron job should not have its own enrichment logic.
+It should call the same runTmdbEnrichment(...) function as the manual endpoint.
+```
+
+Code shape:
+
+```ts
+async scheduled(_controller, env, ctx) {
+  ctx.waitUntil(
+    runTmdbEnrichment(env, {
+      limit: 20000,
+      refreshOlderThanDays: 7,
+      progressEvery: 5000,
+      tmdbConcurrency: 25,
+      trigger: "cron",
+    }),
+  );
+}
+```
+
+Do not enable the real cron schedule until manual testing proves the timing.
+
+When ready, add this to `wrangler.jsonc` after the `queues` block:
+
+```jsonc
+"triggers": {
+  "crons": [
+    "0 */6 * * *"
+  ]
+}
+```
+
+That means:
+
+```text
+run every 6 hours
+```
+
+Cloudflare dashboard test:
+
+```text
+Workers & Pages
+movieapp-cloudflare
+Settings
+Triggers
+Cron Triggers
+```
+
+Use the dashboard test/run control if Cloudflare shows it for your account.
+
+### Step 9B-9: Watch The Progress Logs
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Open the Cloudflare dashboard log view before testing remote enrichment.</div>
+
+Dashboard path:
+
+```text
+Workers & Pages
+movieapp-cloudflare
+Observability
+Events
+Live
+Last 1 hour
+```
+
+Look for:
+
+```text
+tmdb-enrich-start
+tmdb-enrich-progress
+tmdb-enrich-end
+```
+
+Also run this locally in another terminal:
+
+```bash
+npx wrangler tail
+```
+
+### Step 9B-10: Test Locally From 1000 Rows To 20000 Rows
+
+Remember:
+
+```text
+Each test updates only rows that qualify by tmdb_enriched_at.
+
+Because the WHERE clause checks:
+  tmdb_enriched_at IS NULL
+  OR tmdb_enriched_at is older than 7 days
+
+the second test does not redo the same fresh rows from the first test.
+It moves on to the next rows that still qualify.
+```
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Start local Wrangler:</div>
+
+```bash
+npm run dev
+```
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Local 1000-row enrichment test:</div>
+
+```bash
+curl "http://localhost:8787/admin/import/tmdb/enrich-manual?limit=1000&refreshOlderThanDays=7&progressEvery=1000&tmdbConcurrency=25"
+```
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Check local enrichment count:</div>
+
+```bash
+npx wrangler d1 execute movieapp-db --local --command "SELECT COUNT(*) AS enriched_count FROM tmdb_movies_staging WHERE tmdb_enriched_at IS NOT NULL;"
+```
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Local 5000-row enrichment test:</div>
+
+```bash
+curl "http://localhost:8787/admin/import/tmdb/enrich-manual?limit=5000&refreshOlderThanDays=7&progressEvery=1000&tmdbConcurrency=25"
+```
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Local 10000-row enrichment test:</div>
+
+```bash
+curl "http://localhost:8787/admin/import/tmdb/enrich-manual?limit=10000&refreshOlderThanDays=7&progressEvery=2500&tmdbConcurrency=25"
+```
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Local 20000-row enrichment test:</div>
+
+```bash
+curl "http://localhost:8787/admin/import/tmdb/enrich-manual?limit=20000&refreshOlderThanDays=7&progressEvery=5000&tmdbConcurrency=25"
+```
+
+Helpful local verification:
+
+```bash
+npx wrangler d1 execute movieapp-db --local --command "SELECT COUNT(*) AS enriched_count FROM tmdb_movies_staging WHERE tmdb_enriched_at IS NOT NULL;"
+```
+
+```bash
+npx wrangler d1 execute movieapp-db --local --command "SELECT COUNT(*) AS imdb_count FROM tmdb_movies_staging WHERE imdb_id IS NOT NULL;"
 ```
 
 ```bash
@@ -3892,7 +4264,65 @@ npx wrangler d1 execute movieapp-db --local --command "SELECT COUNT(*) AS certif
 npx wrangler d1 execute movieapp-db --local --command "SELECT COUNT(*) AS provider_count FROM movie_watch_providers;"
 ```
 
-Then repeat the same checks with `--remote` after deploying and running the remote enrichment endpoint.
+### Step 9B-11: Deploy And Test Remotely From 1000 Rows To 20000 Rows
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Deploy after local testing looks good:</div>
+
+```bash
+npm run deploy
+```
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Remote 1000-row enrichment test:</div>
+
+```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-manual?limit=1000&refreshOlderThanDays=7&progressEvery=1000&tmdbConcurrency=25"
+```
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Check remote enrichment count:</div>
+
+```bash
+npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS enriched_count FROM tmdb_movies_staging WHERE tmdb_enriched_at IS NOT NULL;"
+```
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Remote 5000-row enrichment test:</div>
+
+```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-manual?limit=5000&refreshOlderThanDays=7&progressEvery=1000&tmdbConcurrency=25"
+```
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Remote 10000-row enrichment test:</div>
+
+```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-manual?limit=10000&refreshOlderThanDays=7&progressEvery=2500&tmdbConcurrency=25"
+```
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Remote 20000-row enrichment test:</div>
+
+```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-manual?limit=20000&refreshOlderThanDays=7&progressEvery=5000&tmdbConcurrency=25"
+```
+
+Remote verification:
+
+```bash
+npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS enriched_count FROM tmdb_movies_staging WHERE tmdb_enriched_at IS NOT NULL;"
+```
+
+```bash
+npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS imdb_count FROM tmdb_movies_staging WHERE imdb_id IS NOT NULL;"
+```
+
+```bash
+npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS certified_count FROM tmdb_movies_staging WHERE us_certification IS NOT NULL AND us_certification <> '';"
+```
+
+```bash
+npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS provider_count FROM movie_watch_providers;"
+```
+
+If a remote run fails with a transient Cloudflare/TMDB error like `1101`, `1102`, or a TMDB `500/502/503/504`, rerun the same command.
+
+Because successful rows have `tmdb_enriched_at`, the rerun continues with rows that still qualify instead of redoing the fresh rows.
 
 <a id="phase-10-build-the-final-movie-list-table"></a>
 ## Step 10: Build The Final Movie List Table

@@ -151,11 +151,63 @@ type TmdbDateWindow = {
 	endDate: string;
 };
 
+type TmdbMovieDetails = {
+	id: number;
+	external_ids?: {
+		imdb_id?: string | null;
+	};
+	release_dates?: {
+		results?: TmdbReleaseDateCountry[];
+	};
+	"watch/providers"?: {
+		results?: {
+			US?: {
+				flatrate?: TmdbWatchProvider[];
+			};
+		};
+	};
+};
+
+type TmdbReleaseDateCountry = {
+	iso_3166_1?: string;
+	release_dates?: TmdbReleaseDateItem[];
+};
+
+type TmdbReleaseDateItem = {
+	certification?: string;
+};
+
+type TmdbWatchProvider = {
+	provider_id?: unknown;
+};
+
+type TmdbEnrichmentRow = {
+	tmdb_id: number;
+};
+
+type TmdbEnrichmentOptions = {
+	limit: number;
+	refreshOlderThanDays: number;
+	progressEvery: number;
+	tmdbConcurrency: number;
+	trigger: "manual" | "cron";
+	useLock?: boolean;
+};
+
+type ImportJobLockRow = {
+	owner: string;
+	lock_expires_at: string;
+};
+
 const IMDB_QUEUE_ROWS_PER_MESSAGE = 33;
 const IMDB_QUEUE_MESSAGES_PER_SEND_BATCH = 100;
 const TMDB_MAX_REQUESTS_PER_SECOND = 35;
 const TMDB_MAX_RETRIES = 3;
 const TMDB_DISCOVER_MAX_PAGE = 500;
+const TMDB_ENRICH_D1_BATCH_MOVIES = 100;
+const TMDB_ENRICH_TMDB_CONCURRENCY = 25;
+const TMDB_ENRICH_JOB_NAME = "tmdb-enrich";
+const TMDB_ENRICH_LOCK_MINUTES = 30;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const tmdbRequestTimestamps: number[] = [];
 
@@ -679,6 +731,384 @@ async function loadTmdbPrimaryRowsManual(
 		stoppedWindow,
 		stopReason,
 	};
+}
+
+async function getTmdbMovieDetails(tmdbId: number, env: Env) {
+	const url = new URL(`https://api.themoviedb.org/3/movie/${tmdbId}`);
+	url.searchParams.set(
+		"append_to_response",
+		"external_ids,release_dates,watch/providers",
+	);
+
+	return fetchTmdbJson<TmdbMovieDetails>(url, env);
+}
+
+function getUsCertification(details: TmdbMovieDetails) {
+	const usReleaseBlock = details.release_dates?.results?.find(
+		(entry) => entry.iso_3166_1 === "US",
+	);
+
+	return (
+		usReleaseBlock?.release_dates?.find(
+			(entry) =>
+				typeof entry.certification === "string" &&
+				entry.certification.length > 0,
+		)?.certification ?? null
+	);
+}
+
+function getUsFlatrateProviderIds(details: TmdbMovieDetails) {
+	const providers = details["watch/providers"]?.results?.US?.flatrate ?? [];
+
+	return [
+		...new Set(
+			providers
+				.map((provider) => provider.provider_id)
+				.filter((providerId) => typeof providerId === "number"),
+		),
+	];
+}
+
+function buildTmdbEnrichmentStatements(
+	tmdbId: number,
+	details: TmdbMovieDetails,
+	env: Env,
+) {
+	const imdbId = details.external_ids?.imdb_id ?? null;
+	const usCertification = getUsCertification(details);
+	const providerIds = getUsFlatrateProviderIds(details);
+	const statements = [
+		env.DB.prepare(
+			`UPDATE tmdb_movies_staging
+			 SET imdb_id = ?,
+			     us_certification = ?,
+			     tmdb_enriched_at = CURRENT_TIMESTAMP
+			 WHERE tmdb_id = ?`,
+		).bind(imdbId, usCertification, tmdbId),
+		env.DB.prepare(
+			`DELETE FROM movie_watch_providers
+			 WHERE tmdb_id = ?
+			   AND region = ?`,
+		).bind(tmdbId, "US"),
+	];
+
+	for (const providerId of providerIds) {
+		statements.push(
+			env.DB.prepare(
+				`INSERT INTO movie_watch_providers (tmdb_id, provider_id, region)
+				 VALUES (?, ?, ?)`,
+			).bind(tmdbId, providerId, "US"),
+		);
+	}
+
+	return {
+		statements,
+		imdbIdFound: imdbId ? 1 : 0,
+		certificationFound: usCertification ? 1 : 0,
+		providerMovieFound: providerIds.length > 0 ? 1 : 0,
+		providerRowsInserted: providerIds.length,
+	};
+}
+
+async function getTmdbEnrichmentRows(
+	env: Env,
+	limit: number,
+	refreshOlderThanDays: number,
+) {
+	const { results } = await env.DB.prepare(
+		`SELECT tmdb_id
+		 FROM tmdb_movies_staging
+		 WHERE tmdb_enriched_at IS NULL
+		    OR tmdb_enriched_at < datetime('now', '-' || ? || ' days')
+		 ORDER BY
+		   tmdb_enriched_at IS NOT NULL,
+		   tmdb_enriched_at,
+		   tmdb_id
+		 LIMIT ?`,
+	)
+		.bind(refreshOlderThanDays, limit)
+		.all<TmdbEnrichmentRow>();
+
+	return results;
+}
+
+function createJobOwner(trigger: "manual" | "cron") {
+	return `${trigger}-${Date.now()}-${crypto.randomUUID()}`;
+}
+
+async function acquireImportJobLock(
+	env: Env,
+	jobName: string,
+	owner: string,
+	lockMinutes: number,
+) {
+	await env.DB.prepare(
+		`DELETE FROM import_job_locks
+		 WHERE job_name = ?
+		   AND lock_expires_at < CURRENT_TIMESTAMP`,
+	).bind(jobName).run();
+
+	const insertResult = await env.DB.prepare(
+		`INSERT OR IGNORE INTO import_job_locks (
+			 job_name,
+			 locked_at,
+			 lock_expires_at,
+			 owner
+		 )
+		 VALUES (?, CURRENT_TIMESTAMP, datetime('now', '+' || ? || ' minutes'), ?)`,
+	).bind(jobName, lockMinutes, owner).run();
+
+	if (insertResult.meta.changes > 0) {
+		console.log(
+			JSON.stringify({
+				event: "import-job-lock-acquired",
+				jobName,
+				owner,
+				lockMinutes,
+			}),
+		);
+		return true;
+	}
+
+	const existingLock = await env.DB.prepare(
+		`SELECT owner, lock_expires_at
+		 FROM import_job_locks
+		 WHERE job_name = ?`,
+	).bind(jobName).first<ImportJobLockRow>();
+
+	console.log(
+		JSON.stringify({
+			event: "import-job-lock-skipped",
+			jobName,
+			owner,
+			existingOwner: existingLock?.owner ?? null,
+			existingLockExpiresAt: existingLock?.lock_expires_at ?? null,
+		}),
+	);
+
+	return false;
+}
+
+async function releaseImportJobLock(
+	env: Env,
+	jobName: string,
+	owner: string,
+) {
+	await env.DB.prepare(
+		`DELETE FROM import_job_locks
+		 WHERE job_name = ?
+		   AND owner = ?`,
+	).bind(jobName, owner).run();
+
+	console.log(
+		JSON.stringify({
+			event: "import-job-lock-released",
+			jobName,
+			owner,
+		}),
+	);
+}
+
+async function runTmdbEnrichment(env: Env, options: TmdbEnrichmentOptions) {
+	const startedAtMs = Date.now();
+	const startedAt = new Date(startedAtMs).toISOString();
+	const lockOwner = createJobOwner(options.trigger);
+	let lockAcquired = false;
+
+	if (options.useLock) {
+		lockAcquired = await acquireImportJobLock(
+			env,
+			TMDB_ENRICH_JOB_NAME,
+			lockOwner,
+			TMDB_ENRICH_LOCK_MINUTES,
+		);
+
+		if (!lockAcquired) {
+			const endedAtMs = Date.now();
+			const endedAt = new Date(endedAtMs).toISOString();
+			return {
+				trigger: options.trigger,
+				skipped: true,
+				skipReason: "job_already_running",
+				limit: options.limit,
+				refreshOlderThanDays: options.refreshOlderThanDays,
+				tmdbConcurrency: options.tmdbConcurrency,
+				selected: 0,
+				processed: 0,
+				updated: 0,
+				errors: 0,
+				imdbIdsFound: 0,
+				certificationsFound: 0,
+				providerMoviesFound: 0,
+				providerRowsInserted: 0,
+				startedAt,
+				endedAt,
+				durationMs: endedAtMs - startedAtMs,
+			};
+		}
+	}
+
+	try {
+		const rows = await getTmdbEnrichmentRows(
+			env,
+			options.limit,
+			options.refreshOlderThanDays,
+		);
+		let processed = 0;
+		let updated = 0;
+		let errors = 0;
+		let imdbIdsFound = 0;
+		let certificationsFound = 0;
+		let providerMoviesFound = 0;
+		let providerRowsInserted = 0;
+		let pendingStatements: D1PreparedStatement[] = [];
+		let pendingStatementMovies = 0;
+		let nextProgressLogAt = options.progressEvery;
+
+		console.log(
+			JSON.stringify({
+				event: "tmdb-enrich-start",
+				trigger: options.trigger,
+				limit: options.limit,
+				refreshOlderThanDays: options.refreshOlderThanDays,
+				selected: rows.length,
+				progressEvery: options.progressEvery,
+				tmdbConcurrency: options.tmdbConcurrency,
+				startedAt,
+			}),
+		);
+
+		async function flushStatements() {
+			if (pendingStatements.length === 0) {
+				return;
+			}
+
+			await env.DB.batch(pendingStatements);
+			pendingStatements = [];
+			pendingStatementMovies = 0;
+		}
+
+		for (
+			let index = 0;
+			index < rows.length;
+			index += options.tmdbConcurrency
+		) {
+			const rowChunk = rows.slice(index, index + options.tmdbConcurrency);
+			const enrichmentResults = await Promise.all(
+				rowChunk.map(async (row) => {
+					try {
+						const details = await getTmdbMovieDetails(row.tmdb_id, env);
+						return {
+							row,
+							enrichment: buildTmdbEnrichmentStatements(
+								row.tmdb_id,
+								details,
+								env,
+							),
+							error: null,
+						};
+					} catch (error) {
+						return {
+							row,
+							enrichment: null,
+							error,
+						};
+					}
+				}),
+			);
+
+			for (const result of enrichmentResults) {
+				if (result.enrichment) {
+					pendingStatements.push(...result.enrichment.statements);
+					pendingStatementMovies += 1;
+					updated += 1;
+					imdbIdsFound += result.enrichment.imdbIdFound;
+					certificationsFound += result.enrichment.certificationFound;
+					providerMoviesFound += result.enrichment.providerMovieFound;
+					providerRowsInserted += result.enrichment.providerRowsInserted;
+
+					if (pendingStatementMovies >= TMDB_ENRICH_D1_BATCH_MOVIES) {
+						await flushStatements();
+					}
+				} else {
+					errors += 1;
+					console.log(
+						JSON.stringify({
+							event: "tmdb-enrich-row-error",
+							trigger: options.trigger,
+							tmdbId: result.row.tmdb_id,
+							error:
+								result.error instanceof Error
+									? result.error.message
+									: String(result.error),
+						}),
+					);
+				}
+
+				processed += 1;
+			}
+
+			if (processed >= nextProgressLogAt || processed === rows.length) {
+				await flushStatements();
+
+				console.log(
+					JSON.stringify({
+						event: "tmdb-enrich-progress",
+						trigger: options.trigger,
+						selected: rows.length,
+						processed,
+						updated,
+						errors,
+						imdbIdsFound,
+						certificationsFound,
+						providerMoviesFound,
+						providerRowsInserted,
+						durationMs: Date.now() - startedAtMs,
+					}),
+				);
+
+				while (nextProgressLogAt <= processed) {
+					nextProgressLogAt += options.progressEvery;
+				}
+			}
+		}
+
+		await flushStatements();
+
+		const endedAtMs = Date.now();
+		const endedAt = new Date(endedAtMs).toISOString();
+		const durationMs = endedAtMs - startedAtMs;
+		const result = {
+			trigger: options.trigger,
+			limit: options.limit,
+			refreshOlderThanDays: options.refreshOlderThanDays,
+			tmdbConcurrency: options.tmdbConcurrency,
+			selected: rows.length,
+			processed,
+			updated,
+			errors,
+			imdbIdsFound,
+			certificationsFound,
+			providerMoviesFound,
+			providerRowsInserted,
+			startedAt,
+			endedAt,
+			durationMs,
+		};
+
+		console.log(
+			JSON.stringify({
+				event: "tmdb-enrich-end",
+				...result,
+			}),
+		);
+
+		return result;
+	} finally {
+		if (options.useLock && lockAcquired) {
+			await releaseImportJobLock(env, TMDB_ENRICH_JOB_NAME, lockOwner);
+		}
+	}
 }
 
 /*
@@ -1273,8 +1703,64 @@ export default {
 					}),
 				);
 
-				return Response.json(responseBody);
+			return Response.json(responseBody);
+		}
+
+		if (url.pathname === "/admin/import/tmdb/enrich-manual") {
+			const limit = Number(url.searchParams.get("limit") ?? 1000);
+			const refreshOlderThanDays = Number(
+				url.searchParams.get("refreshOlderThanDays") ?? 7,
+			);
+			const progressEvery = Number(
+				url.searchParams.get("progressEvery") ?? Math.min(limit, 5000),
+			);
+			const tmdbConcurrency = Number(
+				url.searchParams.get("tmdbConcurrency") ??
+					TMDB_ENRICH_TMDB_CONCURRENCY,
+			);
+
+			if (!Number.isInteger(limit) || limit < 1) {
+				return Response.json(
+					{ error: "limit must be a positive integer." },
+					{ status: 400 },
+				);
 			}
+
+			if (
+				!Number.isInteger(refreshOlderThanDays) ||
+				refreshOlderThanDays < 1
+			) {
+				return Response.json(
+					{ error: "refreshOlderThanDays must be a positive integer." },
+					{ status: 400 },
+				);
+			}
+
+			if (!Number.isInteger(progressEvery) || progressEvery < 1) {
+				return Response.json(
+					{ error: "progressEvery must be a positive integer." },
+					{ status: 400 },
+				);
+			}
+
+			if (!Number.isInteger(tmdbConcurrency) || tmdbConcurrency < 1) {
+				return Response.json(
+					{ error: "tmdbConcurrency must be a positive integer." },
+					{ status: 400 },
+				);
+			}
+
+			const result = await runTmdbEnrichment(env, {
+				limit,
+				refreshOlderThanDays,
+				progressEvery,
+				tmdbConcurrency,
+				useLock: true,
+				trigger: "manual",
+			});
+
+			return Response.json(result);
+		}
 
 		/*
 			This creates a simple GET API route.
@@ -1372,5 +1858,22 @@ export default {
 
 			message.ack();
 		}
+	},
+
+	async scheduled(
+		_controller: ScheduledController,
+		env: Env,
+		ctx: ExecutionContext,
+	): Promise<void> {
+		ctx.waitUntil(
+			runTmdbEnrichment(env, {
+				limit: 20000,
+				refreshOlderThanDays: 7,
+				progressEvery: 5000,
+				tmdbConcurrency: TMDB_ENRICH_TMDB_CONCURRENCY,
+				useLock: true,
+				trigger: "cron",
+			}),
+		);
 	},
 } satisfies ExportedHandler<Env, ImdbRatingQueueMessage>;
