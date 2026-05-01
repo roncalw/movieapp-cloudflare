@@ -37,6 +37,7 @@
     - [ ] [Step 17: Recommended Build Order](#step-17-recommended-build-order)
     - [ ] [Step 18: Useful Commands](#step-18-useful-commands)
     - [ ] [Step 19: Data Usage Notes](#step-19-data-usage-notes)
+    - [ ] [Step 20: Scheduled Refresh Cron Jobs](#step-20-scheduled-refresh-cron-jobs)
 
 ## Summary
 
@@ -412,7 +413,7 @@ TMDB movie enrichment API
 
 Then:
 tmdb_movies_staging
-INNER JOIN imdb_ratings_staging on imdb_id / tconst
+LEFT JOIN imdb_ratings_staging on imdb_id / tconst
 -> movie_list_items
 ```
 
@@ -2064,29 +2065,37 @@ That is intended for the paid-plan D1 invocation limit.
 
 If testing on the free plan, use a smaller consumer batch size first.
 
-Add the Cron Trigger only after the manual Queue import path is working:
-  1. the manual enqueue endpoint sends IMDb row batches to the Queue
-  2. the Queue consumer writes those batches into D1
+The recurring IMDb Cron Trigger is now part of the full production schedule in Step 20.
 
-```jsonc
-{
-  "triggers": {
-    "crons": [
-      "0 9 */3 * *"
-    ]
-  }
-}
-```
-
-That example means:
+Current IMDb schedule:
 
 ```text
-run at 09:00 UTC every 3 days
+0 22 * * 1
 ```
 
-The exact schedule can change.
+Meaning:
 
-Do not enable the full Cron Trigger until the dry-run endpoint and small queue import test both pass.
+```text
+Sunday 6:00 PM Eastern while on Eastern Daylight Time
+Sunday 22:00 UTC in Cloudflare's cron expression
+```
+
+Cloudflare's cron day-of-week value in this dashboard/API is:
+
+```text
+1 = Sunday
+2 = Monday
+3 = Tuesday
+...
+7 = Saturday
+```
+
+The cron should only be enabled after the manual Queue import path is working:
+
+```text
+1. the manual enqueue endpoint sends IMDb row batches to the Queue
+2. the Queue consumer writes those batches into D1
+```
 
 <a id="phase-7-write-imdb-rating-batches-into-d1"></a>
 <a id="step-7-write-imdb-rating-batches-into-d1"></a>
@@ -3728,15 +3737,15 @@ Cloudflare Worker logs show no TMDB 429 or D1 write errors
 
 Step 9B happens after Step 9A.
 
-Step 9A loaded the primary TMDB rows from `discover/movie`.
+Step 9A loaded the base TMDB rows from `discover/movie` into `tmdb_movies_staging`.
 
-Step 9B refreshes each already-loaded `tmdb_id` through TMDB movie details:
+Step 9B enriches those already-loaded `tmdb_id` values through TMDB movie details:
 
 ```text
 /movie/{tmdb_id}?append_to_response=external_ids,release_dates,watch/providers
 ```
 
-That one TMDB call refreshes all critical enrichment data together:
+That one TMDB detail request refreshes the fields MovieApp needs but `discover/movie` did not give us:
 
 ```text
 imdb_id                -> joins TMDB rows to IMDb ratings
@@ -3750,23 +3759,22 @@ Important design decision:
 Do not use TMDB /movie/changes as the main refresh driver.
 
 Reason:
-  provider/streamer changes are the critical freshness problem,
-  and TMDB change logs do not reliably include watch-provider changes.
+  provider/streamer freshness is just as critical as ratings/certifications,
+  and the changes endpoint does not give us the watch-provider payload we need.
 
 Instead:
   select rows from our own D1 table based on tmdb_enriched_at.
-  refresh those movies through the same full enrichment function every time.
+  refresh the full detail payload for those rows.
 ```
 
-This means initial backfill and recurring refresh use the same code and the same SQL shape.
-
-The selector is:
+That means initial backfill and recurring refresh use the same selection idea:
 
 ```sql
 SELECT tmdb_id
 FROM tmdb_movies_staging
-WHERE tmdb_enriched_at IS NULL
-   OR tmdb_enriched_at < datetime('now', '-' || ? || ' days')
+WHERE (tmdb_enriched_at IS NULL
+   OR tmdb_enriched_at < datetime('now', '-' || ? || ' days'))
+  AND tmdb_enrichment_error IS NULL
 ORDER BY
   tmdb_enriched_at IS NOT NULL,
   tmdb_enriched_at,
@@ -3779,45 +3787,61 @@ Plain meaning:
 ```text
 1. first pick movies that have never been enriched
 2. then pick the oldest enriched movies whose enrichment is stale
-3. stop at the limit for this run
+3. do not pick terminal-error rows again
+4. stop at the limit for this run
 ```
 
-The cool part while testing:
+The important testing behavior:
 
 ```text
 Each test run updates only rows that still qualify.
 
-If you run limit=1000, those 1000 rows get tmdb_enriched_at.
-The next limit=1000 run does not redo those same rows.
-It moves on to the next qualifying rows.
+If you enrich 1000 rows, those rows get tmdb_enriched_at.
+The next run moves on to the next qualifying rows.
+It does not redo fresh rows unless they become older than refreshOlderThanDays.
 ```
 
-Step 9B also writes structured `console.log(...)` events so progress is visible in:
+### Step 9B-1: Why TMDB Enrichment Moved To A Queue
+
+The first enrichment version processed the selected TMDB rows directly inside the manual endpoint or cron invocation.
+
+That worked for small tests, but it was the wrong production shape.
+
+What we learned:
 
 ```text
-Cloudflare Dashboard
-Workers & Pages
-movieapp-cloudflare
-Observability
-Events
+1000 rows direct:
+  worked, but still took about a minute remotely
+
+20000 rows direct:
+  too close to Worker CPU/time limits
+
+cron direct:
+  could hit exceededCpu before the chunk finished
+
+browser/manual direct:
+  keeps the HTTP request open for the whole job
 ```
 
-and in:
-
-```bash
-npx wrangler tail
-```
-
-Expected event names:
+The queue-based design fixes that:
 
 ```text
-tmdb-enrich-start
-tmdb-enrich-progress
-tmdb-enrich-row-error
-tmdb-enrich-end
+manual endpoint or cron:
+  selects tmdb_id rows
+  creates an import_job_runs progress row
+  sends small TMDB enrichment messages to the queue
+  returns quickly
+
+queue consumer:
+  receives one small message
+  calls TMDB details for those IDs
+  writes D1 updates in batches
+  updates import_job_runs progress
 ```
 
-### Step 9B-1: Add The Enrichment Tracking Column
+This is the same reason we used a queue for the IMDb file load: large import work is safer when it is broken into retryable pieces instead of one giant Worker invocation.
+
+### Step 9B-2: Add The Enrichment Tracking Columns
 
 <div><span class="ooo">[</span> X <span class="ooo">]</span> Add migration `migrations/0002_add_tmdb_enriched_at.sql`.</div>
 
@@ -3825,10 +3849,10 @@ Why:
 
 ```text
 tmdb_enriched_at is the single field that says:
-  this movie has gone through the full Step 9B enrichment refresh.
+  this movie has gone through the full TMDB detail enrichment refresh.
 
-Do not use imdb_id IS NULL or us_certification IS NULL to decide whether
-a movie still needs enrichment.
+Do not use imdb_id IS NULL, us_certification IS NULL, or provider rows missing
+to decide whether a movie still needs enrichment.
 
 Those nulls can be valid:
   some movies genuinely have no IMDb id
@@ -3846,6 +3870,29 @@ CREATE INDEX IF NOT EXISTS idx_tmdb_movies_staging_enriched_at
 ON tmdb_movies_staging (tmdb_enriched_at, tmdb_id);
 ```
 
+<div><span class="ooo">[</span> X <span class="ooo">]</span> Add migration `migrations/0005_add_tmdb_enrichment_error.sql`.</div>
+
+Why:
+
+```text
+Some TMDB IDs can appear in discover/movie but later return 404 from
+/movie/{tmdb_id}.
+
+Those are terminal enrichment errors for our use case.
+
+If we do not record that, the same bad IDs get selected forever.
+```
+
+Migration:
+
+```sql
+ALTER TABLE tmdb_movies_staging
+ADD COLUMN tmdb_enrichment_error TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_tmdb_movies_staging_enrichment_error
+ON tmdb_movies_staging (tmdb_enrichment_error, tmdb_id);
+```
+
 Apply locally before local tests:
 
 ```bash
@@ -3858,76 +3905,151 @@ Apply remotely before remote tests:
 npm run db:migrate:remote
 ```
 
-### Step 9B-2: Add The TMDB Enrichment Types And Constants
+### Step 9B-3: Add The Queue Binding
 
-<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add the Step 9B TMDB response types near the Step 9A TMDB types.</div>
+<div><span class="ooo">[</span> X <span class="ooo">]</span> In `wrangler.jsonc`, add a TMDB enrichment queue producer and consumer.</div>
 
-Why:
+Current queue config:
 
-```text
-The Worker needs to understand the shape of:
-  external_ids
-  release_dates
-  watch/providers
-
-The code only keeps the fields the app needs.
+```jsonc
+"queues": {
+  "producers": [
+    {
+      "binding": "IMDB_RATING_QUEUE",
+      "queue": "movieapp-imdb-rating-import-queue"
+    },
+    {
+      "binding": "TMDB_ENRICHMENT_QUEUE",
+      "queue": "movieapp-tmdb-enrichment-queue"
+    }
+  ],
+  "consumers": [
+    {
+      "queue": "movieapp-imdb-rating-import-queue",
+      "max_batch_size": 100,
+      "max_batch_timeout": 10,
+      "max_retries": 5
+    },
+    {
+      "queue": "movieapp-tmdb-enrichment-queue",
+      "max_batch_size": 1,
+      "max_batch_timeout": 10,
+      "max_retries": 5,
+      "max_concurrency": 1
+    }
+  ]
+}
 ```
 
-Also add:
+Plain meaning:
+
+```text
+producer binding:
+  lets Worker code call env.TMDB_ENRICHMENT_QUEUE.sendBatch(...)
+
+consumer config:
+  tells Cloudflare that this same Worker should receive messages from
+  movieapp-tmdb-enrichment-queue
+
+max_concurrency: 1:
+  intentionally starts conservative so multiple queue consumers do not multiply
+  the TMDB request rate at the same time
+```
+
+Current cron config is listed in Step 20.
+
+The current recurring schedule has four cron entries:
+
+```jsonc
+"triggers": {
+  "crons": [
+    "0 22 * * 1",
+    "0 4 * * 2",
+    "0 10 * * 2",
+    "0 1 * * 3"
+  ]
+}
+```
+
+Cloudflare cron expressions are UTC. See Step 20 for the Eastern-time meaning and the reason the enrichment/final-table jobs use fixed fallback times.
+
+### Step 9B-4: Add The Queue Message Types And Constants
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add the TMDB queue binding to `Env`.</div>
 
 ```ts
+export interface Env extends Cloudflare.Env {
+  DB: D1Database;
+  IMDB_RATING_QUEUE: Queue<ImdbRatingQueueMessage>;
+  TMDB_ENRICHMENT_QUEUE: Queue<TmdbEnrichmentQueueMessage>;
+  TMDB_API_KEY: string;
+}
+```
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> Add the TMDB queue message type.</div>
+
+```ts
+type TmdbEnrichmentQueueMessage = {
+  kind: "tmdb-enrichment";
+  jobRunId: string;
+  tmdbIds: number[];
+};
+
+type WorkerQueueMessage = ImdbRatingQueueMessage | TmdbEnrichmentQueueMessage;
+```
+
+Why the message has `kind`:
+
+```text
+The Worker now consumes two different queue message shapes:
+  IMDb rating rows
+  TMDB enrichment IDs
+
+kind: "tmdb-enrichment" lets queue(...) tell which message type it received.
+```
+
+Current constants:
+
+```ts
+const TMDB_MAX_REQUESTS_PER_SECOND = 35;
+const TMDB_MAX_RETRIES = 3;
 const TMDB_ENRICH_D1_BATCH_MOVIES = 100;
+const TMDB_ENRICH_IDS_PER_QUEUE_MESSAGE = 100;
+const TMDB_ENRICH_QUEUE_MESSAGES_PER_SEND_BATCH = 100;
 const TMDB_ENRICH_TMDB_CONCURRENCY = 25;
+const TMDB_ENRICH_JOB_NAME = "tmdb-enrich";
+const TMDB_ENRICH_LOCK_MINUTES = 30;
 ```
 
-Why:
+Plain meaning:
 
 ```text
-The whole run may process 1000, 5000, 10000, or 20000 movies.
-But D1 writes should still flush in smaller groups.
+TMDB_MAX_REQUESTS_PER_SECOND:
+  our request-start governor stays below TMDB's rough 40-per-second upper range
 
-So:
-  run limit = how many movies this invocation tries
-  D1 batch size = how many movies worth of SQL statements are sent at once
-  TMDB concurrency = how many movie detail requests can be in flight at once
+TMDB_ENRICH_IDS_PER_QUEUE_MESSAGE:
+  each queue message handles about 100 movies
+
+TMDB_ENRICH_D1_BATCH_MOVIES:
+  D1 writes flush after about 100 movies worth of prepared statements
+
+TMDB_ENRICH_TMDB_CONCURRENCY:
+  up to 25 TMDB detail requests can be in flight inside one queue message
 ```
 
-The TMDB concurrency setting does not remove the rate governor.
-
-The governor still controls request starts:
+Important:
 
 ```text
+Concurrency does not remove the rate governor.
+
 fetchTmdbJson(...)
 -> waitForTmdbRequestSlot()
 -> no more than 35 TMDB request starts per rolling second
 ```
 
-Why concurrency is still needed:
-
-```text
-Without concurrency, the Worker waits for one movie detail request to finish
-before starting the next one.
-
-That can be much slower than the 35-per-second cap because each request has
-network round-trip time.
-
-With controlled concurrency, several movie detail requests can be in flight,
-but the shared governor still prevents request starts from exceeding the cap.
-```
-
-### Step 9B-3: Add The TMDB Movie Detail Helper
+### Step 9B-5: Add TMDB Detail And Parsing Helpers
 
 <div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add `getTmdbMovieDetails(...)` after the Step 9A TMDB helpers.</div>
-
-Why:
-
-```text
-This is the one TMDB request per movie.
-It uses append_to_response so we do not make three separate TMDB calls.
-It calls fetchTmdbJson(...), so it uses the same 35-requests-per-second governor.
-```
-
-Code shape:
 
 ```ts
 async function getTmdbMovieDetails(tmdbId: number, env: Env) {
@@ -3941,42 +4063,34 @@ async function getTmdbMovieDetails(tmdbId: number, env: Env) {
 }
 ```
 
-### Step 9B-4: Add The Enrichment Parsing Helpers
-
-<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add helpers that pull US certification and US flatrate provider ids from the TMDB detail response.</div>
-
 Why:
 
 ```text
-The TMDB response has nested sections.
-Keeping the parsing in small helpers makes the write logic easier to read.
+This is the one TMDB request per movie.
+append_to_response keeps IMDb id, certifications, and watch providers together.
 ```
 
-Helpers added:
+<div><span class="ooo">[</span> X <span class="ooo">]</span> Add parsing helpers for US certification and US flatrate providers.</div>
 
 ```text
 getUsCertification(details)
 getUsFlatrateProviderIds(details)
 ```
 
-### Step 9B-5: Add The D1 Statement Builder
+The provider helper dedupes provider IDs before writing them.
+
+### Step 9B-6: Add The D1 Statement Builders
 
 <div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add `buildTmdbEnrichmentStatements(...)`.</div>
 
-Why:
-
-```text
-Do not run one D1 request for every SQL statement.
-Build prepared statements first, then send them with env.DB.batch(...).
-```
-
-For one movie, the SQL intent is:
+For one successful movie, the SQL intent is:
 
 ```sql
 UPDATE tmdb_movies_staging
 SET imdb_id = ?,
     us_certification = ?,
-    tmdb_enriched_at = CURRENT_TIMESTAMP
+    tmdb_enriched_at = CURRENT_TIMESTAMP,
+    tmdb_enrichment_error = NULL
 WHERE tmdb_id = ?;
 
 DELETE FROM movie_watch_providers
@@ -3987,97 +4101,165 @@ INSERT INTO movie_watch_providers (tmdb_id, provider_id, region)
 VALUES (?, ?, 'US');
 ```
 
-Why the provider-child-table logic starts with `DELETE`:
+Why the provider table starts with `DELETE`:
 
 ```text
-Watch providers can change over time.
-If we only INSERT new rows, old rows could be left behind.
-Deleting the old provider rows for that tmdb_id first keeps the child table exact.
+Watch providers can change.
+
+If a movie used to be on provider A and is now only on provider B,
+we must remove the old provider A row before inserting the fresh provider rows.
 ```
 
-### Step 9B-6: Add The Shared Enrichment Runner
+Why `env.DB.batch(...)` matters:
 
-<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add `getTmdbEnrichmentRows(...)` and `runTmdbEnrichment(...)`.</div>
+```text
+The SQL statements are still separate prepared statements.
+batch does not turn them into one giant SQL statement.
+
+But it does send a group of statements to D1 in one round trip.
+That is why it was much faster remotely than one D1 call per statement.
+```
+
+Pseudo-code:
+
+```text
+for each movie:
+  build UPDATE statement
+  build DELETE-old-providers statement
+  build INSERT-new-provider statements
+  add statements to pending list
+
+when pending list reaches about 100 movies:
+  env.DB.batch(pendingStatements)
+```
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> Add terminal-error statement handling.</div>
+
+For a TMDB detail `404 Not Found`, the SQL intent is:
+
+```sql
+UPDATE tmdb_movies_staging
+SET imdb_id = NULL,
+    us_certification = NULL,
+    tmdb_enriched_at = CURRENT_TIMESTAMP,
+    tmdb_enrichment_error = ?
+WHERE tmdb_id = ?;
+
+DELETE FROM movie_watch_providers
+WHERE tmdb_id = ?
+  AND region = 'US';
+```
+
+Plain meaning:
+
+```text
+This TMDB id came from discover/movie,
+but the detail endpoint no longer has the movie.
+
+Mark it as checked with an error so:
+  it does not get selected forever
+  Step 10 will not copy it into movie_list_items
+```
+
+### Step 9B-7: Add The Progress Tables
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> Add `migrations/0003_add_import_job_locks.sql`.</div>
 
 Why:
 
 ```text
-Manual runs, cron runs, initial backfill, and recurring refresh should all use
-the same code path.
+The lock prevents a new enqueue job from starting while another one is already active.
 ```
 
-The row selector:
+<div><span class="ooo">[</span> X <span class="ooo">]</span> Add `migrations/0004_add_import_job_runs.sql`.</div>
 
-```sql
-SELECT tmdb_id
-FROM tmdb_movies_staging
-WHERE tmdb_enriched_at IS NULL
-   OR tmdb_enriched_at < datetime('now', '-' || ? || ' days')
-ORDER BY
-  tmdb_enriched_at IS NOT NULL,
-  tmdb_enriched_at,
-  tmdb_id
-LIMIT ?
-```
-
-The runner:
+Why:
 
 ```text
-1. selects the next rows needing enrichment
-2. calls TMDB once per selected movie
-3. builds D1 prepared statements
-4. flushes D1 batches
-5. logs progress at the configured progressEvery interval
-6. returns a JSON summary
+Cloudflare Observability events can arrive late or appear in groups.
+import_job_runs gives us D1-backed progress that SQL tasks can query.
 ```
 
-Progress logs are intentionally structured JSON.
+Important fields:
 
-Start:
-
-```json
-{
-  "event": "tmdb-enrich-start",
-  "trigger": "manual",
-  "limit": 20000,
-  "refreshOlderThanDays": 7,
-  "selected": 20000
-}
+```text
+job_run_id
+status
+selected_count
+queued_count
+processed_count
+updated_count
+error_count
+provider_rows_inserted
+started_at
+last_progress_at
+ended_at
+last_error
 ```
 
-Progress:
+### Step 9B-8: Add The Enqueue Function
 
-```json
-{
-  "event": "tmdb-enrich-progress",
-  "processed": 5000,
-  "selected": 20000,
-  "updated": 5000,
-  "errors": 0,
-  "imdbIdsFound": 4200,
-  "certificationsFound": 3100,
-  "providerMoviesFound": 1800,
-  "providerRowsInserted": 4300,
-  "durationMs": 150000
-}
+<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add `enqueueTmdbEnrichmentJob(...)`.</div>
+
+What it does:
+
+```text
+1. optionally gets the import-job lock
+2. checks import_job_runs for an already queued/running TMDB enrichment job
+3. selects qualifying tmdb_id rows
+4. creates an import_job_runs row
+5. groups IDs into queue messages
+6. sends messages with env.TMDB_ENRICHMENT_QUEUE.sendBatch(...)
+7. returns a small summary immediately
 ```
 
-End:
+The manual endpoint does not enrich the rows itself anymore.
 
-```json
-{
-  "event": "tmdb-enrich-end",
-  "selected": 20000,
-  "processed": 20000,
-  "updated": 20000,
-  "errors": 0,
-  "durationMs": 612000
-}
+It enqueues the job.
+
+That is why you can kick off the work and shut down your computer: the remote queue consumers keep running inside Cloudflare.
+
+### Step 9B-9: Add The Queue Consumer
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, update `queue(...)` so it can handle both IMDb and TMDB messages.</div>
+
+Pseudo-code:
+
+```text
+for each message in batch.messages:
+  if message.body.kind === "tmdb-enrichment":
+    read tmdbIds from the message
+    process those TMDB IDs
+    update import_job_runs
+    ack the message
+  else:
+    process the IMDb rating rows
+    ack the message
 ```
 
-### Step 9B-7: Add The Manual Endpoint
+Queue events to expect:
 
-<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add the manual route.</div>
+```text
+tmdb-enrich-queue-message-start
+tmdb-enrich-row-error
+tmdb-enrich-queue-message-end
+```
+
+The queue consumer uses `processTmdbEnrichmentRows(...)`.
+
+That function:
+
+```text
+1. calls TMDB details for the message's IDs
+2. builds success or terminal-error SQL statements
+3. writes D1 batches
+4. updates import_job_runs
+5. logs a queue-message summary
+```
+
+### Step 9B-10: Add The Manual And Progress Endpoints
+
+<div><span class="ooo">[</span> X <span class="ooo">]</span> Add the manual enqueue endpoint.</div>
 
 Route:
 
@@ -4085,92 +4267,148 @@ Route:
 /admin/import/tmdb/enrich-manual
 ```
 
-Example:
+Remote example:
 
 ```bash
-curl "http://localhost:8787/admin/import/tmdb/enrich-manual?limit=1000&refreshOlderThanDays=7&progressEvery=1000&tmdbConcurrency=25"
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-manual?limit=300000&refreshOlderThanDays=7"
 ```
 
 Parameters:
 
 ```text
 limit:
-  how many movies this run should try
+  how many qualifying tmdb_id rows to enqueue
 
 refreshOlderThanDays:
-  rows with tmdb_enriched_at older than this can be refreshed again
+  rows older than this can be selected again
   null tmdb_enriched_at rows always qualify
-
-progressEvery:
-  how often the Worker writes a progress event
-
-tmdbConcurrency:
-  optional tuning knob for how many TMDB movie detail requests can be in flight
-  default is 25
 ```
 
-### Step 9B-8: Add The Scheduled Handler
+<div><span class="ooo">[</span> X <span class="ooo">]</span> Add the progress endpoint.</div>
 
-<div><span class="ooo">[</span> X <span class="ooo">]</span> In `src/index.ts`, add a `scheduled(...)` handler that calls the same enrichment runner.</div>
-
-Why:
+Route:
 
 ```text
-The cron job should not have its own enrichment logic.
-It should call the same runTmdbEnrichment(...) function as the manual endpoint.
+/admin/import/tmdb/enrich-progress
 ```
 
-Code shape:
+Remote example:
 
-```ts
-async scheduled(_controller, env, ctx) {
-  ctx.waitUntil(
-    runTmdbEnrichment(env, {
-      limit: 20000,
-      refreshOlderThanDays: 7,
-      progressEvery: 5000,
-      tmdbConcurrency: 25,
-      trigger: "cron",
-    }),
-  );
-}
+```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-progress"
 ```
 
-Do not enable the real cron schedule until manual testing proves the timing.
+This returns recent rows from `import_job_runs`.
 
-When ready, add this to `wrangler.jsonc` after the `queues` block:
+Use this endpoint or the VS Code SQL task when Observability is delayed.
 
-```jsonc
-"triggers": {
-  "crons": [
-    "0 */6 * * *"
-  ]
-}
-```
+### Step 9B-11: Queue Operation Cost Check
 
-That means:
+The queue message size is intentionally around 100 TMDB IDs per message.
+
+Approximate queue billing math:
 
 ```text
-run every 6 hours
+1 queue write
+1 queue read
+1 queue delete
+= about 3 billable queue operations per message
 ```
 
-Cloudflare dashboard test:
+For the full TMDB staging table:
 
 ```text
-Workers & Pages
-movieapp-cloudflare
-Settings
-Triggers
-Cron Triggers
+1,011,396 movies / 100 IDs per message
+= about 10,114 queue messages
+
+10,114 messages * about 3 operations
+= about 30,342 queue operations per full TMDB enrichment pass
 ```
 
-Use the dashboard test/run control if Cloudflare shows it for your account.
+That is small compared with the paid Queues included monthly usage.
 
-### Step 9B-9: Watch The Progress Logs
+The bigger queue cost is the IMDb file import because it uses 33 IMDb rows per message:
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Open the Cloudflare dashboard log view before testing remote enrichment.</div>
+```text
+1,665,567 IMDb rows / 33 rows per message
+= about 50,472 queue messages
 
-Dashboard path:
+50,472 messages * about 3 operations
+= about 151,416 queue operations per IMDb import
+```
+
+Four IMDb imports per month:
+
+```text
+151,416 * 4 = about 605,664 queue operations
+```
+
+Add one weekly TMDB enrichment pass:
+
+```text
+30,342 * 4 = about 121,368 queue operations
+```
+
+Together:
+
+```text
+about 727,032 queue operations per month
+```
+
+That is still under the paid plan's 1 million included Queues operations.
+
+### Step 9B-12: Test And Monitor TMDB Enrichment
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Deploy after local code and migration checks look good.</div>
+
+```bash
+npm run deploy
+```
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Enqueue a small remote test first.</div>
+
+```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-manual?limit=1000&refreshOlderThanDays=7"
+```
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Check D1-backed progress.</div>
+
+```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-progress"
+```
+
+Or run this VS Code task:
+
+```text
+remote-tmdb-progress
+```
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Check TMDB staging counts.</div>
+
+```text
+remote-tmdb-counts
+```
+
+That task shows:
+
+```text
+total TMDB staging rows
+enriched rows
+terminal-error rows
+rows with IMDb id
+```
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Check terminal errors.</div>
+
+```text
+remote-tmdb-errors
+```
+
+Most terminal errors we saw were TMDB detail `404 Not Found` rows.
+
+Those rows are not selected again and are excluded from the final `movie_list_items` build in Step 10.
+
+Dashboard path for logs:
 
 ```text
 Workers & Pages
@@ -4181,148 +4419,69 @@ Live
 Last 1 hour
 ```
 
-Look for:
+Useful note:
 
 ```text
-tmdb-enrich-start
-tmdb-enrich-progress
-tmdb-enrich-end
+Cloudflare Observability may show logs late or in groups.
+The import_job_runs table is the steadier progress source.
 ```
 
-Also run this locally in another terminal:
+### Step 9B-13: Saved SQL And VS Code Tasks
 
-```bash
-npx wrangler tail
-```
-
-### Step 9B-10: Test Locally From 1000 Rows To 20000 Rows
-
-Remember:
+Support SQL lives here:
 
 ```text
-Each test updates only rows that qualify by tmdb_enriched_at.
-
-Because the WHERE clause checks:
-  tmdb_enriched_at IS NULL
-  OR tmdb_enriched_at is older than 7 days
-
-the second test does not redo the same fresh rows from the first test.
-It moves on to the next rows that still qualify.
+support/sql/
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Start local Wrangler:</div>
+Task wrappers:
 
-```bash
-npm run dev
+```text
+support/run-sql-local.sh
+support/run-sql-remote.sh
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Local 1000-row enrichment test:</div>
+Why the wrapper scripts use `--command` instead of `--file`:
 
-```bash
-curl "http://localhost:8787/admin/import/tmdb/enrich-manual?limit=1000&refreshOlderThanDays=7&progressEvery=1000&tmdbConcurrency=25"
+```text
+Wrangler remote --file is shaped like an import flow and can return an
+execution summary instead of SELECT result rows.
+
+The wrappers read the SQL file and pass it through --command so SELECT tasks
+print the actual rows in the VS Code terminal.
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Check local enrichment count:</div>
+Useful task names:
 
-```bash
-npx wrangler d1 execute movieapp-db --local --command "SELECT COUNT(*) AS enriched_count FROM tmdb_movies_staging WHERE tmdb_enriched_at IS NOT NULL;"
+```text
+remote-tmdb-progress
+remote-tmdb-counts
+remote-tmdb-errors
+remote-staging-to-movie-list-ready
+remote-staging-to-movie-list-top-50
+remote-staging-to-movie-list-insert
+remote-movie-list-counts
+remote-movie-list-top-50
+remote-movie-search-by-year
+remote-sys-objects
+remote-sys-migrations
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Local 5000-row enrichment test:</div>
+Each remote task has a matching local task with `local-` at the front.
 
-```bash
-curl "http://localhost:8787/admin/import/tmdb/enrich-manual?limit=5000&refreshOlderThanDays=7&progressEvery=1000&tmdbConcurrency=25"
+VS Code task picker:
+
+```text
+Command Palette
+Tasks: Run Task
+pick the task name
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Local 10000-row enrichment test:</div>
+Workspace setting used to keep recently used tasks from jumping to the top:
 
-```bash
-curl "http://localhost:8787/admin/import/tmdb/enrich-manual?limit=10000&refreshOlderThanDays=7&progressEvery=2500&tmdbConcurrency=25"
+```json
+"task.quickOpen.history": 0
 ```
-
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Local 20000-row enrichment test:</div>
-
-```bash
-curl "http://localhost:8787/admin/import/tmdb/enrich-manual?limit=20000&refreshOlderThanDays=7&progressEvery=5000&tmdbConcurrency=25"
-```
-
-Helpful local verification:
-
-```bash
-npx wrangler d1 execute movieapp-db --local --command "SELECT COUNT(*) AS enriched_count FROM tmdb_movies_staging WHERE tmdb_enriched_at IS NOT NULL;"
-```
-
-```bash
-npx wrangler d1 execute movieapp-db --local --command "SELECT COUNT(*) AS imdb_count FROM tmdb_movies_staging WHERE imdb_id IS NOT NULL;"
-```
-
-```bash
-npx wrangler d1 execute movieapp-db --local --command "SELECT COUNT(*) AS certified_count FROM tmdb_movies_staging WHERE us_certification IS NOT NULL AND us_certification <> '';"
-```
-
-```bash
-npx wrangler d1 execute movieapp-db --local --command "SELECT COUNT(*) AS provider_count FROM movie_watch_providers;"
-```
-
-### Step 9B-11: Deploy And Test Remotely From 1000 Rows To 20000 Rows
-
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Deploy after local testing looks good:</div>
-
-```bash
-npm run deploy
-```
-
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Remote 1000-row enrichment test:</div>
-
-```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-manual?limit=1000&refreshOlderThanDays=7&progressEvery=1000&tmdbConcurrency=25"
-```
-
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Check remote enrichment count:</div>
-
-```bash
-npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS enriched_count FROM tmdb_movies_staging WHERE tmdb_enriched_at IS NOT NULL;"
-```
-
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Remote 5000-row enrichment test:</div>
-
-```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-manual?limit=5000&refreshOlderThanDays=7&progressEvery=1000&tmdbConcurrency=25"
-```
-
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Remote 10000-row enrichment test:</div>
-
-```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-manual?limit=10000&refreshOlderThanDays=7&progressEvery=2500&tmdbConcurrency=25"
-```
-
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Remote 20000-row enrichment test:</div>
-
-```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-manual?limit=20000&refreshOlderThanDays=7&progressEvery=5000&tmdbConcurrency=25"
-```
-
-Remote verification:
-
-```bash
-npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS enriched_count FROM tmdb_movies_staging WHERE tmdb_enriched_at IS NOT NULL;"
-```
-
-```bash
-npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS imdb_count FROM tmdb_movies_staging WHERE imdb_id IS NOT NULL;"
-```
-
-```bash
-npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS certified_count FROM tmdb_movies_staging WHERE us_certification IS NOT NULL AND us_certification <> '';"
-```
-
-```bash
-npx wrangler d1 execute movieapp-db --remote --command "SELECT COUNT(*) AS provider_count FROM movie_watch_providers;"
-```
-
-If a remote run fails with a transient Cloudflare/TMDB error like `1101`, `1102`, or a TMDB `500/502/503/504`, rerun the same command.
-
-Because successful rows have `tmdb_enriched_at`, the rerun continues with rows that still qualify instead of redoing the fresh rows.
 
 <a id="phase-10-build-the-final-movie-list-table"></a>
 ## Step 10: Build The Final Movie List Table
@@ -4341,28 +4500,147 @@ The name means:
 one row = one movie item that can appear in the MovieApp list/search results
 ```
 
-Use an `INNER JOIN` here on purpose.
+Use a `LEFT JOIN` to IMDb ratings here on purpose.
 
-That means the final table only keeps TMDB rows that have a matching row in
-`imdb_ratings_staging`.
+That means the final table keeps enriched TMDB rows even when the IMDb ratings
+file does not have a matching rating row.
 
 ```text
 tmdb movie has matching imdb_id / tconst row:
-  keep it
+  keep it with imdb_rating and imdb_vote_count
 
 tmdb movie has no matching imdb_id / tconst row:
-  skip it
+  keep it with imdb_rating = NULL and imdb_vote_count = NULL
 ```
 
 Important:
 
 ```text
-matching IMDb row required
-rating value itself not required
-vote-count value itself not required
+matching IMDb row not required
+rating value not required
+vote-count value not required
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> For a small proof, run this manually against remote D1:</div>
+Also important:
+
+```text
+Do not copy TMDB rows with terminal enrichment errors into movie_list_items.
+
+Those are rows where:
+  tmdb_enrichment_error IS NOT NULL
+
+Example:
+  discover/movie returned the TMDB id,
+  but /movie/{tmdb_id} later returned 404 Not Found.
+
+Those rows are useful to keep in staging for audit/debugging,
+but they should not appear in the public app table.
+```
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Preview the rows that are ready to become final `movie_list_items` rows:</div>
+
+VS Code task:
+
+```text
+remote-staging-to-movie-list-top-50
+```
+
+That task runs:
+
+```text
+support/sql/staging-to-movie-list-preview-50.sql
+```
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Build the final `movie_list_items` table from the remote staging tables:</div>
+
+VS Code task:
+
+```text
+remote-staging-to-movie-list-insert
+```
+
+That task runs:
+
+```text
+support/sql/staging-to-movie-list-insert.sql
+```
+
+Why this saved SQL file exists:
+
+```text
+This is mainly a manual support/debugging script.
+
+The final long-term plan should not be:
+  remember to run this by hand forever
+
+The long-term plan should be an ordered automation:
+  1. IMDb ratings staging refresh finishes
+  2. TMDB primary staging refresh finishes
+  3. TMDB enrichment refresh finishes
+  4. movie_list_items rebuild runs last
+
+The saved SQL stays useful because it gives us a known-good runnable version
+of the final Step 10 insert while we are testing, checking counts, or doing a
+manual recovery before the scheduled orchestration exists.
+```
+
+Big warning before using the saved SQL file:
+
+```text
+The saved SQL file deletes and rebuilds movie_list_items.
+
+Do not use the saved SQL file as the preferred production rebuild path.
+It exists for manual support/debugging.
+
+The safer production path is:
+  GET /admin/import/movie-list/rebuild-manual
+
+or:
+  the scheduled Final Table cron job
+
+Why:
+  the Worker code uses env.DB.batch([...]) for the DELETE and INSERT.
+  D1 batch statements are documented as transactional, so a failed INSERT
+  should roll back the DELETE.
+
+The saved SQL file goes through Wrangler as a multi-statement --command.
+Do not assume it has the same rollback safety as the Worker batch path
+unless that has been explicitly verified.
+```
+
+The Worker rebuild has a readiness guard before it runs the destructive
+delete/reinsert batch.
+
+The guard checks:
+
+```text
+1. no TMDB enrichment job is still queued/running
+2. tmdb_movies_staging has rows
+3. imdb_ratings_staging has rows
+4. no non-terminal TMDB rows still need enrichment under the 7-day freshness rule
+5. the final TMDB rows would produce at least one movie_list_items row
+```
+
+The key readiness condition is:
+
+```sql
+WHERE (tmdb_enriched_at IS NULL
+   OR tmdb_enriched_at < datetime('now', '-7 days'))
+  AND tmdb_enrichment_error IS NULL
+```
+
+Plain meaning:
+
+```text
+Do not rebuild movie_list_items while there are still usable TMDB rows that
+have never been enriched, or whose enrichment is older than the same 7-day
+freshness rule used by the enrichment job.
+
+Terminal TMDB errors are allowed because those rows are intentionally excluded
+from the final public table.
+```
+
+The saved SQL is:
 
 ```bash
 npx wrangler d1 execute movieapp-db --remote --command "
@@ -4388,11 +4666,54 @@ SELECT
   COALESCE(t.popularity, 0),
   CURRENT_TIMESTAMP
 FROM tmdb_movies_staging t
-INNER JOIN imdb_ratings_staging i
+LEFT JOIN imdb_ratings_staging i
   ON i.imdb_id = t.imdb_id
+WHERE t.tmdb_enriched_at IS NOT NULL
+  AND t.tmdb_enrichment_error IS NULL
 ;
 "
 ```
+
+Why these two `WHERE` lines are there:
+
+```text
+t.tmdb_enriched_at IS NOT NULL:
+  the TMDB detail enrichment has actually run for this row
+
+t.tmdb_enrichment_error IS NULL:
+  the row did not hit a terminal TMDB detail error like 404 Not Found
+```
+
+Why the IMDb join is a `LEFT JOIN`:
+
+```text
+IMDb ratings improve sorting/filtering when they exist,
+but missing IMDb rating data should not make an otherwise valid TMDB movie
+disappear from MovieApp.
+```
+
+The Worker rebuild does not run one giant `INSERT ... SELECT`.
+
+Why:
+
+```text
+The final LEFT JOIN build can write about 1 million rows.
+A single D1 storage operation for that many rows can exceed D1's operation
+timeout.
+```
+
+So the Worker rebuild:
+
+```text
+1. scans eligible TMDB rows by tmdb_id
+2. upserts movie_list_items in 10,000-row chunks
+3. logs movie-list-build-progress every 100,000 rows
+4. deletes any no-longer-valid final rows in cleanup chunks
+```
+
+This makes the rebuild rerunnable. If a later chunk fails, rerunning the same
+endpoint continues to upsert the same final rows instead of depending on one
+giant all-or-nothing insert.
 
 For the full production refresh, do not assume one giant `INSERT INTO ... SELECT ...` will always be safe.
 
@@ -4532,11 +4853,10 @@ Example URLs:
 }
 ```
 
-This endpoint reads `movie_list_items`, so it only returns TMDB movies that
-already have a matching IMDb staging row.
+This endpoint reads `movie_list_items`, so it can return enriched TMDB movies
+even when IMDb rating data is missing.
 
-If the matching IMDb staging row exists but its rating or vote count is blank,
-the response can still return:
+If IMDb rating data is missing, the response can return:
 
 ```json
 {
@@ -4755,7 +5075,7 @@ TMDB weekly recurring refresh:
 
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Do not schedule the historical TMDB backfill on Cron.</div>
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Schedule only the smaller weekly TMDB refresh after the historical TMDB backfill is finished.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Use the recurring production schedule in Step 20 after the historical backfill is finished.</div>
 
 Recurring job scope:
 
@@ -4767,68 +5087,22 @@ TMDB recurring job:
   weekly incremental refresh from the latest release_date already stored
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> When you are ready to schedule both recurring jobs, add separate Cron expressions in `wrangler.jsonc`.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Cron scheduling details now live on their own page in Step 20.</div>
 
-Example:
-
-```jsonc
-{
-  "triggers": {
-    "crons": [
-      "0 9 */3 * *",
-      "0 10 * * 1"
-    ]
-  }
-}
-```
-
-Meaning:
-
-```text
-0 9 */3 * *   -> IMDb full-file refresh every 3 days at 09:00 UTC
-0 10 * * 1    -> TMDB weekly incremental refresh every Monday at 10:00 UTC
-```
-
-<div><span class="ooo">[</span>   <span class="ooo">]</span> In `src/index.ts`, branch inside `scheduled(...)` based on which Cron expression fired.</div>
-
-Example shape:
-
-```ts
-export default {
-  async scheduled(controller: ScheduledController, env: Env): Promise<void> {
-    if (controller.cron === "0 9 */3 * *") {
-      await enqueueImdbRatingRows(env);
-      return;
-    }
-
-    if (controller.cron === "0 10 * * 1") {
-      const beginDate = await getTmdbRefreshStartDate(env);
-      await runTmdbIncrementalRefresh(env, beginDate);
-      return;
-    }
-  },
-};
-```
-
-TMDB recurring helper shape:
-
-```text
-1. reads MAX(release_date) from tmdb_movies_staging
-2. calls getTmdbDiscoverPage(...)
-3. calls buildTmdbPrimaryStatements(...) for accepted TMDB rows
-4. writes those statements with env.DB.batch(...)
-5. calls getTmdbMovieDetails(...) for accepted tmdb_id values
-6. calls enrichTmdbMovieSideTables(...)
-```
-
-Recurring-job split:
+Current recurring-job split:
 
 ```text
 IMDb Cron:
   whole-file refresh path
 
-TMDB Cron:
-  weekly incremental refresh path
+TMDB Primary Cron:
+  weekly discover/movie staging refresh from the latest release_date already stored
+
+TMDB Enrichment Cron:
+  queue-based enrichment refresh for rows that are new or stale
+
+Final Table Cron:
+  rebuilds movie_list_items after the staging refreshes have had time to finish
 ```
 
 Verification:
@@ -5032,4 +5306,253 @@ https://developers.cloudflare.com/workers/platform/limits/
 https://developers.cloudflare.com/d1/platform/limits/
 https://developers.cloudflare.com/workers/configuration/cron-triggers/
 https://developers.cloudflare.com/queues/platform/limits/
+```
+
+<a id="phase-20-scheduled-refresh-cron-jobs"></a>
+## Step 20: Scheduled Refresh Cron Jobs
+
+This page is the recurring production refresh schedule.
+
+Cloudflare Cron Triggers use UTC cron expressions.
+
+The schedule below maps your requested Eastern-time schedule to UTC while the account is on Eastern Daylight Time:
+
+```text
+Sunday 6:00 PM Eastern  -> Sunday 22:00 UTC
+Monday 12:00 AM Eastern -> Monday 04:00 UTC
+Monday 6:00 AM Eastern  -> Monday 10:00 UTC
+Monday 9:00 PM Eastern  -> Tuesday 01:00 UTC
+```
+
+Important daylight-saving note:
+
+```text
+Cloudflare stores cron schedules in UTC.
+
+If you want the jobs to stay pinned to the exact same Eastern wall-clock time
+after daylight saving time changes, review these expressions when Eastern time
+switches between EDT and EST.
+```
+
+### Step 20-1: Current `wrangler.jsonc` Schedule
+
+The current cron list is:
+
+```jsonc
+"triggers": {
+  "crons": [
+    // IMDb ratings refresh: Sunday 6:00 PM ET while on EDT; Sunday 22:00 UTC.
+    "0 22 * * 1",
+    // TMDB primary refresh: Monday 12:00 AM ET while on EDT; Monday 04:00 UTC.
+    "0 4 * * 2",
+    // TMDB enrichment refresh: Monday 6:00 AM ET while on EDT; Monday 10:00 UTC.
+    "0 10 * * 2",
+    // Final movie_list_items rebuild: Monday 9:00 PM ET while on EDT; Tuesday 01:00 UTC.
+    "0 1 * * 3"
+  ]
+}
+```
+
+Meaning:
+
+```text
+0 22 * * 1
+  IMDb ratings refresh
+  Sunday 6:00 PM Eastern while on EDT
+
+0 4 * * 2
+  TMDB primary staging refresh
+  Monday 12:00 AM Eastern while on EDT
+
+0 10 * * 2
+  TMDB enrichment refresh
+  Monday 6:00 AM Eastern while on EDT
+
+0 1 * * 3
+  Final movie_list_items rebuild
+  Monday 9:00 PM Eastern while on EDT
+```
+
+Cloudflare's cron day-of-week values here are:
+
+```text
+1 = Sunday
+2 = Monday
+3 = Tuesday
+...
+7 = Saturday
+```
+
+That is why the Monday jobs use `2`, and the Tuesday UTC final-table job uses `3`.
+
+### Step 20-2: Why Enrichment And Final Build Use Fixed Times
+
+Preferred ideal:
+
+```text
+TMDB primary completes
+-> wait 30 minutes
+-> TMDB enrichment starts
+
+TMDB enrichment completes
+-> wait 30 minutes
+-> movie_list_items rebuild starts
+```
+
+Current implementation:
+
+```text
+Cloudflare Cron Triggers are time-based.
+They do not directly express "run 30 minutes after another cron job completes".
+```
+
+So we use the fixed fallback times:
+
+```text
+TMDB enrichment:
+  Monday 6:00 AM Eastern
+
+Final movie_list_items rebuild:
+  Monday 9:00 PM Eastern
+```
+
+That gives the upstream work a wide buffer:
+
+```text
+TMDB primary starts at midnight Eastern.
+TMDB enrichment starts 6 hours later.
+Final movie_list_items rebuild starts 15 hours after enrichment starts.
+```
+
+Later, if we want true completion-based chaining, use an orchestrator pattern:
+
+```text
+job progress table says prior job completed
+-> enqueue next job
+-> final build runs after enrichment progress is complete
+```
+
+Cloudflare Workflows could also be evaluated later if we want a first-class workflow engine.
+
+### Step 20-3: What `scheduled(...)` Does
+
+The Worker branches on `controller.cron`.
+
+Current mapping:
+
+```text
+controller.cron === "0 22 * * 1"
+  -> runScheduledImdbRatingsRefresh(env)
+  -> reads IMDb title.ratings.tsv.gz
+  -> enqueues IMDb rating rows into IMDB_RATING_QUEUE
+
+controller.cron === "0 4 * * 2"
+  -> runScheduledTmdbPrimaryRefresh(env)
+  -> reads MAX(release_date) from tmdb_movies_staging
+  -> loads TMDB discover/movie rows through today
+
+controller.cron === "0 10 * * 2"
+  -> enqueueTmdbEnrichmentJob(env, ...)
+  -> selects rows where tmdb_enriched_at is null or stale
+  -> enqueues TMDB enrichment messages into TMDB_ENRICHMENT_QUEUE
+
+controller.cron === "0 1 * * 3"
+  -> rebuildMovieListItems(env, "cron")
+  -> clears movie_list_items
+  -> inserts final rows that have:
+       tmdb_enriched_at IS NOT NULL
+       tmdb_enrichment_error IS NULL
+     with IMDb rating/vote fields populated only when a matching IMDb rating row exists
+```
+
+### Step 20-4: Manual Access In Cloudflare Dashboard
+
+You can still manually run these cron jobs from the Cloudflare dashboard.
+
+Dashboard path:
+
+```text
+Workers & Pages
+movieapp-cloudflare
+Settings
+Triggers
+Cron Triggers
+```
+
+Use the dashboard's test/run control for the cron expression you want.
+
+If the dashboard only shows the UTC expression, use this map:
+
+```text
+0 22 * * 1 -> IMDb ratings
+0 4 * * 2  -> TMDB primary
+0 10 * * 2 -> TMDB enrichment
+0 1 * * 3  -> Final movie_list_items build
+```
+
+Manual HTTP fallbacks also exist for testing:
+
+```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual"
+```
+
+```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/load-manual?limit=100000&beginDate=YYYY-MM-DD&endDate=YYYY-MM-DD"
+```
+
+```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-manual?limit=300000&refreshOlderThanDays=7"
+```
+
+```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual"
+```
+
+### Step 20-5: Monitoring Order
+
+Use this order after the weekly refresh begins:
+
+```text
+1. Check IMDb queue / IMDb staging counts.
+2. Check TMDB primary staging counts.
+3. Check TMDB enrichment progress.
+4. Check final movie_list_items counts.
+```
+
+Useful VS Code tasks:
+
+```text
+remote-imdb-counts
+remote-tmdb-counts
+remote-tmdb-progress
+remote-tmdb-errors
+remote-staging-to-movie-list-ready
+remote-movie-list-counts
+remote-movie-list-top-50
+```
+
+Cloudflare Observability path:
+
+```text
+Workers & Pages
+movieapp-cloudflare
+Observability
+Events
+Live
+Last 1 hour
+```
+
+Expected scheduled-job event names:
+
+```text
+imdb-ratings-cron-start
+imdb-ratings-cron-end
+tmdb-primary-cron-start
+tmdb-primary-cron-end
+tmdb-enrich-enqueue-start
+tmdb-enrich-enqueue-end
+tmdb-enrich-queue-message-start
+tmdb-enrich-queue-message-end
+movie-list-build-start
+movie-list-build-end
 ```

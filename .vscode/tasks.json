@@ -1,0 +1,333 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "remote-tmdb-progress",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "support/sql/tmdb-enrich-progress.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "remote-tmdb-counts",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "support/sql/tmdb-counts.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "remote-tmdb-errors",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "support/sql/tmdb-errors.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "remote-tmdb-top-50",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "support/sql/tmdb-top-50.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "remote-imdb-counts",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "support/sql/imdb-counts.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "remote-imdb-top-50",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "support/sql/imdb-top-50.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "remote-staging-to-movie-list-ready",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "support/sql/staging-to-movie-list-readiness.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "remote-staging-to-movie-list-top-50",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "support/sql/staging-to-movie-list-preview-50.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "remote-staging-to-movie-list-insert",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "support/sql/staging-to-movie-list-insert.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "remote-movie-list-counts",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "support/sql/movie-list-counts.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "remote-movie-list-top-50",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "support/sql/movie-list-top-50.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "remote-movie-list-last-5-years-top-50-popularity",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "support/sql/movie-list-last-5-years-top-50-popularity.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "remote-movie-list-last-5-years-top-50-imdb-gte-500",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "support/sql/movie-list-last-5-years-top-50-imdb-gte-500.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "remote-movie-list-last-5-years-top-50-imdb-gte-5000-genre-27-horror",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "support/sql/movie-list-last-5-years-top-50-imdb-gte-5000-genre-27-horror.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "remote-movie-search-by-year",
+			"type": "shell",
+			"command": "zsh",
+			"args": [
+				"support/run-sql-remote.sh",
+				"support/sql/movie-search-by-year.sql",
+				"START_DATE=${input:movieSearchStartDate}",
+				"END_DATE=${input:movieSearchEndDate}"
+			],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "remote-providers-counts",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "support/sql/providers-counts.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "remote-genres-counts",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "support/sql/genres-counts.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "remote-sys-objects",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "support/sql/sys-objects.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "remote-sys-migrations",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "support/sql/sys-migrations.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-tmdb-progress",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-local.sh", "support/sql/tmdb-enrich-progress.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-tmdb-counts",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-local.sh", "support/sql/tmdb-counts.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-tmdb-errors",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-local.sh", "support/sql/tmdb-errors.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-tmdb-top-50",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-local.sh", "support/sql/tmdb-top-50.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-imdb-counts",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-local.sh", "support/sql/imdb-counts.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-imdb-top-50",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-local.sh", "support/sql/imdb-top-50.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-staging-to-movie-list-ready",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-local.sh", "support/sql/staging-to-movie-list-readiness.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-staging-to-movie-list-top-50",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-local.sh", "support/sql/staging-to-movie-list-preview-50.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-staging-to-movie-list-insert",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-local.sh", "support/sql/staging-to-movie-list-insert.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-movie-list-counts",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-local.sh", "support/sql/movie-list-counts.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-movie-list-top-50",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-local.sh", "support/sql/movie-list-top-50.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-movie-list-last-5-years-top-50-popularity",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-local.sh", "support/sql/movie-list-last-5-years-top-50-popularity.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-movie-list-last-5-years-top-50-imdb-gte-500",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-local.sh", "support/sql/movie-list-last-5-years-top-50-imdb-gte-500.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-movie-list-last-5-years-top-50-imdb-gte-5000-genre-27-horror",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-local.sh", "support/sql/movie-list-last-5-years-top-50-imdb-gte-5000-genre-27-horror.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-movie-search-by-year",
+			"type": "shell",
+			"command": "zsh",
+			"args": [
+				"support/run-sql-local.sh",
+				"support/sql/movie-search-by-year.sql",
+				"START_DATE=${input:movieSearchStartDate}",
+				"END_DATE=${input:movieSearchEndDate}"
+			],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-providers-counts",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-local.sh", "support/sql/providers-counts.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-genres-counts",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-local.sh", "support/sql/genres-counts.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-sys-objects",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-local.sh", "support/sql/sys-objects.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-sys-migrations",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-local.sh", "support/sql/sys-migrations.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		}
+	],
+	"inputs": [
+		{
+			"id": "movieSearchStartDate",
+			"type": "promptString",
+			"description": "Movie search start date, YYYY-MM-DD",
+			"default": "2020-01-01"
+		},
+		{
+			"id": "movieSearchEndDate",
+			"type": "promptString",
+			"description": "Movie search end date, YYYY-MM-DD",
+			"default": "2020-12-31"
+		}
+	]
+}

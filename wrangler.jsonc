@@ -62,6 +62,10 @@
 			{
 				"binding": "IMDB_RATING_QUEUE",
 				"queue": "movieapp-imdb-rating-import-queue"
+			},
+			{
+				"binding": "TMDB_ENRICHMENT_QUEUE",
+				"queue": "movieapp-tmdb-enrichment-queue"
 			}
 		],
 		"consumers": [
@@ -70,12 +74,26 @@
 				"max_batch_size": 100,
 				"max_batch_timeout": 10,
 				"max_retries": 5
+			},
+			{
+				"queue": "movieapp-tmdb-enrichment-queue",
+				"max_batch_size": 1,
+				"max_batch_timeout": 10,
+				"max_retries": 5,
+				"max_concurrency": 1
 			}
 		]
 	},
 	"triggers": {
 		"crons": [
-			"*/15 * * * *"
+			// IMDb ratings refresh: Sunday 6:00 PM ET while on EDT; Sunday 22:00 UTC.
+			"0 22 * * 1",
+			// TMDB primary refresh: Monday 12:00 AM ET while on EDT; Monday 04:00 UTC.
+			"0 4 * * 2",
+			// TMDB enrichment refresh: Monday 6:00 AM ET while on EDT; Monday 10:00 UTC.
+			"0 10 * * 2",
+			// Final movie_list_items rebuild: Monday 9:00 PM ET while on EDT; Tuesday 01:00 UTC.
+			"0 1 * * 3"
 		]
 	}
 	/**

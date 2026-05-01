@@ -57,6 +57,7 @@
 export interface Env extends Cloudflare.Env {
 	DB: D1Database;
 	IMDB_RATING_QUEUE: Queue<ImdbRatingQueueMessage>;
+	TMDB_ENRICHMENT_QUEUE: Queue<TmdbEnrichmentQueueMessage>;
 	TMDB_API_KEY: string;
 }
 
@@ -130,6 +131,14 @@ type ImdbRatingQueueMessage = {
 	rows: ImdbRatingRow[];
 };
 
+type TmdbEnrichmentQueueMessage = {
+	kind: "tmdb-enrichment";
+	jobRunId: string;
+	tmdbIds: number[];
+};
+
+type WorkerQueueMessage = ImdbRatingQueueMessage | TmdbEnrichmentQueueMessage;
+
 type TmdbDiscoverResult = {
 	id: number;
 	title?: string;
@@ -199,15 +208,69 @@ type ImportJobLockRow = {
 	lock_expires_at: string;
 };
 
+type ImportJobRunRow = {
+	job_run_id: string;
+	job_name: string;
+	status: string;
+	trigger: string;
+	selected_count: number;
+	queued_count: number;
+	processed_count: number;
+	updated_count: number;
+	error_count: number;
+	provider_rows_inserted: number;
+	started_at: string;
+	last_progress_at: string;
+	ended_at: string | null;
+	last_error: string | null;
+};
+
+type TmdbEnrichmentStats = {
+	processed: number;
+	updated: number;
+	errors: number;
+	imdbIdsFound: number;
+	certificationsFound: number;
+	providerMoviesFound: number;
+	providerRowsInserted: number;
+};
+
+type MovieListBuildReadiness = {
+	tmdbRows: number;
+	imdbRows: number;
+	tmdbRowsNeedingEnrichment: number;
+	tmdbTerminalErrorRows: number;
+	movieListCandidateRows: number;
+};
+
+type MovieListBuildChunk = {
+	chunkRows: number;
+	lastTmdbId: number | null;
+};
+
 const IMDB_QUEUE_ROWS_PER_MESSAGE = 33;
 const IMDB_QUEUE_MESSAGES_PER_SEND_BATCH = 100;
 const TMDB_MAX_REQUESTS_PER_SECOND = 35;
 const TMDB_MAX_RETRIES = 3;
 const TMDB_DISCOVER_MAX_PAGE = 500;
 const TMDB_ENRICH_D1_BATCH_MOVIES = 100;
+const TMDB_ENRICH_IDS_PER_QUEUE_MESSAGE = 100;
+const TMDB_ENRICH_QUEUE_MESSAGES_PER_SEND_BATCH = 100;
 const TMDB_ENRICH_TMDB_CONCURRENCY = 25;
 const TMDB_ENRICH_JOB_NAME = "tmdb-enrich";
 const TMDB_ENRICH_LOCK_MINUTES = 30;
+const MOVIE_LIST_BUILD_JOB_NAME = "movie-list-build";
+const MOVIE_LIST_BUILD_LOCK_MINUTES = 60;
+const MOVIE_LIST_BUILD_REFRESH_OLDER_THAN_DAYS = 7;
+const MOVIE_LIST_BUILD_INSERT_CHUNK_ROWS = 10000;
+const MOVIE_LIST_BUILD_CLEANUP_CHUNK_ROWS = 10000;
+const MOVIE_LIST_BUILD_PROGRESS_EVERY_ROWS = 100000;
+const TMDB_PRIMARY_CRON_LIMIT = 100000;
+const TMDB_ENRICHMENT_CRON_LIMIT = 300000;
+const SCHEDULED_IMDB_CRON = "0 22 * * 1";
+const SCHEDULED_TMDB_PRIMARY_CRON = "0 4 * * 2";
+const SCHEDULED_TMDB_ENRICHMENT_CRON = "0 10 * * 2";
+const SCHEDULED_MOVIE_LIST_BUILD_CRON = "0 1 * * 3";
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const tmdbRequestTimestamps: number[] = [];
 
@@ -782,7 +845,8 @@ function buildTmdbEnrichmentStatements(
 			`UPDATE tmdb_movies_staging
 			 SET imdb_id = ?,
 			     us_certification = ?,
-			     tmdb_enriched_at = CURRENT_TIMESTAMP
+			     tmdb_enriched_at = CURRENT_TIMESTAMP,
+			     tmdb_enrichment_error = NULL
 			 WHERE tmdb_id = ?`,
 		).bind(imdbId, usCertification, tmdbId),
 		env.DB.prepare(
@@ -810,6 +874,34 @@ function buildTmdbEnrichmentStatements(
 	};
 }
 
+function isTerminalTmdbEnrichmentError(error: unknown) {
+	const message = error instanceof Error ? error.message : String(error);
+	return message.includes("404 Not Found");
+}
+
+function buildTmdbTerminalErrorStatements(
+	tmdbId: number,
+	error: unknown,
+	env: Env,
+) {
+	const message = error instanceof Error ? error.message : String(error);
+	return [
+		env.DB.prepare(
+			`UPDATE tmdb_movies_staging
+			 SET imdb_id = NULL,
+			     us_certification = NULL,
+			     tmdb_enriched_at = CURRENT_TIMESTAMP,
+			     tmdb_enrichment_error = ?
+			 WHERE tmdb_id = ?`,
+		).bind(message, tmdbId),
+		env.DB.prepare(
+			`DELETE FROM movie_watch_providers
+			 WHERE tmdb_id = ?
+			   AND region = ?`,
+		).bind(tmdbId, "US"),
+	];
+}
+
 async function getTmdbEnrichmentRows(
 	env: Env,
 	limit: number,
@@ -818,8 +910,9 @@ async function getTmdbEnrichmentRows(
 	const { results } = await env.DB.prepare(
 		`SELECT tmdb_id
 		 FROM tmdb_movies_staging
-		 WHERE tmdb_enriched_at IS NULL
-		    OR tmdb_enriched_at < datetime('now', '-' || ? || ' days')
+		 WHERE (tmdb_enriched_at IS NULL
+		    OR tmdb_enriched_at < datetime('now', '-' || ? || ' days'))
+		   AND tmdb_enrichment_error IS NULL
 		 ORDER BY
 		   tmdb_enriched_at IS NOT NULL,
 		   tmdb_enriched_at,
@@ -909,10 +1002,318 @@ async function releaseImportJobLock(
 	);
 }
 
-async function runTmdbEnrichment(env: Env, options: TmdbEnrichmentOptions) {
+function isTmdbEnrichmentQueueMessage(
+	body: WorkerQueueMessage,
+): body is TmdbEnrichmentQueueMessage {
+	return "kind" in body && body.kind === "tmdb-enrichment";
+}
+
+function createJobRunId(trigger: "manual" | "cron") {
+	return `${TMDB_ENRICH_JOB_NAME}-${trigger}-${Date.now()}-${crypto.randomUUID()}`;
+}
+
+async function createImportJobRun(
+	env: Env,
+	jobRunId: string,
+	trigger: "manual" | "cron",
+	selectedCount: number,
+	queuedCount: number,
+) {
+	const status = selectedCount === 0 ? "complete" : "queued";
+
+	await env.DB.prepare(
+		`INSERT INTO import_job_runs (
+			 job_run_id,
+			 job_name,
+			 status,
+			 trigger,
+			 selected_count,
+			 queued_count,
+			 started_at,
+			 last_progress_at,
+			 ended_at
+		 )
+		 VALUES (
+			 ?,
+			 ?,
+			 ?,
+			 ?,
+			 ?,
+			 ?,
+			 CURRENT_TIMESTAMP,
+			 CURRENT_TIMESTAMP,
+			 CASE WHEN ? = 0 THEN CURRENT_TIMESTAMP ELSE NULL END
+		 )`,
+	)
+		.bind(
+			jobRunId,
+			TMDB_ENRICH_JOB_NAME,
+			status,
+			trigger,
+			selectedCount,
+			queuedCount,
+			selectedCount,
+		)
+		.run();
+}
+
+async function updateImportJobRunProgress(
+	env: Env,
+	jobRunId: string,
+	stats: TmdbEnrichmentStats,
+	lastError: string | null,
+) {
+	await env.DB.prepare(
+		`UPDATE import_job_runs
+		 SET status =
+		       CASE
+		         WHEN processed_count + ? >= selected_count THEN
+		           CASE
+		             WHEN error_count + ? > 0 THEN 'complete_with_errors'
+		             ELSE 'complete'
+		           END
+		         ELSE 'running'
+		       END,
+		     processed_count = processed_count + ?,
+		     updated_count = updated_count + ?,
+		     error_count = error_count + ?,
+		     provider_rows_inserted = provider_rows_inserted + ?,
+		     last_progress_at = CURRENT_TIMESTAMP,
+		     ended_at =
+		       CASE
+		         WHEN processed_count + ? >= selected_count THEN CURRENT_TIMESTAMP
+		         ELSE ended_at
+		       END,
+		     last_error = COALESCE(?, last_error)
+		 WHERE job_run_id = ?`,
+	)
+		.bind(
+			stats.processed,
+			stats.errors,
+			stats.processed,
+			stats.updated,
+			stats.errors,
+			stats.providerRowsInserted,
+			stats.processed,
+			lastError,
+			jobRunId,
+		)
+		.run();
+}
+
+async function getRecentImportJobRuns(env: Env) {
+	const { results } = await env.DB.prepare(
+		`SELECT job_run_id,
+		        job_name,
+		        status,
+		        trigger,
+		        selected_count,
+		        queued_count,
+		        processed_count,
+		        updated_count,
+		        error_count,
+		        provider_rows_inserted,
+		        started_at,
+		        last_progress_at,
+		        ended_at,
+		        last_error
+		 FROM import_job_runs
+		 WHERE job_name = ?
+		 ORDER BY started_at DESC
+		 LIMIT 10`,
+	)
+		.bind(TMDB_ENRICH_JOB_NAME)
+		.all<ImportJobRunRow>();
+
+	return results;
+}
+
+async function getActiveImportJobRun(env: Env) {
+	return env.DB.prepare(
+		`SELECT job_run_id,
+		        job_name,
+		        status,
+		        trigger,
+		        selected_count,
+		        queued_count,
+		        processed_count,
+		        updated_count,
+		        error_count,
+		        provider_rows_inserted,
+		        started_at,
+		        last_progress_at,
+		        ended_at,
+		        last_error
+		 FROM import_job_runs
+		 WHERE job_name = ?
+		   AND status IN ('queued', 'running')
+		 ORDER BY started_at DESC
+		 LIMIT 1`,
+	)
+		.bind(TMDB_ENRICH_JOB_NAME)
+		.first<ImportJobRunRow>();
+}
+
+async function processTmdbEnrichmentRows(
+	env: Env,
+	jobRunId: string,
+	rows: TmdbEnrichmentRow[],
+	trigger: "queue",
+) {
+	const startedAtMs = Date.now();
+	const startedAt = new Date(startedAtMs).toISOString();
+	let processed = 0;
+	let updated = 0;
+	let errors = 0;
+	let imdbIdsFound = 0;
+	let certificationsFound = 0;
+	let providerMoviesFound = 0;
+	let providerRowsInserted = 0;
+	let lastError: string | null = null;
+	let pendingStatements: D1PreparedStatement[] = [];
+	let pendingStatementMovies = 0;
+
+	console.log(
+		JSON.stringify({
+			event: "tmdb-enrich-queue-message-start",
+			trigger,
+			jobRunId,
+			selected: rows.length,
+			tmdbConcurrency: TMDB_ENRICH_TMDB_CONCURRENCY,
+			startedAt,
+		}),
+	);
+
+	async function flushStatements() {
+		if (pendingStatements.length === 0) {
+			return;
+		}
+
+		await env.DB.batch(pendingStatements);
+		pendingStatements = [];
+		pendingStatementMovies = 0;
+	}
+
+	for (
+		let index = 0;
+		index < rows.length;
+		index += TMDB_ENRICH_TMDB_CONCURRENCY
+	) {
+		const rowChunk = rows.slice(index, index + TMDB_ENRICH_TMDB_CONCURRENCY);
+		const enrichmentResults = await Promise.all(
+			rowChunk.map(async (row) => {
+				try {
+					const details = await getTmdbMovieDetails(row.tmdb_id, env);
+					return {
+						row,
+						enrichment: buildTmdbEnrichmentStatements(
+							row.tmdb_id,
+							details,
+							env,
+						),
+						error: null,
+					};
+				} catch (error) {
+					return {
+						row,
+						enrichment: null,
+						error,
+					};
+				}
+			}),
+		);
+
+		for (const result of enrichmentResults) {
+			if (result.enrichment) {
+				pendingStatements.push(...result.enrichment.statements);
+				pendingStatementMovies += 1;
+				updated += 1;
+				imdbIdsFound += result.enrichment.imdbIdFound;
+				certificationsFound += result.enrichment.certificationFound;
+				providerMoviesFound += result.enrichment.providerMovieFound;
+				providerRowsInserted += result.enrichment.providerRowsInserted;
+
+				if (pendingStatementMovies >= TMDB_ENRICH_D1_BATCH_MOVIES) {
+					await flushStatements();
+				}
+			} else {
+				errors += 1;
+				lastError =
+					result.error instanceof Error
+						? result.error.message
+						: String(result.error);
+
+				if (isTerminalTmdbEnrichmentError(result.error)) {
+					pendingStatements.push(
+						...buildTmdbTerminalErrorStatements(
+							result.row.tmdb_id,
+							result.error,
+							env,
+						),
+					);
+					pendingStatementMovies += 1;
+
+					if (pendingStatementMovies >= TMDB_ENRICH_D1_BATCH_MOVIES) {
+						await flushStatements();
+					}
+				}
+
+				console.log(
+					JSON.stringify({
+						event: "tmdb-enrich-row-error",
+						trigger,
+						jobRunId,
+						tmdbId: result.row.tmdb_id,
+						error: lastError,
+					}),
+				);
+			}
+
+			processed += 1;
+		}
+	}
+
+	await flushStatements();
+
+	const stats = {
+		processed,
+		updated,
+		errors,
+		imdbIdsFound,
+		certificationsFound,
+		providerMoviesFound,
+		providerRowsInserted,
+	};
+
+	await updateImportJobRunProgress(env, jobRunId, stats, lastError);
+
+	const endedAtMs = Date.now();
+	const endedAt = new Date(endedAtMs).toISOString();
+
+	console.log(
+		JSON.stringify({
+			event: "tmdb-enrich-queue-message-end",
+			trigger,
+			jobRunId,
+			selected: rows.length,
+			...stats,
+			startedAt,
+			endedAt,
+			durationMs: endedAtMs - startedAtMs,
+		}),
+	);
+
+	return stats;
+}
+
+async function enqueueTmdbEnrichmentJob(
+	env: Env,
+	options: TmdbEnrichmentOptions,
+) {
 	const startedAtMs = Date.now();
 	const startedAt = new Date(startedAtMs).toISOString();
 	const lockOwner = createJobOwner(options.trigger);
+	const jobRunId = createJobRunId(options.trigger);
 	let lockAcquired = false;
 
 	if (options.useLock) {
@@ -932,15 +1333,10 @@ async function runTmdbEnrichment(env: Env, options: TmdbEnrichmentOptions) {
 				skipReason: "job_already_running",
 				limit: options.limit,
 				refreshOlderThanDays: options.refreshOlderThanDays,
-				tmdbConcurrency: options.tmdbConcurrency,
 				selected: 0,
-				processed: 0,
-				updated: 0,
-				errors: 0,
-				imdbIdsFound: 0,
-				certificationsFound: 0,
-				providerMoviesFound: 0,
-				providerRowsInserted: 0,
+				rowsQueued: 0,
+				messagesQueued: 0,
+				jobRunId: null,
 				startedAt,
 				endedAt,
 				durationMs: endedAtMs - startedAtMs,
@@ -949,156 +1345,118 @@ async function runTmdbEnrichment(env: Env, options: TmdbEnrichmentOptions) {
 	}
 
 	try {
+		const activeRun = await getActiveImportJobRun(env);
+
+		if (activeRun) {
+			const endedAtMs = Date.now();
+			const endedAt = new Date(endedAtMs).toISOString();
+			return {
+				trigger: options.trigger,
+				skipped: true,
+				skipReason: "job_already_queued_or_running",
+				activeJobRunId: activeRun.job_run_id,
+				activeStatus: activeRun.status,
+				activeSelected: activeRun.selected_count,
+				activeProcessed: activeRun.processed_count,
+				limit: options.limit,
+				refreshOlderThanDays: options.refreshOlderThanDays,
+				selected: 0,
+				rowsQueued: 0,
+				messagesQueued: 0,
+				jobRunId: null,
+				startedAt,
+				endedAt,
+				durationMs: endedAtMs - startedAtMs,
+			};
+		}
+
 		const rows = await getTmdbEnrichmentRows(
 			env,
 			options.limit,
 			options.refreshOlderThanDays,
 		);
-		let processed = 0;
-		let updated = 0;
-		let errors = 0;
-		let imdbIdsFound = 0;
-		let certificationsFound = 0;
-		let providerMoviesFound = 0;
-		let providerRowsInserted = 0;
-		let pendingStatements: D1PreparedStatement[] = [];
-		let pendingStatementMovies = 0;
-		let nextProgressLogAt = options.progressEvery;
+		let queueMessages: TmdbEnrichmentQueueMessage[] = [];
+		let rowsQueued = 0;
+		let messagesQueued = 0;
+
+		await createImportJobRun(
+			env,
+			jobRunId,
+			options.trigger,
+			rows.length,
+			rows.length,
+		);
 
 		console.log(
 			JSON.stringify({
-				event: "tmdb-enrich-start",
+				event: "tmdb-enrich-enqueue-start",
 				trigger: options.trigger,
+				jobRunId,
 				limit: options.limit,
 				refreshOlderThanDays: options.refreshOlderThanDays,
 				selected: rows.length,
-				progressEvery: options.progressEvery,
-				tmdbConcurrency: options.tmdbConcurrency,
+				idsPerMessage: TMDB_ENRICH_IDS_PER_QUEUE_MESSAGE,
 				startedAt,
 			}),
 		);
 
-		async function flushStatements() {
-			if (pendingStatements.length === 0) {
+		async function flushQueueMessages() {
+			if (queueMessages.length === 0) {
 				return;
 			}
 
-			await env.DB.batch(pendingStatements);
-			pendingStatements = [];
-			pendingStatementMovies = 0;
+			await env.TMDB_ENRICHMENT_QUEUE.sendBatch(
+				queueMessages.map((message) => ({ body: message })),
+			);
+
+			messagesQueued += queueMessages.length;
+			queueMessages = [];
 		}
 
 		for (
 			let index = 0;
 			index < rows.length;
-			index += options.tmdbConcurrency
+			index += TMDB_ENRICH_IDS_PER_QUEUE_MESSAGE
 		) {
-			const rowChunk = rows.slice(index, index + options.tmdbConcurrency);
-			const enrichmentResults = await Promise.all(
-				rowChunk.map(async (row) => {
-					try {
-						const details = await getTmdbMovieDetails(row.tmdb_id, env);
-						return {
-							row,
-							enrichment: buildTmdbEnrichmentStatements(
-								row.tmdb_id,
-								details,
-								env,
-							),
-							error: null,
-						};
-					} catch (error) {
-						return {
-							row,
-							enrichment: null,
-							error,
-						};
-					}
-				}),
-			);
+			const tmdbIds = rows
+				.slice(index, index + TMDB_ENRICH_IDS_PER_QUEUE_MESSAGE)
+				.map((row) => row.tmdb_id);
 
-			for (const result of enrichmentResults) {
-				if (result.enrichment) {
-					pendingStatements.push(...result.enrichment.statements);
-					pendingStatementMovies += 1;
-					updated += 1;
-					imdbIdsFound += result.enrichment.imdbIdFound;
-					certificationsFound += result.enrichment.certificationFound;
-					providerMoviesFound += result.enrichment.providerMovieFound;
-					providerRowsInserted += result.enrichment.providerRowsInserted;
+			queueMessages.push({
+				kind: "tmdb-enrichment",
+				jobRunId,
+				tmdbIds,
+			});
+			rowsQueued += tmdbIds.length;
 
-					if (pendingStatementMovies >= TMDB_ENRICH_D1_BATCH_MOVIES) {
-						await flushStatements();
-					}
-				} else {
-					errors += 1;
-					console.log(
-						JSON.stringify({
-							event: "tmdb-enrich-row-error",
-							trigger: options.trigger,
-							tmdbId: result.row.tmdb_id,
-							error:
-								result.error instanceof Error
-									? result.error.message
-									: String(result.error),
-						}),
-					);
-				}
-
-				processed += 1;
-			}
-
-			if (processed >= nextProgressLogAt || processed === rows.length) {
-				await flushStatements();
-
-				console.log(
-					JSON.stringify({
-						event: "tmdb-enrich-progress",
-						trigger: options.trigger,
-						selected: rows.length,
-						processed,
-						updated,
-						errors,
-						imdbIdsFound,
-						certificationsFound,
-						providerMoviesFound,
-						providerRowsInserted,
-						durationMs: Date.now() - startedAtMs,
-					}),
-				);
-
-				while (nextProgressLogAt <= processed) {
-					nextProgressLogAt += options.progressEvery;
-				}
+			if (
+				queueMessages.length >=
+				TMDB_ENRICH_QUEUE_MESSAGES_PER_SEND_BATCH
+			) {
+				await flushQueueMessages();
 			}
 		}
 
-		await flushStatements();
+		await flushQueueMessages();
 
 		const endedAtMs = Date.now();
 		const endedAt = new Date(endedAtMs).toISOString();
-		const durationMs = endedAtMs - startedAtMs;
 		const result = {
 			trigger: options.trigger,
 			limit: options.limit,
 			refreshOlderThanDays: options.refreshOlderThanDays,
-			tmdbConcurrency: options.tmdbConcurrency,
 			selected: rows.length,
-			processed,
-			updated,
-			errors,
-			imdbIdsFound,
-			certificationsFound,
-			providerMoviesFound,
-			providerRowsInserted,
+			rowsQueued,
+			messagesQueued,
+			jobRunId,
 			startedAt,
 			endedAt,
-			durationMs,
+			durationMs: endedAtMs - startedAtMs,
 		};
 
 		console.log(
 			JSON.stringify({
-				event: "tmdb-enrich-end",
+				event: "tmdb-enrich-enqueue-end",
 				...result,
 			}),
 		);
@@ -1108,6 +1466,437 @@ async function runTmdbEnrichment(env: Env, options: TmdbEnrichmentOptions) {
 		if (options.useLock && lockAcquired) {
 			await releaseImportJobLock(env, TMDB_ENRICH_JOB_NAME, lockOwner);
 		}
+	}
+}
+
+async function runScheduledImdbRatingsRefresh(env: Env) {
+	const startedAtMs = Date.now();
+	const startedAt = new Date(startedAtMs).toISOString();
+
+	console.log(
+		JSON.stringify({
+			event: "imdb-ratings-cron-start",
+			startedAt,
+		}),
+	);
+
+	const result = await enqueueImdbRatingRows(env);
+	const endedAtMs = Date.now();
+	const endedAt = new Date(endedAtMs).toISOString();
+
+	console.log(
+		JSON.stringify({
+			event: "imdb-ratings-cron-end",
+			...result,
+			startedAt,
+			endedAt,
+			durationMs: endedAtMs - startedAtMs,
+		}),
+	);
+
+	return {
+		...result,
+		startedAt,
+		endedAt,
+		durationMs: endedAtMs - startedAtMs,
+	};
+}
+
+async function runScheduledTmdbPrimaryRefresh(env: Env) {
+	const startedAtMs = Date.now();
+	const startedAt = new Date(startedAtMs).toISOString();
+	const beginDate = await getTmdbRefreshStartDate(env);
+	const endDate = timeToIsoDate(Date.now());
+
+	if (beginDate > endDate) {
+		const endedAtMs = Date.now();
+		const endedAt = new Date(endedAtMs).toISOString();
+		const result = {
+			skipped: true,
+			skipReason: "begin_date_after_end_date",
+			beginDate,
+			endDate,
+			startedAt,
+			endedAt,
+			durationMs: endedAtMs - startedAtMs,
+		};
+
+		console.log(
+			JSON.stringify({
+				event: "tmdb-primary-cron-skipped",
+				...result,
+			}),
+		);
+
+		return result;
+	}
+
+	console.log(
+		JSON.stringify({
+			event: "tmdb-primary-cron-start",
+			startedAt,
+			beginDate,
+			endDate,
+			limit: TMDB_PRIMARY_CRON_LIMIT,
+		}),
+	);
+
+	const result = await loadTmdbPrimaryRowsManual(
+		env,
+		beginDate,
+		endDate,
+		TMDB_PRIMARY_CRON_LIMIT,
+	);
+	const endedAtMs = Date.now();
+	const endedAt = new Date(endedAtMs).toISOString();
+
+	console.log(
+		JSON.stringify({
+			event: "tmdb-primary-cron-end",
+			...result,
+			startedAt,
+			endedAt,
+			durationMs: endedAtMs - startedAtMs,
+		}),
+	);
+
+	return {
+		...result,
+		startedAt,
+		endedAt,
+		durationMs: endedAtMs - startedAtMs,
+	};
+}
+
+async function getMovieListBuildReadiness(
+	env: Env,
+	refreshOlderThanDays: number,
+): Promise<MovieListBuildReadiness> {
+	const row = await env.DB.prepare(
+		`SELECT
+		    (SELECT COUNT(*) FROM tmdb_movies_staging) AS tmdbRows,
+		    (SELECT COUNT(*) FROM imdb_ratings_staging) AS imdbRows,
+		    (
+		      SELECT COUNT(*)
+		      FROM tmdb_movies_staging
+		      WHERE (tmdb_enriched_at IS NULL
+		         OR tmdb_enriched_at < datetime('now', '-' || ? || ' days'))
+		        AND tmdb_enrichment_error IS NULL
+		    ) AS tmdbRowsNeedingEnrichment,
+		    (
+		      SELECT COUNT(*)
+		      FROM tmdb_movies_staging
+		      WHERE tmdb_enrichment_error IS NOT NULL
+		    ) AS tmdbTerminalErrorRows,
+		    (
+		      SELECT COUNT(*)
+		      FROM tmdb_movies_staging AS tmdb
+		      LEFT JOIN imdb_ratings_staging AS imdb
+		        ON imdb.imdb_id = tmdb.imdb_id
+		      WHERE tmdb.tmdb_enriched_at IS NOT NULL
+		        AND tmdb.tmdb_enrichment_error IS NULL
+		    ) AS movieListCandidateRows`,
+	)
+		.bind(refreshOlderThanDays)
+		.first<MovieListBuildReadiness>();
+
+	return {
+		tmdbRows: row?.tmdbRows ?? 0,
+		imdbRows: row?.imdbRows ?? 0,
+		tmdbRowsNeedingEnrichment: row?.tmdbRowsNeedingEnrichment ?? 0,
+		tmdbTerminalErrorRows: row?.tmdbTerminalErrorRows ?? 0,
+		movieListCandidateRows: row?.movieListCandidateRows ?? 0,
+	};
+}
+
+function getMovieListBuildReadinessBlockers(
+	readiness: MovieListBuildReadiness,
+) {
+	const blockers: string[] = [];
+
+	if (readiness.tmdbRows === 0) {
+		blockers.push("tmdb_staging_empty");
+	}
+
+	if (readiness.imdbRows === 0) {
+		blockers.push("imdb_staging_empty");
+	}
+
+	if (readiness.tmdbRowsNeedingEnrichment > 0) {
+		blockers.push("tmdb_enrichment_not_current");
+	}
+
+	if (readiness.movieListCandidateRows === 0) {
+		blockers.push("no_movie_list_candidates");
+	}
+
+	return blockers;
+}
+
+async function getNextMovieListBuildChunk(
+	env: Env,
+	lastTmdbId: number,
+	chunkRows: number,
+) {
+	const row = await env.DB.prepare(
+		`SELECT
+		    COUNT(*) AS chunkRows,
+		    MAX(tmdb_id) AS lastTmdbId
+		 FROM (
+		    SELECT tmdb.tmdb_id
+		    FROM tmdb_movies_staging AS tmdb
+		    WHERE tmdb.tmdb_enriched_at IS NOT NULL
+		      AND tmdb.tmdb_enrichment_error IS NULL
+		      AND tmdb.tmdb_id > ?
+		    ORDER BY tmdb.tmdb_id
+		    LIMIT ?
+		 )`,
+	)
+		.bind(lastTmdbId, chunkRows)
+		.first<MovieListBuildChunk>();
+
+	return {
+		chunkRows: row?.chunkRows ?? 0,
+		lastTmdbId: row?.lastTmdbId ?? null,
+	};
+}
+
+async function upsertMovieListItemsChunk(
+	env: Env,
+	firstTmdbIdExclusive: number,
+	lastTmdbIdInclusive: number,
+) {
+	await env.DB.prepare(
+		`INSERT OR REPLACE INTO movie_list_items (
+			tmdb_id,
+			title,
+			poster_path,
+			release_date,
+			us_certification,
+			imdb_rating,
+			imdb_vote_count,
+			popularity,
+			last_refreshed_at
+		)
+		SELECT
+			tmdb.tmdb_id,
+			tmdb.title,
+			tmdb.poster_path,
+			tmdb.release_date,
+			tmdb.us_certification,
+			imdb.average_rating AS imdb_rating,
+			imdb.num_votes AS imdb_vote_count,
+			COALESCE(tmdb.popularity, 0) AS popularity,
+			CURRENT_TIMESTAMP AS last_refreshed_at
+		FROM tmdb_movies_staging AS tmdb
+		LEFT JOIN imdb_ratings_staging AS imdb
+			ON imdb.imdb_id = tmdb.imdb_id
+		WHERE tmdb.tmdb_enriched_at IS NOT NULL
+			AND tmdb.tmdb_enrichment_error IS NULL
+			AND tmdb.tmdb_id > ?
+			AND tmdb.tmdb_id <= ?`,
+	)
+		.bind(firstTmdbIdExclusive, lastTmdbIdInclusive)
+		.run();
+}
+
+async function cleanupInvalidMovieListItemsChunk(env: Env, chunkRows: number) {
+	const result = await env.DB.prepare(
+		`DELETE FROM movie_list_items
+		 WHERE tmdb_id IN (
+		    SELECT movie.tmdb_id
+		    FROM movie_list_items AS movie
+		    LEFT JOIN tmdb_movies_staging AS tmdb
+		      ON tmdb.tmdb_id = movie.tmdb_id
+		     AND tmdb.tmdb_enriched_at IS NOT NULL
+		     AND tmdb.tmdb_enrichment_error IS NULL
+		    WHERE tmdb.tmdb_id IS NULL
+		    LIMIT ?
+		 )`,
+	)
+		.bind(chunkRows)
+		.run();
+
+	return result.meta.changes ?? 0;
+}
+
+async function rebuildMovieListItems(env: Env, trigger: "manual" | "cron") {
+	const startedAtMs = Date.now();
+	const startedAt = new Date(startedAtMs).toISOString();
+	const lockOwner = createJobOwner(trigger);
+	const lockAcquired = await acquireImportJobLock(
+		env,
+		MOVIE_LIST_BUILD_JOB_NAME,
+		lockOwner,
+		MOVIE_LIST_BUILD_LOCK_MINUTES,
+	);
+
+	if (!lockAcquired) {
+		const endedAtMs = Date.now();
+		const endedAt = new Date(endedAtMs).toISOString();
+		return {
+			trigger,
+			skipped: true,
+			skipReason: "job_already_running",
+			startedAt,
+			endedAt,
+			durationMs: endedAtMs - startedAtMs,
+		};
+	}
+
+	try {
+		console.log(
+			JSON.stringify({
+				event: "movie-list-build-start",
+				trigger,
+				startedAt,
+			}),
+		);
+
+		const activeTmdbEnrichmentRun = await getActiveImportJobRun(env);
+
+		if (activeTmdbEnrichmentRun) {
+			const endedAtMs = Date.now();
+			const endedAt = new Date(endedAtMs).toISOString();
+			const result = {
+				trigger,
+				skipped: true,
+				skipReason: "tmdb_enrichment_job_active",
+				activeJobRunId: activeTmdbEnrichmentRun.job_run_id,
+				activeStatus: activeTmdbEnrichmentRun.status,
+				activeSelected: activeTmdbEnrichmentRun.selected_count,
+				activeProcessed: activeTmdbEnrichmentRun.processed_count,
+				startedAt,
+				endedAt,
+				durationMs: endedAtMs - startedAtMs,
+			};
+
+			console.log(
+				JSON.stringify({
+					event: "movie-list-build-skipped",
+					...result,
+				}),
+			);
+
+			return result;
+		}
+
+		const readiness = await getMovieListBuildReadiness(
+			env,
+			MOVIE_LIST_BUILD_REFRESH_OLDER_THAN_DAYS,
+		);
+		const readinessBlockers = getMovieListBuildReadinessBlockers(readiness);
+
+		if (readinessBlockers.length > 0) {
+			const endedAtMs = Date.now();
+			const endedAt = new Date(endedAtMs).toISOString();
+			const result = {
+				trigger,
+				skipped: true,
+				skipReason: "staging_not_ready",
+				readinessBlockers,
+				refreshOlderThanDays: MOVIE_LIST_BUILD_REFRESH_OLDER_THAN_DAYS,
+				readiness,
+				startedAt,
+				endedAt,
+				durationMs: endedAtMs - startedAtMs,
+			};
+
+			console.log(
+				JSON.stringify({
+					event: "movie-list-build-skipped",
+					...result,
+				}),
+			);
+
+			return result;
+		}
+
+		let lastTmdbId = 0;
+		let upsertedRows = 0;
+		let nextProgressLogAt = MOVIE_LIST_BUILD_PROGRESS_EVERY_ROWS;
+
+		while (true) {
+			const chunk = await getNextMovieListBuildChunk(
+				env,
+				lastTmdbId,
+				MOVIE_LIST_BUILD_INSERT_CHUNK_ROWS,
+			);
+
+			if (chunk.chunkRows === 0 || chunk.lastTmdbId === null) {
+				break;
+			}
+
+			await upsertMovieListItemsChunk(env, lastTmdbId, chunk.lastTmdbId);
+
+			lastTmdbId = chunk.lastTmdbId;
+			upsertedRows += chunk.chunkRows;
+
+			if (
+				upsertedRows >= nextProgressLogAt ||
+				upsertedRows === readiness.movieListCandidateRows
+			) {
+				console.log(
+					JSON.stringify({
+						event: "movie-list-build-progress",
+						trigger,
+						upsertedRows,
+						candidateRows: readiness.movieListCandidateRows,
+						lastTmdbId,
+						durationMs: Date.now() - startedAtMs,
+					}),
+				);
+
+				while (nextProgressLogAt <= upsertedRows) {
+					nextProgressLogAt += MOVIE_LIST_BUILD_PROGRESS_EVERY_ROWS;
+				}
+			}
+		}
+
+		let deletedRows = 0;
+
+		while (true) {
+			const chunkDeletedRows = await cleanupInvalidMovieListItemsChunk(
+				env,
+				MOVIE_LIST_BUILD_CLEANUP_CHUNK_ROWS,
+			);
+
+			if (chunkDeletedRows === 0) {
+				break;
+			}
+
+			deletedRows += chunkDeletedRows;
+		}
+
+		const countResult = await env.DB.prepare(
+			"SELECT COUNT(*) AS movie_list_count FROM movie_list_items",
+		).first<{ movie_list_count: number }>();
+		const endedAtMs = Date.now();
+		const endedAt = new Date(endedAtMs).toISOString();
+		const result = {
+			trigger,
+			movieListCount: countResult?.movie_list_count ?? 0,
+			refreshOlderThanDays: MOVIE_LIST_BUILD_REFRESH_OLDER_THAN_DAYS,
+			insertChunkRows: MOVIE_LIST_BUILD_INSERT_CHUNK_ROWS,
+			cleanupChunkRows: MOVIE_LIST_BUILD_CLEANUP_CHUNK_ROWS,
+			upsertedRows,
+			deletedRows,
+			readiness,
+			startedAt,
+			endedAt,
+			durationMs: endedAtMs - startedAtMs,
+		};
+
+		console.log(
+			JSON.stringify({
+				event: "movie-list-build-end",
+				...result,
+			}),
+		);
+
+		return result;
+	} finally {
+		await releaseImportJobLock(env, MOVIE_LIST_BUILD_JOB_NAME, lockOwner);
 	}
 }
 
@@ -1706,17 +2495,15 @@ export default {
 			return Response.json(responseBody);
 		}
 
+		if (url.pathname === "/admin/import/tmdb/enrich-progress") {
+			const runs = await getRecentImportJobRuns(env);
+			return Response.json({ runs });
+		}
+
 		if (url.pathname === "/admin/import/tmdb/enrich-manual") {
 			const limit = Number(url.searchParams.get("limit") ?? 1000);
 			const refreshOlderThanDays = Number(
 				url.searchParams.get("refreshOlderThanDays") ?? 7,
-			);
-			const progressEvery = Number(
-				url.searchParams.get("progressEvery") ?? Math.min(limit, 5000),
-			);
-			const tmdbConcurrency = Number(
-				url.searchParams.get("tmdbConcurrency") ??
-					TMDB_ENRICH_TMDB_CONCURRENCY,
 			);
 
 			if (!Number.isInteger(limit) || limit < 1) {
@@ -1736,29 +2523,20 @@ export default {
 				);
 			}
 
-			if (!Number.isInteger(progressEvery) || progressEvery < 1) {
-				return Response.json(
-					{ error: "progressEvery must be a positive integer." },
-					{ status: 400 },
-				);
-			}
-
-			if (!Number.isInteger(tmdbConcurrency) || tmdbConcurrency < 1) {
-				return Response.json(
-					{ error: "tmdbConcurrency must be a positive integer." },
-					{ status: 400 },
-				);
-			}
-
-			const result = await runTmdbEnrichment(env, {
+			const result = await enqueueTmdbEnrichmentJob(env, {
 				limit,
 				refreshOlderThanDays,
-				progressEvery,
-				tmdbConcurrency,
+				progressEvery: 5000,
+				tmdbConcurrency: TMDB_ENRICH_TMDB_CONCURRENCY,
 				useLock: true,
 				trigger: "manual",
 			});
 
+			return Response.json(result);
+		}
+
+		if (url.pathname === "/admin/import/movie-list/rebuild-manual") {
+			const result = await rebuildMovieListItems(env, "manual");
 			return Response.json(result);
 		}
 
@@ -1829,10 +2607,24 @@ export default {
 	},
 
 	async queue(
-		batch: MessageBatch<ImdbRatingQueueMessage>,
+		batch: MessageBatch<WorkerQueueMessage>,
 		env: Env,
 	): Promise<void> {
 		for (const message of batch.messages) {
+			if (isTmdbEnrichmentQueueMessage(message.body)) {
+				const rows = message.body.tmdbIds.map((tmdbId) => ({ tmdb_id: tmdbId }));
+
+				await processTmdbEnrichmentRows(
+					env,
+					message.body.jobRunId,
+					rows,
+					"queue",
+				);
+
+				message.ack();
+				continue;
+			}
+
 			const rows = message.body.rows;
 
 			if (rows.length === 0) {
@@ -1861,19 +2653,44 @@ export default {
 	},
 
 	async scheduled(
-		_controller: ScheduledController,
+		controller: ScheduledController,
 		env: Env,
 		ctx: ExecutionContext,
 	): Promise<void> {
-		ctx.waitUntil(
-			runTmdbEnrichment(env, {
-				limit: 20000,
-				refreshOlderThanDays: 7,
-				progressEvery: 5000,
-				tmdbConcurrency: TMDB_ENRICH_TMDB_CONCURRENCY,
-				useLock: true,
-				trigger: "cron",
+		if (controller.cron === SCHEDULED_IMDB_CRON) {
+			ctx.waitUntil(runScheduledImdbRatingsRefresh(env));
+			return;
+		}
+
+		if (controller.cron === SCHEDULED_TMDB_PRIMARY_CRON) {
+			ctx.waitUntil(runScheduledTmdbPrimaryRefresh(env));
+			return;
+		}
+
+		if (controller.cron === SCHEDULED_TMDB_ENRICHMENT_CRON) {
+			ctx.waitUntil(
+				enqueueTmdbEnrichmentJob(env, {
+					limit: TMDB_ENRICHMENT_CRON_LIMIT,
+					refreshOlderThanDays: 7,
+					progressEvery: 5000,
+					tmdbConcurrency: TMDB_ENRICH_TMDB_CONCURRENCY,
+					useLock: true,
+					trigger: "cron",
+				}),
+			);
+			return;
+		}
+
+		if (controller.cron === SCHEDULED_MOVIE_LIST_BUILD_CRON) {
+			ctx.waitUntil(rebuildMovieListItems(env, "cron"));
+			return;
+		}
+
+		console.log(
+			JSON.stringify({
+				event: "scheduled-cron-unhandled",
+				cron: controller.cron,
 			}),
 		);
 	},
-} satisfies ExportedHandler<Env, ImdbRatingQueueMessage>;
+} satisfies ExportedHandler<Env, WorkerQueueMessage>;
