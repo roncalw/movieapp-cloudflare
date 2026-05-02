@@ -98,30 +98,6 @@
 			"problemMatcher": []
 		},
 		{
-			"label": "remote-watch-movie-search-counts",
-			"type": "shell",
-			"command": "zsh",
-			"args": ["support/run-sql-remote.sh", "support/sql/movie-search-items-counts.sql"],
-			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
-			"problemMatcher": []
-		},
-		{
-			"label": "remote-watch-movie-search-progress",
-			"type": "shell",
-			"command": "zsh",
-			"args": ["support/run-sql-remote.sh", "support/sql/movie-search-items-progress.sql"],
-			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
-			"problemMatcher": []
-		},
-		{
-			"label": "remote-movie-search-items-horror-imdb-top-20",
-			"type": "shell",
-			"command": "zsh",
-			"args": ["support/run-sql-remote.sh", "support/sql/movie-search-items-horror-imdb-top-20.sql"],
-			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
-			"problemMatcher": []
-		},
-		{
 			"label": "remote-movie-list-last-5-years-top-50-popularity",
 			"type": "shell",
 			"command": "zsh",
@@ -283,30 +259,6 @@
 			"type": "shell",
 			"command": "zsh",
 			"args": ["support/run-sql-local.sh", "support/sql/movie-list-top-50.sql"],
-			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
-			"problemMatcher": []
-		},
-		{
-			"label": "local-watch-movie-search-counts",
-			"type": "shell",
-			"command": "zsh",
-			"args": ["support/run-sql-local.sh", "support/sql/movie-search-items-counts.sql"],
-			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
-			"problemMatcher": []
-		},
-		{
-			"label": "local-watch-movie-search-progress",
-			"type": "shell",
-			"command": "zsh",
-			"args": ["support/run-sql-local.sh", "support/sql/movie-search-items-progress.sql"],
-			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
-			"problemMatcher": []
-		},
-		{
-			"label": "local-movie-search-items-horror-imdb-top-20",
-			"type": "shell",
-			"command": "zsh",
-			"args": ["support/run-sql-local.sh", "support/sql/movie-search-items-horror-imdb-top-20.sql"],
 			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
 			"problemMatcher": []
 		},
