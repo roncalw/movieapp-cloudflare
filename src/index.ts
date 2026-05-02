@@ -58,6 +58,7 @@ export interface Env extends Cloudflare.Env {
 	DB: D1Database;
 	IMDB_RATING_QUEUE: Queue<ImdbRatingQueueMessage>;
 	TMDB_ENRICHMENT_QUEUE: Queue<TmdbEnrichmentQueueMessage>;
+	MOVIE_SEARCH_BUILD_QUEUE: Queue<MovieSearchBuildQueueMessage>;
 	TMDB_API_KEY: string;
 }
 
@@ -85,6 +86,24 @@ type MovieRow = {
 	IMDBRating: string | null;
 	IMDBVoteCounts: string | null;
 };
+
+type MovieSearchListItem = {
+	tmdb_id: number;
+	poster_path: string;
+	imdb_rating: number | null;
+};
+
+type MovieSearchSort = "popularity" | "imdb";
+
+type MovieSearchCursor = {
+	sort: MovieSearchSort;
+	tmdbId: number;
+	popularity?: number;
+	imdbRating?: number;
+	imdbVoteCount?: number;
+};
+
+class RequestValidationError extends Error {}
 
 /*
 	This is the remote IMDb gzip file we want Cloudflare to read during the
@@ -137,7 +156,16 @@ type TmdbEnrichmentQueueMessage = {
 	tmdbIds: number[];
 };
 
-type WorkerQueueMessage = ImdbRatingQueueMessage | TmdbEnrichmentQueueMessage;
+type MovieSearchBuildQueueMessage = {
+	kind: "movie-search-build";
+	jobRunId: string;
+	sourceRows: number;
+};
+
+type WorkerQueueMessage =
+	| ImdbRatingQueueMessage
+	| TmdbEnrichmentQueueMessage
+	| MovieSearchBuildQueueMessage;
 
 type TmdbDiscoverResult = {
 	id: number;
@@ -248,6 +276,37 @@ type MovieListBuildChunk = {
 	lastTmdbId: number | null;
 };
 
+type MovieSearchBuildReadiness = MovieListBuildReadiness & {
+	movieListRows: number;
+};
+
+type MovieSearchBuildPass =
+	| "no_filter"
+	| "genre_only"
+	| "provider_only"
+	| "genre_provider"
+	| "cleanup_stale"
+	| "cleanup_invalid"
+	| "complete";
+
+type MovieSearchBuildState = {
+	job_name: string;
+	build_marker: string;
+	status: string;
+	pass_name: MovieSearchBuildPass;
+	last_tmdb_id: number;
+	selected_count: number;
+	processed_count: number;
+	started_at: string;
+	updated_at: string;
+	completed_at: string | null;
+};
+
+type MovieSearchBuildOptions = {
+	sourceRows: number;
+	reset: boolean;
+};
+
 const IMDB_QUEUE_ROWS_PER_MESSAGE = 33;
 const IMDB_QUEUE_MESSAGES_PER_SEND_BATCH = 100;
 const TMDB_MAX_REQUESTS_PER_SECOND = 35;
@@ -265,12 +324,20 @@ const MOVIE_LIST_BUILD_REFRESH_OLDER_THAN_DAYS = 7;
 const MOVIE_LIST_BUILD_INSERT_CHUNK_ROWS = 10000;
 const MOVIE_LIST_BUILD_CLEANUP_CHUNK_ROWS = 10000;
 const MOVIE_LIST_BUILD_PROGRESS_EVERY_ROWS = 100000;
+const MOVIE_SEARCH_CACHE_SECONDS = 60 * 60 * 24 * 7;
+const MOVIE_SEARCH_STALE_SECONDS = 60 * 60 * 24;
+const MOVIE_SEARCH_BUILD_JOB_NAME = "movie-search-build";
+const MOVIE_SEARCH_BUILD_LOCK_MINUTES = 60;
+const MOVIE_SEARCH_BUILD_REFRESH_OLDER_THAN_DAYS = 7;
+const MOVIE_SEARCH_BUILD_SOURCE_ROWS_PER_RUN = 25000;
+const MOVIE_SEARCH_BUILD_CLEANUP_CHUNK_ROWS = 10000;
 const TMDB_PRIMARY_CRON_LIMIT = 100000;
 const TMDB_ENRICHMENT_CRON_LIMIT = 300000;
 const SCHEDULED_IMDB_CRON = "0 22 * * 1";
 const SCHEDULED_TMDB_PRIMARY_CRON = "0 4 * * 2";
 const SCHEDULED_TMDB_ENRICHMENT_CRON = "0 10 * * 2";
 const SCHEDULED_MOVIE_LIST_BUILD_CRON = "0 1 * * 3";
+const SCHEDULED_MOVIE_SEARCH_BUILD_CRON = "0 2 * * 3";
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const tmdbRequestTimestamps: number[] = [];
 
@@ -1008,6 +1075,12 @@ function isTmdbEnrichmentQueueMessage(
 	return "kind" in body && body.kind === "tmdb-enrichment";
 }
 
+function isMovieSearchBuildQueueMessage(
+	body: WorkerQueueMessage,
+): body is MovieSearchBuildQueueMessage {
+	return "kind" in body && body.kind === "movie-search-build";
+}
+
 function createJobRunId(trigger: "manual" | "cron") {
 	return `${TMDB_ENRICH_JOB_NAME}-${trigger}-${Date.now()}-${crypto.randomUUID()}`;
 }
@@ -1595,6 +1668,8 @@ async function getMovieListBuildReadiness(
 		        ON imdb.imdb_id = tmdb.imdb_id
 		      WHERE tmdb.tmdb_enriched_at IS NOT NULL
 		        AND tmdb.tmdb_enrichment_error IS NULL
+		        AND tmdb.poster_path IS NOT NULL
+		        AND tmdb.poster_path <> ''
 		    ) AS movieListCandidateRows`,
 	)
 		.bind(refreshOlderThanDays)
@@ -1647,6 +1722,8 @@ async function getNextMovieListBuildChunk(
 		    FROM tmdb_movies_staging AS tmdb
 		    WHERE tmdb.tmdb_enriched_at IS NOT NULL
 		      AND tmdb.tmdb_enrichment_error IS NULL
+		      AND tmdb.poster_path IS NOT NULL
+		      AND tmdb.poster_path <> ''
 		      AND tmdb.tmdb_id > ?
 		    ORDER BY tmdb.tmdb_id
 		    LIMIT ?
@@ -1693,6 +1770,8 @@ async function upsertMovieListItemsChunk(
 			ON imdb.imdb_id = tmdb.imdb_id
 		WHERE tmdb.tmdb_enriched_at IS NOT NULL
 			AND tmdb.tmdb_enrichment_error IS NULL
+			AND tmdb.poster_path IS NOT NULL
+			AND tmdb.poster_path <> ''
 			AND tmdb.tmdb_id > ?
 			AND tmdb.tmdb_id <= ?`,
 	)
@@ -1710,6 +1789,8 @@ async function cleanupInvalidMovieListItemsChunk(env: Env, chunkRows: number) {
 		      ON tmdb.tmdb_id = movie.tmdb_id
 		     AND tmdb.tmdb_enriched_at IS NOT NULL
 		     AND tmdb.tmdb_enrichment_error IS NULL
+		     AND tmdb.poster_path IS NOT NULL
+		     AND tmdb.poster_path <> ''
 		    WHERE tmdb.tmdb_id IS NULL
 		    LIMIT ?
 		 )`,
@@ -1898,6 +1979,703 @@ async function rebuildMovieListItems(env: Env, trigger: "manual" | "cron") {
 	} finally {
 		await releaseImportJobLock(env, MOVIE_LIST_BUILD_JOB_NAME, lockOwner);
 	}
+}
+
+async function getMovieSearchBuildReadiness(
+	env: Env,
+	refreshOlderThanDays: number,
+): Promise<MovieSearchBuildReadiness> {
+	const movieListReadiness = await getMovieListBuildReadiness(
+		env,
+		refreshOlderThanDays,
+	);
+	const row = await env.DB.prepare(
+		"SELECT COUNT(*) AS movieListRows FROM movie_list_items",
+	).first<{ movieListRows: number }>();
+
+	return {
+		...movieListReadiness,
+		movieListRows: row?.movieListRows ?? 0,
+	};
+}
+
+function getMovieSearchBuildReadinessBlockers(
+	readiness: MovieSearchBuildReadiness,
+) {
+	const blockers = getMovieListBuildReadinessBlockers(readiness);
+
+	if (readiness.movieListRows === 0) {
+		blockers.push("movie_list_empty");
+	}
+
+	if (
+		readiness.movieListCandidateRows > 0 &&
+		readiness.movieListRows !== readiness.movieListCandidateRows
+	) {
+		blockers.push("movie_list_count_does_not_match_candidates");
+	}
+
+	return blockers;
+}
+
+async function getNextMovieSearchBuildChunk(
+	env: Env,
+	lastTmdbId: number,
+	chunkRows: number,
+) {
+	const row = await env.DB.prepare(
+		`SELECT
+		    COUNT(*) AS chunkRows,
+		    MAX(tmdb_id) AS lastTmdbId
+		 FROM (
+		    SELECT tmdb_id
+		    FROM movie_list_items
+		    WHERE tmdb_id > ?
+		    ORDER BY tmdb_id
+		    LIMIT ?
+		 )`,
+	)
+		.bind(lastTmdbId, chunkRows)
+		.first<MovieListBuildChunk>();
+
+	return {
+		chunkRows: row?.chunkRows ?? 0,
+		lastTmdbId: row?.lastTmdbId ?? null,
+	};
+}
+
+function getNextMovieSearchBuildPass(
+	passName: MovieSearchBuildPass,
+): MovieSearchBuildPass {
+	if (passName === "no_filter") {
+		return "genre_only";
+	}
+
+	if (passName === "genre_only") {
+		return "provider_only";
+	}
+
+	if (passName === "provider_only") {
+		return "genre_provider";
+	}
+
+	if (passName === "genre_provider") {
+		return "cleanup_stale";
+	}
+
+	if (passName === "cleanup_stale") {
+		return "cleanup_invalid";
+	}
+
+	return "complete";
+}
+
+async function getMovieSearchBuildState(
+	env: Env,
+): Promise<MovieSearchBuildState | null> {
+	return env.DB.prepare(
+		`SELECT job_name,
+		        build_marker,
+		        status,
+		        pass_name,
+		        last_tmdb_id,
+		        selected_count,
+		        processed_count,
+		        started_at,
+		        updated_at,
+		        completed_at
+		 FROM movie_search_build_state
+		 WHERE job_name = ?`,
+	)
+		.bind(MOVIE_SEARCH_BUILD_JOB_NAME)
+		.first<MovieSearchBuildState>();
+}
+
+async function resetMovieSearchBuildState(env: Env) {
+	await env.DB.prepare(
+		`DELETE FROM movie_search_build_state
+		 WHERE job_name = ?`,
+	)
+		.bind(MOVIE_SEARCH_BUILD_JOB_NAME)
+		.run();
+}
+
+async function initializeMovieSearchBuildState(
+	env: Env,
+	buildMarker: string,
+	selectedCount: number,
+) {
+	await env.DB.prepare(
+		`INSERT INTO movie_search_build_state (
+			 job_name,
+			 build_marker,
+			 status,
+			 pass_name,
+			 last_tmdb_id,
+			 selected_count,
+			 processed_count,
+			 started_at,
+			 updated_at
+		 )
+		 VALUES (?, ?, 'running', 'no_filter', 0, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+	)
+		.bind(MOVIE_SEARCH_BUILD_JOB_NAME, buildMarker, selectedCount)
+		.run();
+}
+
+async function updateMovieSearchBuildStateProgress(
+	env: Env,
+	passName: MovieSearchBuildPass,
+	lastTmdbId: number,
+	processedCount: number,
+) {
+	await env.DB.prepare(
+		`UPDATE movie_search_build_state
+		 SET pass_name = ?,
+		     last_tmdb_id = ?,
+		     processed_count = ?,
+		     updated_at = CURRENT_TIMESTAMP
+		 WHERE job_name = ?`,
+	)
+		.bind(
+			passName,
+			lastTmdbId,
+			processedCount,
+			MOVIE_SEARCH_BUILD_JOB_NAME,
+		)
+		.run();
+}
+
+async function advanceMovieSearchBuildStatePass(
+	env: Env,
+	nextPassName: MovieSearchBuildPass,
+	processedCount: number,
+) {
+	await env.DB.prepare(
+		`UPDATE movie_search_build_state
+		 SET status = CASE WHEN ? = 'complete' THEN 'complete' ELSE 'running' END,
+		     pass_name = ?,
+		     last_tmdb_id = 0,
+		     processed_count = ?,
+		     updated_at = CURRENT_TIMESTAMP,
+		     completed_at = CASE WHEN ? = 'complete' THEN CURRENT_TIMESTAMP ELSE completed_at END
+		 WHERE job_name = ?`,
+	)
+		.bind(
+			nextPassName,
+			nextPassName,
+			processedCount,
+			nextPassName,
+			MOVIE_SEARCH_BUILD_JOB_NAME,
+		)
+		.run();
+}
+
+async function insertMovieSearchItemsPassRange(
+	env: Env,
+	passName: MovieSearchBuildPass,
+	firstTmdbIdExclusive: number,
+	lastTmdbIdInclusive: number,
+	buildMarker: string,
+) {
+	const movieSearchSelectColumns = `movie.title,
+		movie.poster_path,
+		movie.release_date,
+		movie.us_certification,
+		CASE WHEN movie.us_certification IS NOT NULL
+		          AND movie.us_certification <> ''
+		     THEN 1 ELSE 0 END AS has_us_certification,
+		CASE WHEN EXISTS (
+			SELECT 1
+			FROM movie_watch_providers AS provider_check
+			WHERE provider_check.tmdb_id = movie.tmdb_id
+			  AND provider_check.region = 'US'
+		) THEN 1 ELSE 0 END AS has_us_watch_provider,
+		CASE WHEN movie.poster_path IS NOT NULL
+		          AND movie.poster_path <> ''
+		     THEN 1 ELSE 0 END AS has_poster,
+		movie.imdb_rating,
+		movie.imdb_vote_count,
+		COALESCE(movie.popularity, 0) AS popularity,
+		? AS last_refreshed_at`;
+
+	const insertMovieSearchRows = async (sql: string) => {
+		const result = await env.DB
+			.prepare(
+				`INSERT OR REPLACE INTO movie_search_items (
+					genre_id,
+					provider_id,
+					region,
+					tmdb_id,
+					title,
+					poster_path,
+					release_date,
+					us_certification,
+					has_us_certification,
+					has_us_watch_provider,
+					has_poster,
+					imdb_rating,
+					imdb_vote_count,
+					popularity,
+					last_refreshed_at
+			)
+			${sql}`,
+			)
+			.bind(buildMarker, firstTmdbIdExclusive, lastTmdbIdInclusive)
+			.run();
+
+		return result.meta.changes ?? 0;
+	};
+
+	if (passName === "no_filter") {
+		return insertMovieSearchRows(
+			`SELECT
+				0 AS genre_id,
+				0 AS provider_id,
+				'US' AS region,
+				movie.tmdb_id,
+				${movieSearchSelectColumns}
+			 FROM movie_list_items AS movie
+			 WHERE movie.tmdb_id > ?
+			   AND movie.tmdb_id <= ?`,
+		);
+	}
+
+	if (passName === "genre_only") {
+		return insertMovieSearchRows(
+			`SELECT
+				genre.genre_id,
+				0 AS provider_id,
+				'US' AS region,
+				movie.tmdb_id,
+				${movieSearchSelectColumns}
+			 FROM movie_list_items AS movie
+			 JOIN movie_genres AS genre
+			   ON genre.tmdb_id = movie.tmdb_id
+			 WHERE movie.tmdb_id > ?
+			   AND movie.tmdb_id <= ?`,
+		);
+	}
+
+	if (passName === "provider_only") {
+		return insertMovieSearchRows(
+			`SELECT
+				0 AS genre_id,
+				provider.provider_id,
+				provider.region,
+				movie.tmdb_id,
+				${movieSearchSelectColumns}
+			 FROM movie_list_items AS movie
+			 JOIN movie_watch_providers AS provider
+			   ON provider.tmdb_id = movie.tmdb_id
+			  AND provider.region = 'US'
+			 WHERE movie.tmdb_id > ?
+			   AND movie.tmdb_id <= ?`,
+		);
+	}
+
+	if (passName === "genre_provider") {
+		return insertMovieSearchRows(
+			`SELECT
+				genre.genre_id,
+				provider.provider_id,
+				provider.region,
+				movie.tmdb_id,
+				${movieSearchSelectColumns}
+			 FROM movie_list_items AS movie
+			 JOIN movie_genres AS genre
+			   ON genre.tmdb_id = movie.tmdb_id
+			 JOIN movie_watch_providers AS provider
+			   ON provider.tmdb_id = movie.tmdb_id
+			  AND provider.region = 'US'
+			 WHERE movie.tmdb_id > ?
+			   AND movie.tmdb_id <= ?`,
+		);
+	}
+
+	return 0;
+}
+
+async function cleanupInvalidMovieSearchItemsChunk(env: Env, chunkRows: number) {
+	const result = await env.DB.prepare(
+		`DELETE FROM movie_search_items
+		 WHERE tmdb_id IN (
+		    SELECT search.tmdb_id
+		    FROM movie_search_items AS search
+		    LEFT JOIN movie_list_items AS movie
+		      ON movie.tmdb_id = search.tmdb_id
+		    WHERE movie.tmdb_id IS NULL
+		    LIMIT ?
+		 )`,
+	)
+		.bind(chunkRows)
+		.run();
+
+	return result.meta.changes ?? 0;
+}
+
+async function cleanupStaleMovieSearchItemsChunk(
+	env: Env,
+	buildMarker: string,
+	chunkRows: number,
+) {
+	const result = await env.DB.prepare(
+		`DELETE FROM movie_search_items
+		 WHERE rowid IN (
+		    SELECT rowid
+		    FROM movie_search_items
+		    WHERE last_refreshed_at <> ?
+		    LIMIT ?
+		 )`,
+	)
+		.bind(buildMarker, chunkRows)
+		.run();
+
+	return result.meta.changes ?? 0;
+}
+
+async function rebuildMovieSearchItems(
+	env: Env,
+	trigger: "manual" | "cron",
+	options: MovieSearchBuildOptions = {
+		sourceRows: MOVIE_SEARCH_BUILD_SOURCE_ROWS_PER_RUN,
+		reset: false,
+	},
+) {
+	const startedAtMs = Date.now();
+	const startedAt = new Date(startedAtMs).toISOString();
+	const lockOwner = createJobOwner(trigger);
+	const jobRunId = `${MOVIE_SEARCH_BUILD_JOB_NAME}-${trigger}-${Date.now()}-${crypto.randomUUID()}`;
+	const lockAcquired = await acquireImportJobLock(
+		env,
+		MOVIE_SEARCH_BUILD_JOB_NAME,
+		lockOwner,
+		MOVIE_SEARCH_BUILD_LOCK_MINUTES,
+	);
+
+	if (!lockAcquired) {
+		const endedAtMs = Date.now();
+		const endedAt = new Date(endedAtMs).toISOString();
+		return {
+			trigger,
+			skipped: true,
+			skipReason: "job_already_running",
+			startedAt,
+			endedAt,
+			durationMs: endedAtMs - startedAtMs,
+		};
+	}
+
+	try {
+		if (options.reset) {
+			await resetMovieSearchBuildState(env);
+		}
+
+		console.log(
+			JSON.stringify({
+				event: "movie-search-build-start",
+				trigger,
+				startedAt,
+				sourceRows: options.sourceRows,
+				reset: options.reset,
+			}),
+		);
+
+		const activeTmdbEnrichmentRun = await getActiveImportJobRun(env);
+
+		if (activeTmdbEnrichmentRun) {
+			const endedAtMs = Date.now();
+			const endedAt = new Date(endedAtMs).toISOString();
+			const result = {
+				trigger,
+				skipped: true,
+				skipReason: "tmdb_enrichment_job_active",
+				activeJobRunId: activeTmdbEnrichmentRun.job_run_id,
+				activeStatus: activeTmdbEnrichmentRun.status,
+				activeSelected: activeTmdbEnrichmentRun.selected_count,
+				activeProcessed: activeTmdbEnrichmentRun.processed_count,
+				startedAt,
+				endedAt,
+				durationMs: endedAtMs - startedAtMs,
+			};
+
+			console.log(
+				JSON.stringify({
+					event: "movie-search-build-skipped",
+					...result,
+				}),
+			);
+
+			return result;
+		}
+
+		const readiness = await getMovieSearchBuildReadiness(
+			env,
+			MOVIE_SEARCH_BUILD_REFRESH_OLDER_THAN_DAYS,
+		);
+		const readinessBlockers =
+			getMovieSearchBuildReadinessBlockers(readiness);
+
+		if (readinessBlockers.length > 0) {
+			const endedAtMs = Date.now();
+			const endedAt = new Date(endedAtMs).toISOString();
+			const result = {
+				trigger,
+				skipped: true,
+				skipReason: "movie_list_not_ready",
+				readinessBlockers,
+				refreshOlderThanDays: MOVIE_SEARCH_BUILD_REFRESH_OLDER_THAN_DAYS,
+				readiness,
+				startedAt,
+				endedAt,
+				durationMs: endedAtMs - startedAtMs,
+			};
+
+			console.log(
+				JSON.stringify({
+					event: "movie-search-build-skipped",
+					...result,
+				}),
+			);
+
+			return result;
+		}
+
+		let state = await getMovieSearchBuildState(env);
+
+		if (!state || state.status === "complete") {
+			await initializeMovieSearchBuildState(
+				env,
+				startedAt,
+				readiness.movieListRows,
+			);
+			state = await getMovieSearchBuildState(env);
+		}
+
+		if (!state) {
+			throw new Error("Movie search build state was not initialized.");
+		}
+
+		await env.DB.prepare(
+			`INSERT INTO import_job_runs (
+				 job_run_id,
+				 job_name,
+				 status,
+				 trigger,
+				 selected_count,
+				 queued_count,
+				 started_at,
+				 last_progress_at
+			 )
+			 VALUES (?, ?, 'running', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+		)
+			.bind(
+				jobRunId,
+				MOVIE_SEARCH_BUILD_JOB_NAME,
+				trigger,
+				state.selected_count,
+				options.sourceRows,
+			)
+			.run();
+
+		let insertedRows = 0;
+		let deletedRows = 0;
+		let staleDeletedRows = 0;
+		let lastTmdbId = state.last_tmdb_id;
+		let sourceRowsProcessed = state.processed_count;
+		let completedPass = false;
+
+		if (
+			state.pass_name === "no_filter" ||
+			state.pass_name === "genre_only" ||
+			state.pass_name === "provider_only" ||
+			state.pass_name === "genre_provider"
+		) {
+			const chunk = await getNextMovieSearchBuildChunk(
+				env,
+				state.last_tmdb_id,
+				options.sourceRows,
+			);
+
+			if (chunk.chunkRows === 0 || chunk.lastTmdbId === null) {
+				const nextPassName = getNextMovieSearchBuildPass(state.pass_name);
+				await advanceMovieSearchBuildStatePass(
+					env,
+					nextPassName,
+					sourceRowsProcessed,
+				);
+				completedPass = true;
+			} else {
+				insertedRows = await insertMovieSearchItemsPassRange(
+					env,
+					state.pass_name,
+					state.last_tmdb_id,
+					chunk.lastTmdbId,
+					state.build_marker,
+				);
+
+				lastTmdbId = chunk.lastTmdbId;
+				sourceRowsProcessed += chunk.chunkRows;
+
+				await updateMovieSearchBuildStateProgress(
+					env,
+					state.pass_name,
+					lastTmdbId,
+					sourceRowsProcessed,
+				);
+			}
+		} else if (state.pass_name === "cleanup_stale") {
+			staleDeletedRows = await cleanupStaleMovieSearchItemsChunk(
+				env,
+				state.build_marker,
+				MOVIE_SEARCH_BUILD_CLEANUP_CHUNK_ROWS,
+			);
+
+			if (staleDeletedRows === 0) {
+				await advanceMovieSearchBuildStatePass(
+					env,
+					"cleanup_invalid",
+					sourceRowsProcessed,
+				);
+				completedPass = true;
+			}
+		} else if (state.pass_name === "cleanup_invalid") {
+			deletedRows = await cleanupInvalidMovieSearchItemsChunk(
+				env,
+				MOVIE_SEARCH_BUILD_CLEANUP_CHUNK_ROWS,
+			);
+
+			if (deletedRows === 0) {
+				await advanceMovieSearchBuildStatePass(
+					env,
+					"complete",
+					sourceRowsProcessed,
+				);
+				completedPass = true;
+			}
+		}
+
+		const latestState = await getMovieSearchBuildState(env);
+		const endedAtMs = Date.now();
+		const endedAt = new Date(endedAtMs).toISOString();
+		await env.DB.prepare(
+			`UPDATE import_job_runs
+			 SET status = ?,
+			     processed_count = ?,
+			     updated_count = ?,
+			     ended_at = CURRENT_TIMESTAMP,
+			     last_progress_at = CURRENT_TIMESTAMP
+			 WHERE job_run_id = ?`,
+		)
+			.bind(
+				latestState?.status === "complete" ? "complete" : "partial",
+				sourceRowsProcessed,
+				insertedRows,
+				jobRunId,
+			)
+			.run();
+
+		const result = {
+			trigger,
+			refreshOlderThanDays: MOVIE_SEARCH_BUILD_REFRESH_OLDER_THAN_DAYS,
+			sourceRows: options.sourceRows,
+			cleanupChunkRows: MOVIE_SEARCH_BUILD_CLEANUP_CHUNK_ROWS,
+			passName: state.pass_name,
+			nextPassName: latestState?.pass_name ?? null,
+			completedPass,
+			buildStatus: latestState?.status ?? null,
+			buildMarker: state.build_marker,
+			lastTmdbId,
+			sourceRowsProcessed,
+			insertedRows,
+			deletedRows,
+			staleDeletedRows,
+			readiness,
+			startedAt,
+			endedAt,
+			durationMs: endedAtMs - startedAtMs,
+		};
+
+		console.log(
+			JSON.stringify({
+				event: "movie-search-build-end",
+				...result,
+			}),
+		);
+
+		return result;
+	} catch (error) {
+		await env.DB.prepare(
+			`UPDATE import_job_runs
+			 SET status = 'failed',
+			     ended_at = CURRENT_TIMESTAMP,
+			     last_progress_at = CURRENT_TIMESTAMP,
+			     last_error = ?
+			 WHERE job_run_id = ?`,
+		)
+			.bind(error instanceof Error ? error.message : String(error), jobRunId)
+			.run();
+
+		throw error;
+	} finally {
+		await releaseImportJobLock(env, MOVIE_SEARCH_BUILD_JOB_NAME, lockOwner);
+	}
+}
+
+async function enqueueMovieSearchBuildJob(
+	env: Env,
+	trigger: "manual" | "cron",
+	options: MovieSearchBuildOptions,
+) {
+	if (options.reset) {
+		await resetMovieSearchBuildState(env);
+	}
+
+	const jobRunId = `${MOVIE_SEARCH_BUILD_JOB_NAME}-${trigger}-${Date.now()}-${crypto.randomUUID()}`;
+
+	await env.MOVIE_SEARCH_BUILD_QUEUE.send({
+		kind: "movie-search-build",
+		jobRunId,
+		sourceRows: options.sourceRows,
+	});
+
+	console.log(
+		JSON.stringify({
+			event: "movie-search-build-queued",
+			trigger,
+			jobRunId,
+			sourceRows: options.sourceRows,
+			reset: options.reset,
+		}),
+	);
+
+	return {
+		trigger,
+		queued: true,
+		jobRunId,
+		sourceRows: options.sourceRows,
+		reset: options.reset,
+	};
+}
+
+async function processMovieSearchBuildQueueMessage(
+	env: Env,
+	message: MovieSearchBuildQueueMessage,
+) {
+	const result = await rebuildMovieSearchItems(env, "cron", {
+		sourceRows: message.sourceRows,
+		reset: false,
+	});
+
+	console.log(
+		JSON.stringify({
+			event: "movie-search-build-queue-chain-disabled",
+			jobRunId: message.jobRunId,
+			result,
+		}),
+	);
+
+	return result;
 }
 
 /*
@@ -2268,6 +3046,475 @@ function jsonResponse(body: unknown, init?: ResponseInit) {
 	});
 }
 
+function parsePositiveIntegerParam(
+	value: string | null,
+	defaultValue: number,
+	maxValue: number,
+	paramName: string,
+) {
+	const parsedValue = value === null ? defaultValue : Number(value);
+
+	if (
+		!Number.isInteger(parsedValue) ||
+		parsedValue < 1 ||
+		parsedValue > maxValue
+	) {
+		throw new RequestValidationError(
+			`${paramName} must be a whole number between 1 and ${maxValue}.`,
+		);
+	}
+
+	return parsedValue;
+}
+
+function parseOptionalPositiveIntegerParam(
+	value: string | null,
+	maxValue: number,
+	paramName: string,
+) {
+	if (value === null || value.trim() === "") {
+		return null;
+	}
+
+	return parsePositiveIntegerParam(value, 1, maxValue, paramName);
+}
+
+function parseMovieSearchSortParam(value: string | null): MovieSearchSort {
+	if (value === null || value.trim() === "" || value === "popularity") {
+		return "popularity";
+	}
+
+	if (value === "imdb") {
+		return "imdb";
+	}
+
+	throw new RequestValidationError("sort must be popularity or imdb.");
+}
+
+function getDefaultMovieSearchBeginDate() {
+	const today = new Date();
+	const year = today.getUTCFullYear() - 5;
+	return `${year}-01-01`;
+}
+
+function getDefaultMovieSearchEndDate() {
+	return new Date().toISOString().slice(0, 10);
+}
+
+function getMovieSearchDateRange(url: URL) {
+	const datePreset = url.searchParams.get("datePreset");
+	const endDatePreset = url.searchParams.get("endDatePreset");
+
+	if (
+		endDatePreset !== null &&
+		endDatePreset.trim() !== "" &&
+		endDatePreset !== "today"
+	) {
+		throw new RequestValidationError("endDatePreset must be today.");
+	}
+
+	if (datePreset === null || datePreset.trim() === "") {
+		if (endDatePreset === "today" && url.searchParams.has("endDate")) {
+			throw new RequestValidationError(
+				"endDatePreset cannot be combined with endDate.",
+			);
+		}
+
+		return {
+			beginDate:
+				url.searchParams.get("beginDate") ?? getDefaultMovieSearchBeginDate(),
+			endDate:
+				endDatePreset === "today"
+					? getDefaultMovieSearchEndDate()
+					: (url.searchParams.get("endDate") ?? getDefaultMovieSearchEndDate()),
+			datePreset: null,
+			endDatePreset: endDatePreset === "today" ? endDatePreset : null,
+		};
+	}
+
+	if (datePreset !== "last5years") {
+		throw new RequestValidationError("datePreset must be last5years.");
+	}
+
+	if (
+		url.searchParams.has("beginDate") ||
+		url.searchParams.has("endDate") ||
+		url.searchParams.has("endDatePreset")
+	) {
+		throw new RequestValidationError(
+			"datePreset cannot be combined with beginDate, endDate, or endDatePreset.",
+		);
+	}
+
+	return {
+		beginDate: getDefaultMovieSearchBeginDate(),
+		endDate: getDefaultMovieSearchEndDate(),
+		datePreset,
+		endDatePreset: null,
+	};
+}
+
+function parseIntegerListParam(value: string | null, paramName: string) {
+	if (value === null || value.trim() === "") {
+		return [];
+	}
+
+	const parsedValues = value
+		.split(",")
+		.map((part) => part.trim())
+		.filter((part) => part.length > 0)
+		.map((part) => Number(part));
+
+	if (
+		parsedValues.length === 0 ||
+		parsedValues.some((parsedValue) => !Number.isInteger(parsedValue))
+	) {
+		throw new RequestValidationError(
+			`${paramName} must be a comma-separated list of integers.`,
+		);
+	}
+
+	return [...new Set(parsedValues)];
+}
+
+function parseStringListParam(value: string | null) {
+	if (value === null || value.trim() === "") {
+		return [];
+	}
+
+	return [
+		...new Set(
+			value
+				.split(",")
+				.map((part) => part.trim())
+				.filter((part) => part.length > 0),
+		),
+	];
+}
+
+function parseWatchMonetizationTypesParam(value: string | null) {
+	const monetizationTypes = parseStringListParam(value);
+
+	if (
+		monetizationTypes.some(
+			(monetizationType) => monetizationType !== "flatrate",
+		)
+	) {
+		throw new RequestValidationError(
+			"watchMonetizationTypes must be flatrate.",
+		);
+	}
+
+	return monetizationTypes;
+}
+
+function encodeMovieSearchCursor(item: {
+	tmdb_id: number;
+	imdb_rating: number | null;
+	imdb_vote_count: number;
+	popularity: number;
+}, sort: MovieSearchSort) {
+	const cursor: MovieSearchCursor =
+		sort === "imdb"
+			? {
+					sort,
+					imdbRating: item.imdb_rating ?? 0,
+					imdbVoteCount: item.imdb_vote_count,
+					tmdbId: item.tmdb_id,
+				}
+			: {
+					sort,
+					popularity: item.popularity,
+					tmdbId: item.tmdb_id,
+				};
+
+	return btoa(JSON.stringify(cursor));
+}
+
+function decodeMovieSearchCursor(value: string | null, sort: MovieSearchSort) {
+	if (value === null || value.trim() === "") {
+		return null;
+	}
+
+	try {
+		const parsedValue = JSON.parse(atob(value)) as Partial<MovieSearchCursor>;
+
+		if (parsedValue.sort !== sort || typeof parsedValue.tmdbId !== "number") {
+			throw new RequestValidationError("Invalid cursor shape.");
+		}
+
+		if (
+			sort === "imdb" &&
+			(typeof parsedValue.imdbRating !== "number" ||
+				typeof parsedValue.imdbVoteCount !== "number")
+		) {
+			throw new RequestValidationError("Invalid cursor shape.");
+		}
+
+		if (sort === "popularity" && typeof parsedValue.popularity !== "number") {
+			throw new RequestValidationError("Invalid cursor shape.");
+		}
+
+		return parsedValue as MovieSearchCursor;
+	} catch {
+		throw new RequestValidationError("cursor is invalid.");
+	}
+}
+
+async function searchMovieListItems(env: Env, url: URL) {
+	const pageSize = parsePositiveIntegerParam(
+		url.searchParams.get("pageSize"),
+		20,
+		50,
+		"pageSize",
+	);
+	let sort = parseMovieSearchSortParam(url.searchParams.get("sort"));
+	const minImdbVotes = parseOptionalPositiveIntegerParam(
+		url.searchParams.get("minImdbVotes"),
+		10_000_000,
+		"minImdbVotes",
+	);
+
+	if (minImdbVotes !== null) {
+		sort = "imdb";
+	}
+	const genreIds = parseIntegerListParam(
+		url.searchParams.get("genreIds"),
+		"genreIds",
+	);
+	const providerIds = parseIntegerListParam(
+		url.searchParams.get("providerIds"),
+		"providerIds",
+	);
+	const watchMonetizationTypes = parseWatchMonetizationTypesParam(
+		url.searchParams.get("watchMonetizationTypes"),
+	);
+	const certifications = parseStringListParam(
+		url.searchParams.get("certifications"),
+	);
+	const { beginDate, endDate, datePreset, endDatePreset } =
+		getMovieSearchDateRange(url);
+	const cursor = decodeMovieSearchCursor(url.searchParams.get("cursor"), sort);
+
+	if (!isIsoDate(beginDate)) {
+		throw new RequestValidationError("beginDate must use YYYY-MM-DD format.");
+	}
+
+	if (!isIsoDate(endDate)) {
+		throw new RequestValidationError("endDate must use YYYY-MM-DD format.");
+	}
+
+	if (beginDate > endDate) {
+		throw new RequestValidationError(
+			"beginDate must be less than or equal to endDate.",
+		);
+	}
+
+	if (providerIds.length > 0 && watchMonetizationTypes.length > 0) {
+		throw new RequestValidationError(
+			"providerIds cannot be combined with watchMonetizationTypes.",
+		);
+	}
+
+	const movieIndexHint =
+		sort === "popularity"
+			? " INDEXED BY idx_movie_list_items_search_popularity_date_cover"
+			: certifications.length === 0
+				? " INDEXED BY idx_movie_list_items_search_imdb_date_cover"
+				: "";
+	const sqlParts = [
+		`SELECT
+		    movie.tmdb_id,
+		    movie.poster_path,
+		    movie.imdb_rating,
+		    movie.imdb_vote_count,
+		    movie.popularity
+		  FROM movie_list_items AS movie${movieIndexHint}
+		  WHERE movie.release_date >= ?
+		    AND movie.release_date <= ?`,
+	];
+	const bindings: Array<number | string> = [beginDate, endDate];
+
+	if (sort === "imdb") {
+		sqlParts.push("AND movie.imdb_rating IS NOT NULL");
+	}
+
+	if (minImdbVotes !== null) {
+		sqlParts.push("AND movie.imdb_vote_count >= ?");
+		bindings.push(minImdbVotes);
+	}
+
+	for (const genreId of genreIds) {
+		sqlParts.push(
+			`AND EXISTS (
+			   SELECT 1
+			   FROM movie_genres AS genre
+			   WHERE genre.tmdb_id = movie.tmdb_id
+			     AND genre.genre_id = ?
+			 )`,
+		);
+		bindings.push(genreId);
+	}
+
+	if (providerIds.length > 0) {
+		const placeholders = providerIds.map(() => "?").join(", ");
+		sqlParts.push(
+			`AND EXISTS (
+			   SELECT 1
+			   FROM movie_watch_providers AS provider
+			   WHERE provider.tmdb_id = movie.tmdb_id
+			     AND provider.region = 'US'
+			     AND provider.provider_id IN (${placeholders})
+			 )`,
+		);
+		bindings.push(...providerIds);
+	}
+
+	if (watchMonetizationTypes.includes("flatrate")) {
+		sqlParts.push(
+			`AND EXISTS (
+			   SELECT 1
+			   FROM movie_watch_providers AS provider
+			   WHERE provider.tmdb_id = movie.tmdb_id
+			     AND provider.region = 'US'
+			 )`,
+		);
+	}
+
+	if (certifications.length > 0) {
+		const placeholders = certifications.map(() => "?").join(", ");
+		sqlParts.push(`AND movie.us_certification IN (${placeholders})`);
+		bindings.push(...certifications);
+	}
+
+	if (cursor !== null) {
+		if (sort === "imdb") {
+			sqlParts.push(
+				`AND (
+				   movie.imdb_rating < ?
+				   OR (
+				     movie.imdb_rating = ?
+				     AND movie.imdb_vote_count < ?
+				   )
+				   OR (
+				     movie.imdb_rating = ?
+				     AND movie.imdb_vote_count = ?
+				     AND movie.tmdb_id > ?
+				   )
+				 )`,
+			);
+			bindings.push(
+				cursor.imdbRating ?? 0,
+				cursor.imdbRating ?? 0,
+				cursor.imdbVoteCount ?? 0,
+				cursor.imdbRating ?? 0,
+				cursor.imdbVoteCount ?? 0,
+				cursor.tmdbId,
+			);
+		} else {
+			sqlParts.push(
+				`AND (
+				   movie.popularity < ?
+				   OR (
+				     movie.popularity = ?
+				     AND movie.tmdb_id > ?
+				   )
+				 )`,
+			);
+			bindings.push(cursor.popularity ?? 0, cursor.popularity ?? 0, cursor.tmdbId);
+		}
+	}
+
+	if (sort === "imdb") {
+		sqlParts.push(
+			`ORDER BY
+			    movie.imdb_rating DESC,
+			    movie.imdb_vote_count DESC,
+			    movie.tmdb_id
+			  LIMIT ?`,
+		);
+	} else {
+		sqlParts.push(
+			`ORDER BY
+			    movie.popularity DESC,
+			    movie.tmdb_id
+			  LIMIT ?`,
+		);
+	}
+
+	bindings.push(pageSize + 1);
+
+	const { results } = await env.DB.prepare(sqlParts.join("\n"))
+		.bind(...bindings)
+		.all<MovieSearchListItem & { imdb_vote_count: number; popularity: number }>();
+	const pageRows = results.slice(0, pageSize);
+	const lastRow = pageRows.at(-1);
+	const nextCursor =
+		results.length > pageSize && lastRow
+			? encodeMovieSearchCursor(lastRow, sort)
+			: null;
+	const movies = pageRows.map(
+		({ imdb_vote_count: _imdbVoteCount, popularity: _popularity, ...movie }) =>
+			movie,
+	);
+
+	return {
+		movies,
+		nextCursor,
+		pageSize,
+		sort,
+		beginDate,
+		endDate,
+		datePreset,
+		endDatePreset,
+	};
+}
+
+function movieSearchCacheHeaders(cacheStatus: "HIT" | "MISS") {
+	return {
+		"Cache-Control": `public, max-age=60, s-maxage=${MOVIE_SEARCH_CACHE_SECONDS}, stale-while-revalidate=${MOVIE_SEARCH_STALE_SECONDS}`,
+		"CDN-Cache-Control": `public, max-age=${MOVIE_SEARCH_CACHE_SECONDS}`,
+		"Cloudflare-CDN-Cache-Control": `public, max-age=${MOVIE_SEARCH_CACHE_SECONDS}`,
+		"X-MovieApp-Cache": cacheStatus,
+	};
+}
+
+async function getCachedMovieSearchResponse(
+	request: Request,
+	env: Env,
+	url: URL,
+	ctx?: ExecutionContext,
+) {
+	const cacheKey = new Request(url.toString(), request);
+	const cache = caches.default;
+	const cachedResponse = await cache.match(cacheKey).catch(() => undefined);
+
+	if (cachedResponse) {
+		const headers = new Headers(cachedResponse.headers);
+		headers.set("X-MovieApp-Cache", "HIT");
+
+		return new Response(cachedResponse.body, {
+			status: cachedResponse.status,
+			statusText: cachedResponse.statusText,
+			headers,
+		});
+	}
+
+	const result = await searchMovieListItems(env, url);
+	const response = Response.json(result, {
+		headers: movieSearchCacheHeaders("MISS"),
+	});
+	const cachePut = cache.put(cacheKey, response.clone()).catch(() => undefined);
+
+	if (ctx) {
+		ctx.waitUntil(cachePut);
+	} else {
+		await cachePut;
+	}
+
+	return response;
+}
+
 /*
 	This default export is the Worker itself.
 
@@ -2342,7 +3589,11 @@ function jsonResponse(body: unknown, init?: ResponseInit) {
 	or app that called the Worker.
 */
 export default {
-	async fetch(request: Request, env: Env): Promise<Response> {
+	async fetch(
+		request: Request,
+		env: Env,
+		ctx?: ExecutionContext,
+	): Promise<Response> {
 		/*
 			Convert the incoming request URL into a URL object.
 
@@ -2377,6 +3628,21 @@ export default {
 				{ error: "Only GET requests are supported." },
 				{ status: 405, headers: { allow: "GET" } },
 			);
+		}
+
+		if (url.pathname === "/movies/search") {
+			try {
+				return await getCachedMovieSearchResponse(request, env, url, ctx);
+			} catch (error) {
+				if (error instanceof RequestValidationError) {
+					return Response.json({ error: error.message }, { status: 400 });
+				}
+
+				return Response.json(
+					{ error: "Movie search failed." },
+					{ status: 500 },
+				);
+			}
 		}
 
 		/*
@@ -2540,6 +3806,27 @@ export default {
 			return Response.json(result);
 		}
 
+		if (url.pathname === "/admin/import/movie-search/rebuild-manual") {
+			const sourceRows = Number(
+				url.searchParams.get("sourceRows") ??
+					MOVIE_SEARCH_BUILD_SOURCE_ROWS_PER_RUN,
+			);
+			const reset = url.searchParams.get("reset") === "true";
+
+			if (!Number.isInteger(sourceRows) || sourceRows < 1) {
+				return Response.json(
+					{ error: "sourceRows must be a positive integer." },
+					{ status: 400 },
+				);
+			}
+
+			const result = await enqueueMovieSearchBuildJob(env, "manual", {
+				sourceRows,
+				reset,
+			});
+			return Response.json(result);
+		}
+
 		/*
 			This creates a simple GET API route.
 
@@ -2625,6 +3912,12 @@ export default {
 				continue;
 			}
 
+			if (isMovieSearchBuildQueueMessage(message.body)) {
+				await processMovieSearchBuildQueueMessage(env, message.body);
+				message.ack();
+				continue;
+			}
+
 			const rows = message.body.rows;
 
 			if (rows.length === 0) {
@@ -2683,6 +3976,17 @@ export default {
 
 		if (controller.cron === SCHEDULED_MOVIE_LIST_BUILD_CRON) {
 			ctx.waitUntil(rebuildMovieListItems(env, "cron"));
+			return;
+		}
+
+		if (controller.cron === SCHEDULED_MOVIE_SEARCH_BUILD_CRON) {
+			console.log(
+				JSON.stringify({
+					event: "movie-search-build-cron-disabled",
+					cron: controller.cron,
+					reason: "Using movie_list_items plus existing genre/provider tables for search.",
+				}),
+			);
 			return;
 		}
 

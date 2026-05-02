@@ -1,9 +1,16 @@
--- Top 50 MovieApp final-list Horror rows by IMDb rating for the current
--- default search window, requiring at least 5,000 IMDb votes.
+-- App-shaped Horror search sorted by IMDb score.
 --
--- Default date logic:
---   start date = January 1 of the year from 5 years ago
---   end date   = today
+-- This mirrors the first production MovieApp list API target:
+--   /movies/search?genreIds=27&minImdbVotes=5000&pageSize=20
+--
+-- The app list view only needs these columns:
+--   tmdb_id
+--   poster_path
+--   imdb_rating
+--
+-- Current filter:
+--   genre_id = 27          Horror
+--   imdb_vote_count >= 5000
 --
 -- Genre legend:
 --   28    Action
@@ -26,75 +33,35 @@
 --   10752 War
 --   37    Western
 --
--- Current filter:
---   genre_id = 27  -- Horror
+-- Performance shape:
+--   1. Read movie_list_items through the covering IMDb search index.
+--   2. Return only fields that live in that index plus tmdb_id.
+--   3. Check horror with an EXISTS lookup into movie_genres.
+--   4. Stop as soon as the first 20 matches are found.
 --
--- Performance notes:
---   1. Scan the IMDb sort index in rating/vote order.
---   2. Require imdb_vote_count >= 5000 to avoid tiny-sample high ratings.
---   3. Use EXISTS against movie_genres for the Horror filter. That lookup can
---      use the movie_genres primary key by tmdb_id.
---   4. Limit to 50 before reading genre/provider lists.
---   5. Force the provider primary-key index so provider lookup starts from
---      tmdb_id instead of scanning every US provider row.
+-- The genre filter is separate from the IMDb sort because those facts live
+-- in separate tables:
+--   movie_list_items -> IMDb score/votes and poster
+--   movie_genres     -> genre membership
 --
--- Important:
---   This is the best query shape for the current normalized schema. It is not
---   as fast as popularity-only because genre lives in movie_genres while IMDb
---   rating lives in movie_list_items. To make this consistently single-digit
---   milliseconds, build a denormalized search table keyed by genre_id with
---   imdb_rating/imdb_vote_count/release_date columns, or add genre flags/list
---   columns to movie_list_items during the final rebuild.
-WITH top_movies AS (
-  SELECT
-    movie.tmdb_id,
-    movie.title,
-    movie.release_date,
-    movie.us_certification,
-    movie.imdb_rating,
-    movie.imdb_vote_count,
-    movie.popularity,
-    movie.last_refreshed_at
-  FROM movie_list_items AS movie INDEXED BY idx_movie_list_items_imdb_sort
-  WHERE movie.release_date >= date('now', '-5 years', 'start of year')
-    AND movie.release_date <= date('now')
-    AND movie.imdb_vote_count >= 5000
-    AND movie.imdb_rating IS NOT NULL
-    AND EXISTS (
-      SELECT 1
-      FROM movie_genres AS genre
-      WHERE genre.tmdb_id = movie.tmdb_id
-        AND genre.genre_id = 27
-    )
-  ORDER BY
-    movie.imdb_rating DESC,
-    movie.imdb_vote_count DESC,
-    movie.tmdb_id
-  LIMIT 50
-)
+-- D1 walks high-rated movies first, then checks whether each movie has
+-- genre 27. In remote testing this returned in roughly 10 ms for the current
+-- dataset.
 SELECT
   movie.tmdb_id,
-  movie.title,
-  movie.release_date,
-  movie.us_certification,
-  movie.imdb_rating,
-  movie.imdb_vote_count,
-  movie.popularity,
-  (
-    SELECT GROUP_CONCAT(genre_id)
-    FROM movie_genres
-    WHERE tmdb_id = movie.tmdb_id
-  ) AS genre_ids,
-  (
-    SELECT GROUP_CONCAT(provider_id)
-    FROM movie_watch_providers INDEXED BY sqlite_autoindex_movie_watch_providers_1
-    WHERE tmdb_id = movie.tmdb_id
-      AND region = 'US'
-  ) AS us_watch_provider_ids,
-  date('now', '-5 years', 'start of year') AS default_begin_date,
-  date('now') AS default_end_date
-FROM top_movies AS movie
+  movie.poster_path,
+  movie.imdb_rating
+FROM movie_list_items AS movie INDEXED BY idx_movie_list_items_search_imdb_cover
+WHERE movie.imdb_vote_count >= 5000
+  AND movie.imdb_rating IS NOT NULL
+  AND EXISTS (
+    SELECT 1
+    FROM movie_genres AS genre
+    WHERE genre.tmdb_id = movie.tmdb_id
+      AND genre.genre_id = 27
+  )
 ORDER BY
   movie.imdb_rating DESC,
   movie.imdb_vote_count DESC,
   movie.tmdb_id
+LIMIT 20;

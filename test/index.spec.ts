@@ -315,6 +315,9 @@ function createMockEnv(rows: unknown[]) {
 				preparedSql = sql;
 
 				return {
+					bind() {
+						return this;
+					},
 					/*
 						This fake all function stands in for:
 
@@ -414,6 +417,76 @@ describe("MovieApp Worker", () => {
 		expect(mock.getPreparedSql()).toBe(
 			"SELECT id, MovieName, IMDBRating, IMDBVoteCounts FROM movies ORDER BY id",
 		);
+	});
+
+	it("returns app-shaped movie search rows", async () => {
+		const rows = [
+			{
+				tmdb_id: 281979,
+				poster_path: "/ikb6cZI8RXUqcxApMJmIdimAJ1X.jpg",
+				imdb_rating: 8.8,
+				imdb_vote_count: 9981,
+				popularity: 12.34,
+			},
+		];
+		const mock = createMockEnv(rows);
+		const request = new IncomingRequest(
+			"http://example.com/movies/search?genreIds=27&minImdbVotes=5000&pageSize=20",
+		);
+		const response = await worker.fetch(request, mock.env);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			movies: [
+				{
+					tmdb_id: 281979,
+					poster_path: "/ikb6cZI8RXUqcxApMJmIdimAJ1X.jpg",
+					imdb_rating: 8.8,
+				},
+			],
+			nextCursor: null,
+			pageSize: 20,
+			sort: "imdb",
+		});
+		expect(mock.getPreparedSql()).toContain(
+			"FROM movie_list_items AS movie",
+		);
+		expect(mock.getPreparedSql()).toContain(
+			"FROM movie_genres AS genre",
+		);
+	});
+
+	it("accepts a stable current-day end date preset for movie search", async () => {
+		const mock = createMockEnv([]);
+		const request = new IncomingRequest(
+			"http://example.com/movies/search?beginDate=2020-01-01&endDatePreset=today&pageSize=20",
+		);
+		const response = await worker.fetch(request, mock.env);
+		const body = await response.json() as {
+			beginDate: string;
+			endDate: string;
+			endDatePreset: string | null;
+		};
+
+		expect(response.status).toBe(200);
+		expect(body.beginDate).toBe("2020-01-01");
+		expect(body.endDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+		expect(body.endDatePreset).toBe("today");
+	});
+
+	it("supports any US flatrate provider filtering for movie search", async () => {
+		const mock = createMockEnv([]);
+		const request = new IncomingRequest(
+			"http://example.com/movies/search?pageSize=20&datePreset=last5years&watchMonetizationTypes=flatrate",
+		);
+		const response = await worker.fetch(request, mock.env);
+
+		expect(response.status).toBe(200);
+		expect(mock.getPreparedSql()).toContain(
+			"FROM movie_watch_providers AS provider",
+		);
+		expect(mock.getPreparedSql()).toContain("provider.region = 'US'");
+		expect(mock.getPreparedSql()).not.toContain("provider.provider_id IN");
 	});
 
 	/*

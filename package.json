@@ -56,7 +56,22 @@
     "=============================================================RUN-SQL-ON-TABLES-REMOTE==============================================================================": "RUN-SQL-ON-TABLES-REMOTE",
     "db:tables:remote": "wrangler d1 execute movieapp-db --remote --command \"SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;\"",
     "db:tmdb:count:remote": "wrangler d1 execute movieapp-db --remote --command \"SELECT COUNT(*) AS tmdb_count FROM tmdb_movies_staging;\"",
-    "db:tmdb:preview:remote": "wrangler d1 execute movieapp-db --remote --command \"SELECT tmdb_id, title, release_date, popularity FROM tmdb_movies_staging ORDER BY release_date, tmdb_id LIMIT 50;\""
+    "db:tmdb:preview:remote": "wrangler d1 execute movieapp-db --remote --command \"SELECT tmdb_id, title, release_date, popularity FROM tmdb_movies_staging ORDER BY release_date, tmdb_id LIMIT 50;\"",
+    "====SPACER": "5",
+    "=====SPACER": "6",
+    "=================================CDN-CACHE==CDN-CACHE==CDN-CACHE==CDN-CACHE==CDN-CACHE====================================================": "WARM-CLOUDFLARE-CDN-CACHE",
+    "=================================CDN-CACHE==CDN-CACHE==CDN-CACHE==CDN-CACHE==CDN-CACHE=====================================================": "WARM-CLOUDFLARE-CDN-CACHE",
+    "=================================CDN-CACHE==CDN-CACHE==CDN-CACHE==CDN-CACHE==CDN-CACHE======================================================": "WARM-CLOUDFLARE-CDN-CACHE",
+    "db:cache:default-popularity": "curl -s -D - -o /dev/null -w 'time_total=%{time_total}\\n' 'https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years'",
+    "db:cache:comedy-g": "curl -s -D - -o /dev/null -w 'time_total=%{time_total}\\n' 'https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&certifications=G&genreIds=35'",
+    "db:cache:comedy-g-pg-r": "curl -s -D - -o /dev/null -w 'time_total=%{time_total}\\n' 'https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&certifications=G,PG,R&genreIds=35'",
+    "db:cache:vote5000-horror": "curl -s -D - -o /dev/null -w 'time_total=%{time_total}\\n' 'https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&minImdbVotes=5000&sort=imdb'",
+    "db:cache:vote10000-horror": "curl -s -D - -o /dev/null -w 'time_total=%{time_total}\\n' 'https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&minImdbVotes=10000&sort=imdb'",
+    "db:cache:vote20000-horror": "curl -s -D - -o /dev/null -w 'time_total=%{time_total}\\n' 'https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&minImdbVotes=20000&sort=imdb'",
+    "db:cache:vote5000-horror-scifi": "curl -s -D - -o /dev/null -w 'time_total=%{time_total}\\n' 'https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27,878&minImdbVotes=5000&sort=imdb'",
+    "db:cache:netflix-prime": "curl -s -D - -o /dev/null -w 'time_total=%{time_total}\\n' 'https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&providerIds=8,9'",
+    "db:cache:vote5000-horror-netflix-prime": "curl -s -D - -o /dev/null -w 'time_total=%{time_total}\\n' 'https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,9&minImdbVotes=5000&sort=imdb'",
+    "db:cache:vote10000-action-thriller-netflix-prime": "curl -s -D - -o /dev/null -w 'time_total=%{time_total}\\n' 'https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=28,53&providerIds=8,9&minImdbVotes=10000&sort=imdb'"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.12.4",
