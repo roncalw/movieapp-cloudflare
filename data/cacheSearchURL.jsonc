@@ -1,0 +1,238 @@
+// Cache search URLs used by utils/warmCacheSearchUrls.mjs.
+//
+// Each object has:
+// - name: a short label shown in terminal output
+// - url: the exact URL to request and warm in Cloudflare cache
+//
+// Exact URL text matters for cache warming. If the app sends
+// watchMonetizationTypes=flatrate, then this file should warm that same
+// flatrate URL, not a similar providerIds=... URL.
+//
+// Sorting rules for this file:
+// - Assume every URL uses datePreset=last5years unless noted otherwise.
+// - Group URLs by the filter types they use.
+// - Within a group, sort genre names alphabetically.
+// - Within the same genre/filter shape, sort IMDb vote counts numerically.
+// - Every IMDb-vote group should include every app vote threshold:
+//   500, 5,000, 15,000, and 25,000.
+// - Individual item comments use this order when present:
+//   Genre, IMDb votes, Watch provider, US certification, Sort.
+[
+  // ===========================================================================
+  // Group: Default Search
+  // ===========================================================================
+
+  // Sort: Popularity
+  {
+    "name": "default-popularity",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years"
+  },
+
+  // ===========================================================================
+  // Group: Genre + US Certification
+  // ===========================================================================
+
+  // Genre: Comedy
+  // US certification: G
+  {
+    "name": "comedy-g",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&certifications=G&genreIds=35"
+  },
+
+  // Genre: Comedy
+  // US certification: G, PG, R
+  {
+    "name": "comedy-g-pg-r",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&certifications=G,PG,R&genreIds=35"
+  },
+
+  // ===========================================================================
+  // Group: Genre + IMDb Votes
+  // ===========================================================================
+
+  // Genre: Horror
+  // IMDb votes: 500+
+  // Sort: IMDb rating
+  {
+    "name": "vote500-horror",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&minImdbVotes=500&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Sort: IMDb rating
+  {
+    "name": "vote5000-horror",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Sort: IMDb rating
+  {
+    "name": "vote15000-horror",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Sort: IMDb rating
+  {
+    "name": "vote25000-horror",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Genre: Horror, SciFi
+  // IMDb votes: 500+
+  // Sort: IMDb rating
+  {
+    "name": "vote500-horror-scifi",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27,878&minImdbVotes=500&sort=imdb"
+  },
+
+  // Genre: Horror, SciFi
+  // IMDb votes: 5,000+
+  // Sort: IMDb rating
+  {
+    "name": "vote5000-horror-scifi",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27,878&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror, SciFi
+  // IMDb votes: 15,000+
+  // Sort: IMDb rating
+  {
+    "name": "vote15000-horror-scifi",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27,878&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror, SciFi
+  // IMDb votes: 25,000+
+  // Sort: IMDb rating
+  {
+    "name": "vote25000-horror-scifi",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27,878&minImdbVotes=25000&sort=imdb"
+  },
+
+  // ===========================================================================
+  // Group: Genre + IMDb Votes + Watch Provider
+  // ===========================================================================
+
+  // Genre: Action, Thriller
+  // IMDb votes: 500+
+  // Watch provider: Netflix, Prime
+  // Sort: IMDb rating
+  {
+    "name": "vote500-action-thriller-netflix-prime",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=28,53&providerIds=8,9&minImdbVotes=500&sort=imdb"
+  },
+
+  // Genre: Action, Thriller
+  // IMDb votes: 5,000+
+  // Watch provider: Netflix, Prime
+  // Sort: IMDb rating
+  {
+    "name": "vote5000-action-thriller-netflix-prime",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=28,53&providerIds=8,9&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Action, Thriller
+  // IMDb votes: 15,000+
+  // Watch provider: Netflix, Prime
+  // Sort: IMDb rating
+  {
+    "name": "vote15000-action-thriller-netflix-prime",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=28,53&providerIds=8,9&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Action, Thriller
+  // IMDb votes: 25,000+
+  // Watch provider: Netflix, Prime
+  // Sort: IMDb rating
+  {
+    "name": "vote25000-action-thriller-netflix-prime",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=28,53&providerIds=8,9&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 500+
+  // Watch provider: flatrate / all streamers
+  // Sort: IMDb rating
+  {
+    "name": "vote500-horror-flatrate",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&watchMonetizationTypes=flatrate&minImdbVotes=500&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch provider: flatrate / all streamers
+  // Sort: IMDb rating
+  {
+    "name": "vote5000-horror-flatrate",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&watchMonetizationTypes=flatrate&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch provider: flatrate / all streamers
+  // Sort: IMDb rating
+  {
+    "name": "vote15000-horror-flatrate",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&watchMonetizationTypes=flatrate&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch provider: flatrate / all streamers
+  // Sort: IMDb rating
+  {
+    "name": "vote25000-horror-flatrate",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&watchMonetizationTypes=flatrate&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 500+
+  // Watch provider: Netflix, Prime
+  // Sort: IMDb rating
+  {
+    "name": "vote500-horror-netflix-prime",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,9&minImdbVotes=500&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch provider: Netflix, Prime
+  // Sort: IMDb rating
+  {
+    "name": "vote5000-horror-netflix-prime",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,9&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch provider: Netflix, Prime
+  // Sort: IMDb rating
+  {
+    "name": "vote15000-horror-netflix-prime",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,9&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch provider: Netflix, Prime
+  // Sort: IMDb rating
+  {
+    "name": "vote25000-horror-netflix-prime",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,9&minImdbVotes=25000&sort=imdb"
+  },
+
+  // ===========================================================================
+  // Group: Watch Provider
+  // ===========================================================================
+
+  // Watch provider: Netflix, Prime
+  {
+    "name": "netflix-prime",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&providerIds=8,9"
+  }
+]

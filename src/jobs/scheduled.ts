@@ -17,6 +17,52 @@ const SCHEDULED_TMDB_PRIMARY_CRON = "0 4 * * 2";
 const SCHEDULED_TMDB_ENRICHMENT_CRON = "0 10 * * 2";
 const SCHEDULED_MOVIE_LIST_BUILD_CRON = "0 1 * * 3";
 
+type JobPauseFlagName =
+	| "IMDB_JOB_PAUSED"
+	| "TMDB_PRIMARY_JOB_PAUSED"
+	| "TMDB_ENRICH_JOB_PAUSED"
+	| "MOVIE_LIST_JOB_PAUSED";
+
+function isPauseFlagEnabled(value: string | undefined) {
+	return value?.toLowerCase() === "true";
+}
+
+function getPausedBy(env: Env, jobPauseFlagName: JobPauseFlagName) {
+	if (isPauseFlagEnabled(env.ALL_JOBS_PAUSED)) {
+		return "ALL_JOBS_PAUSED";
+	}
+
+	if (isPauseFlagEnabled(env[jobPauseFlagName])) {
+		return jobPauseFlagName;
+	}
+
+	return null;
+}
+
+function skipPausedScheduledJob(
+	env: Env,
+	controller: ScheduledController,
+	jobName: string,
+	jobPauseFlagName: JobPauseFlagName,
+) {
+	const pausedBy = getPausedBy(env, jobPauseFlagName);
+
+	if (!pausedBy) {
+		return false;
+	}
+
+	console.log(
+		JSON.stringify({
+			event: "scheduled-cron-paused",
+			jobName,
+			cron: controller.cron,
+			pausedBy,
+		}),
+	);
+
+	return true;
+}
+
 function todayIsoDate() {
 	return new Date(Date.now()).toISOString().slice(0, 10);
 }
@@ -126,16 +172,49 @@ export function handleScheduled(
 	ctx: ExecutionContext,
 ) {
 	if (controller.cron === SCHEDULED_IMDB_CRON) {
+		if (
+			skipPausedScheduledJob(
+				env,
+				controller,
+				"imdb-ratings",
+				"IMDB_JOB_PAUSED",
+			)
+		) {
+			return;
+		}
+
 		ctx.waitUntil(runScheduledImdbRatingsRefresh(env));
 		return;
 	}
 
 	if (controller.cron === SCHEDULED_TMDB_PRIMARY_CRON) {
+		if (
+			skipPausedScheduledJob(
+				env,
+				controller,
+				"tmdb-primary",
+				"TMDB_PRIMARY_JOB_PAUSED",
+			)
+		) {
+			return;
+		}
+
 		ctx.waitUntil(runScheduledTmdbPrimaryRefresh(env));
 		return;
 	}
 
 	if (controller.cron === SCHEDULED_TMDB_ENRICHMENT_CRON) {
+		if (
+			skipPausedScheduledJob(
+				env,
+				controller,
+				"tmdb-enrichment",
+				"TMDB_ENRICH_JOB_PAUSED",
+			)
+		) {
+			return;
+		}
+
 		ctx.waitUntil(
 			enqueueTmdbEnrichmentJob(env, {
 				limit: TMDB_ENRICHMENT_CRON_LIMIT,
@@ -150,6 +229,17 @@ export function handleScheduled(
 	}
 
 	if (controller.cron === SCHEDULED_MOVIE_LIST_BUILD_CRON) {
+		if (
+			skipPausedScheduledJob(
+				env,
+				controller,
+				"movie-list",
+				"MOVIE_LIST_JOB_PAUSED",
+			)
+		) {
+			return;
+		}
+
 		ctx.waitUntil(rebuildMovieListItems(env, "cron"));
 		return;
 	}

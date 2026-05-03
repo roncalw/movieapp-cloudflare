@@ -38,6 +38,7 @@
     - [ ] [Step 18: Useful Commands](#step-18-useful-commands)
     - [ ] [Step 19: Data Usage Notes](#step-19-data-usage-notes)
     - [ ] [Step 20: Scheduled Refresh Cron Jobs](#step-20-scheduled-refresh-cron-jobs)
+    - [ ] [Step 21: Caching](#step-21-caching)
 
 ## Summary
 
@@ -5465,9 +5466,52 @@ controller.cron === "0 1 * * 3"
      with IMDb rating/vote fields populated only when a matching IMDb rating row exists
 ```
 
-### Step 20-4: Manual Access In Cloudflare Dashboard
+### Step 20-4: Manual Testing
 
-You can still manually run these cron jobs from the Cloudflare dashboard.
+Do not assume the Cloudflare dashboard can manually fire a Cron Trigger.
+
+Earlier notes assumed there was a dashboard "run now" control. At the time this
+guide was updated, the documented test path for scheduled events is Wrangler's
+`--test-scheduled` flow, not a dashboard button.
+
+The local scheduled-event test path is:
+
+```bash
+npx wrangler dev --test-scheduled
+```
+
+Then call the special local scheduled URL with the cron expression:
+
+```bash
+curl "http://localhost:8787/__scheduled?cron=0+22+*+*+1"
+```
+
+Use this map:
+
+```text
+0 22 * * 1 -> IMDb ratings
+0 4 * * 2  -> TMDB primary
+0 10 * * 2 -> TMDB enrichment
+0 1 * * 3  -> Final movie_list_items build
+```
+
+What this proves:
+
+```text
+Cloudflare-style ScheduledController event
+-> Worker scheduled(...) handler
+-> controller.cron string matching
+-> correct scheduled job branch
+```
+
+What this does not fully prove:
+
+```text
+Cloudflare's deployed scheduler will fire at the real weekend time.
+```
+
+That final part is only proven after the real deployed cron event appears in
+Cloudflare Observability / Past Cron Events.
 
 Dashboard path:
 
@@ -5479,9 +5523,7 @@ Triggers
 Cron Triggers
 ```
 
-Use the dashboard's test/run control for the cron expression you want.
-
-If the dashboard only shows the UTC expression, use this map:
+If the dashboard only shows the UTC expression, use the same map:
 
 ```text
 0 22 * * 1 -> IMDb ratings
@@ -5556,3 +5598,392 @@ tmdb-enrich-queue-message-end
 movie-list-build-start
 movie-list-build-end
 ```
+
+## Step 21: Caching
+
+This page explains how `/movies/search` caching works.
+
+The most important idea:
+
+```text
+One exact request URL becomes one saved cache entry.
+```
+
+In plain English, a cache entry is one saved answer.
+
+Nobody manually types an entry into Cloudflare. The Worker creates the entry
+automatically after the first request for an exact URL.
+
+The code lives here:
+
+```text
+/Users/croncallo/repo/MovieApp-Cloudflare/src/httpRouting/movieSearch.ts
+```
+
+### Step 21-1: Where The Cache Time Is Configured
+
+The cache timing is configured in Worker code, not in `wrangler.jsonc`.
+
+`wrangler.jsonc` configures deployment things:
+
+```text
+D1 bindings
+queues
+cron schedules
+Worker limits
+```
+
+The movie-search route configures its own cache behavior in:
+
+```text
+src/httpRouting/movieSearch.ts
+```
+
+Current constants:
+
+```ts
+const MOVIE_SEARCH_CACHE_SECONDS = 60 * 60 * 24 * 7;
+const MOVIE_SEARCH_STALE_SECONDS = 60 * 60 * 24;
+```
+
+Read that as:
+
+```text
+60 seconds
+* 60 minutes
+* 24 hours
+* 7 days
+= 604800 seconds
+```
+
+So the Cloudflare CDN cache target is 7 days.
+
+The stale window is:
+
+```text
+60 * 60 * 24 = 86400 seconds = 1 day
+```
+
+That lets Cloudflare serve an older cached response briefly while refreshing it.
+
+### Step 21-2: Which Headers Tell Cloudflare To Cache
+
+The Worker creates cache headers in `movieSearchCacheHeaders(...)`:
+
+```ts
+function movieSearchCacheHeaders(cacheStatus: "HIT" | "MISS") {
+	return {
+		"Cache-Control": `public, max-age=60, s-maxage=${MOVIE_SEARCH_CACHE_SECONDS}, stale-while-revalidate=${MOVIE_SEARCH_STALE_SECONDS}`,
+		"CDN-Cache-Control": `public, max-age=${MOVIE_SEARCH_CACHE_SECONDS}`,
+		"Cloudflare-CDN-Cache-Control": `public, max-age=${MOVIE_SEARCH_CACHE_SECONDS}`,
+		"X-MovieApp-Cache": cacheStatus,
+	};
+}
+```
+
+Read those as:
+
+```text
+Cache-Control max-age=60
+  Browser may keep it briefly.
+
+s-maxage=604800
+  Shared caches like Cloudflare may keep it for 7 days.
+
+stale-while-revalidate=86400
+  Cloudflare may serve stale data for up to 1 day while refreshing.
+
+CDN-Cache-Control / Cloudflare-CDN-Cache-Control
+  Direct CDN-specific cache instructions.
+
+X-MovieApp-Cache
+  Our own debug header. It says HIT or MISS.
+```
+
+`X-MovieApp-Cache` is not a Cloudflare feature. It is a label we add so we can
+read responses more easily.
+
+### Step 21-3: How A Cache Entry Gets Entered
+
+This is the exact flow.
+
+First, the Worker turns the incoming URL into a cache key:
+
+```ts
+const cacheKey = new Request(url.toString(), request);
+const cache = caches.default;
+const cachedResponse = await cache.match(cacheKey).catch(() => undefined);
+```
+
+Read that as:
+
+```text
+Use this exact URL as the lookup key.
+Ask Cloudflare cache:
+  "Do you already have a saved answer for this exact URL?"
+```
+
+If Cloudflare already has a saved answer, that is a cache hit:
+
+```ts
+if (cachedResponse) {
+	const headers = new Headers(cachedResponse.headers);
+	headers.set("X-MovieApp-Cache", "HIT");
+
+	return new Response(cachedResponse.body, {
+		status: cachedResponse.status,
+		statusText: cachedResponse.statusText,
+		headers,
+	});
+}
+```
+
+Read that as:
+
+```text
+If saved answer exists:
+  return it immediately
+  mark it as HIT
+  do not run the D1 query again
+```
+
+If Cloudflare does not have a saved answer, that is a cache miss.
+
+The Worker then runs the real database search:
+
+```ts
+const result = await searchMovieListItems(env, url);
+```
+
+Then the Worker builds a JSON response:
+
+```ts
+const response = Response.json(result, {
+	headers: movieSearchCacheHeaders("MISS"),
+});
+```
+
+Then this line enters the response into Cloudflare's cache:
+
+```ts
+const cachePut = cache.put(cacheKey, response.clone()).catch(() => undefined);
+```
+
+That is the key line.
+
+Read it as:
+
+```text
+Cloudflare, save this response under this exact URL.
+```
+
+The response is cloned because the Worker needs two copies:
+
+```text
+one copy to return to the app now
+one copy to store in Cloudflare cache
+```
+
+The Worker then lets the cache save finish in the background when possible:
+
+```ts
+if (ctx) {
+	ctx.waitUntil(cachePut);
+} else {
+	await cachePut;
+}
+```
+
+Read that as:
+
+```text
+If this is a normal Worker request:
+  return the response to the app without waiting for cache save to block the user.
+
+If there is no ctx:
+  wait for the cache save.
+```
+
+### Step 21-4: Why Exact URLs Matter
+
+Cloudflare's cache key is:
+
+```ts
+url.toString()
+```
+
+That means the exact URL text matters.
+
+This URL:
+
+```text
+/movies/search?pageSize=20&datePreset=last5years&genreIds=27&watchMonetizationTypes=flatrate&minImdbVotes=25000&sort=imdb
+```
+
+is not the same cache entry as this URL:
+
+```text
+/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,9&minImdbVotes=25000&sort=imdb
+```
+
+They are different because they ask different questions.
+
+This means:
+
+```text
+watchMonetizationTypes=flatrate
+```
+
+Plain English:
+
+```text
+Any US streaming provider we have data for.
+```
+
+In the MovieApp UI, this is the path used when all streamers are selected and
+the app sends the broad "flatrate" search.
+
+This means:
+
+```text
+providerIds=8,9
+```
+
+Plain English:
+
+```text
+Only provider 8 and provider 9.
+```
+
+Those are not the same search, so Cloudflare saves them separately:
+
+```text
+Cache entry A:
+  horror + last 5 years + all streamers/flatrate + 25,000+ IMDb votes
+
+Cache entry B:
+  horror + last 5 years + provider 8/provider 9 only + 25,000+ IMDb votes
+```
+
+Warming entry A does not warm entry B.
+
+Warming entry B does not warm entry A.
+
+### Step 21-5: HIT Versus MISS
+
+When a request is a `MISS`, the flow is:
+
+```text
+App asks URL
+-> Cloudflare does not have saved response
+-> Worker runs D1 SQL query
+-> Worker returns JSON
+-> Worker enters JSON into cache with cache.put(...)
+```
+
+When the next request for the same exact URL is a `HIT`, the flow is:
+
+```text
+App asks same exact URL
+-> Cloudflare has saved response
+-> Worker returns saved response
+-> D1 SQL query does not run
+```
+
+That is why the first request can take longer and the next matching request can
+be much faster.
+
+### Step 21-6: Query Parameter Order Can Matter
+
+Because the cache key uses the exact URL string, these may become different
+cache entries even if they mean the same thing to a person:
+
+```text
+/movies/search?pageSize=20&datePreset=last5years&genreIds=27&minImdbVotes=25000&sort=imdb
+```
+
+```text
+/movies/search?genreIds=27&minImdbVotes=25000&pageSize=20&datePreset=last5years&sort=imdb
+```
+
+Same values, different URL order.
+
+The app should keep building common shortcut URLs in a stable order so cache
+warming is useful.
+
+The current app service builds the URL in this order:
+
+```text
+pageSize
+datePreset or beginDate/endDate
+certifications
+genreIds
+watchMonetizationTypes or providerIds
+minImdbVotes
+sort
+cursor
+```
+
+That code lives here:
+
+```text
+/Users/croncallo/repo/MovieApp/src/api/tmdb/services/movieService.ts
+```
+
+### Step 21-7: How To Test Cache Behavior
+
+Use `curl` with response headers:
+
+```bash
+curl -s -D - -o /dev/null -w 'time_total=%{time_total}\n' 'https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&watchMonetizationTypes=flatrate&minImdbVotes=25000&sort=imdb'
+```
+
+Look for:
+
+```text
+cf-cache-status: HIT
+x-movieapp-cache: HIT
+```
+
+or:
+
+```text
+x-movieapp-cache: MISS
+```
+
+The first request for a new exact URL may be `MISS`.
+
+The second request for the same exact URL should usually become `HIT`.
+
+If the same exact URL repeatedly stays `MISS`, investigate:
+
+```text
+different query parameter order
+different providerIds/order
+datePreset versus beginDate/endDate
+response error status
+headers that prevent caching
+Cloudflare cache behavior by edge location
+```
+
+### Step 21-8: Why Add Package Shortcuts
+
+Package shortcuts are just saved commands that request important URLs on purpose.
+
+They are useful because they warm common searches before a user waits on them.
+
+For example, a shortcut can warm:
+
+```text
+horror + last 5 years + all streamers/flatrate + 25,000+ IMDb votes + IMDb sort
+```
+
+That exact shortcut should use the same URL shape the app uses:
+
+```text
+/movies/search?pageSize=20&datePreset=last5years&genreIds=27&watchMonetizationTypes=flatrate&minImdbVotes=25000&sort=imdb
+```
+
+If the shortcut uses `providerIds=...` but the app uses
+`watchMonetizationTypes=flatrate`, then the shortcut warms the wrong cache entry
+for the Add All streamers case.

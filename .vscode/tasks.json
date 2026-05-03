@@ -167,6 +167,14 @@
 			"problemMatcher": []
 		},
 		{
+			"label": "remote-cache-vote25000-horror-flatrate",
+			"type": "shell",
+			"command": "npm",
+			"args": ["run", "db:cache:vote25000-horror-flatrate"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
 			"label": "local-tmdb-progress",
 			"type": "shell",
 			"command": "zsh",

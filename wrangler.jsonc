@@ -10,6 +10,13 @@
 	"observability": {
 		"enabled": true
 	},
+	"vars": {
+		"ALL_JOBS_PAUSED": "true",
+		"IMDB_JOB_PAUSED": "false",
+		"MOVIE_LIST_JOB_PAUSED": "false",
+		"TMDB_ENRICH_JOB_PAUSED": "false",
+		"TMDB_PRIMARY_JOB_PAUSED": "false"
+	},
 	"upload_source_maps": true,
 	"compatibility_flags": [
 		"nodejs_compat"
