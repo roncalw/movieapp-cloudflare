@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(currentDir, "..");
 const defaultUrlFilePath = resolve(projectRoot, "data/cacheSearchURL.jsonc");
+const maxPagesPerUrl = 10;
 const urlFilePath = process.argv[2]
   ? resolve(process.cwd(), process.argv[2])
   : defaultUrlFilePath;
@@ -93,13 +94,26 @@ async function requestUrl(url) {
   const startedAt = performance.now();
   const response = await fetch(url);
   const elapsedMs = performance.now() - startedAt;
-  await response.arrayBuffer();
+  const bodyText = await response.text();
 
   return {
     httpStatus: response.status,
     elapsedMs,
+    body: parseJsonBody(bodyText),
     ...getCacheStatus(response),
   };
+}
+
+function parseJsonBody(bodyText) {
+  if (bodyText.trim() === "") {
+    return null;
+  }
+
+  try {
+    return JSON.parse(bodyText);
+  } catch {
+    return null;
+  }
 }
 
 function formatElapsedMs(elapsedMs) {
@@ -124,24 +138,69 @@ function logResult(prefix, result) {
   console.log(`${prefix}: ${headers.join(" ")}`);
 }
 
+function getNextCursor(result) {
+  if (
+    result.body !== null &&
+    typeof result.body === "object" &&
+    (typeof result.body.nextCursor === "string" || result.body.nextCursor === null)
+  ) {
+    return result.body.nextCursor;
+  }
+
+  return null;
+}
+
+function appendCursorToUrl(baseUrl, cursor) {
+  const separator = baseUrl.includes("?") ? "&" : "?";
+
+  return `${baseUrl}${separator}cursor=${encodeURIComponent(cursor)}`;
+}
+
+async function warmPage(url, pageNumber) {
+  const firstResult = await requestUrl(url);
+  logResult(`page ${pageNumber} first`, firstResult);
+
+  if (firstResult.status !== "MISS") {
+    return firstResult;
+  }
+
+  const secondResult = await requestUrl(url);
+  logResult(`page ${pageNumber} retry`, secondResult);
+
+  return secondResult;
+}
+
+async function warmSearchEntry(entry) {
+  let currentUrl = entry.url;
+
+  for (let pageNumber = 1; pageNumber <= maxPagesPerUrl; pageNumber += 1) {
+    console.log(`page ${pageNumber}: ${currentUrl}`);
+
+    const result = await warmPage(currentUrl, pageNumber);
+    const nextCursor = getNextCursor(result);
+
+    if (nextCursor === null) {
+      console.log(`no nextCursor after page ${pageNumber}`);
+      return;
+    }
+
+    currentUrl = appendCursorToUrl(entry.url, nextCursor);
+  }
+
+  console.log(`stopped after page ${maxPagesPerUrl}`);
+}
+
 async function main() {
   const cacheUrls = await readCacheUrls();
 
   console.log(`Reading cache URLs from: ${urlFilePath}`);
   console.log(`Total URLs: ${cacheUrls.length}`);
-  console.log("Running serially. The next URL waits for the previous URL.\n");
+  console.log(`Max pages per URL: ${maxPagesPerUrl}`);
+  console.log("Running serially. Each page waits for the previous page.\n");
 
   for (const [index, entry] of cacheUrls.entries()) {
     console.log(`${index + 1}. ${entry.name}`);
-    console.log(entry.url);
-
-    const firstResult = await requestUrl(entry.url);
-    logResult("first", firstResult);
-
-    if (firstResult.status === "MISS") {
-      const secondResult = await requestUrl(entry.url);
-      logResult("retry", secondResult);
-    }
+    await warmSearchEntry(entry);
 
     console.log("");
   }

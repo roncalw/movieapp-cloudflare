@@ -38,7 +38,9 @@
     - [ ] [Step 18: Useful Commands](#step-18-useful-commands)
     - [ ] [Step 19: Data Usage Notes](#step-19-data-usage-notes)
     - [ ] [Step 20: Scheduled Refresh Cron Jobs](#step-20-scheduled-refresh-cron-jobs)
+      - [ ] [Step 20-4: Manual Cron Testing](#step-20-4-manual-testing)
     - [ ] [Step 21: Caching](#step-21-caching)
+    - [ ] [Step 22: MyD1 SQL Client](#step-22-myd1-sql-client)
 
 ## Summary
 
@@ -5504,14 +5506,57 @@ Cloudflare-style ScheduledController event
 -> correct scheduled job branch
 ```
 
+If the goal is to confirm that the local code being tested is the same code
+that was just deployed, use this sequence:
+
+```bash
+npm run deploy
+npx wrangler dev --test-scheduled
+curl "http://localhost:8787/__scheduled?cron=0+22+*+*+1"
+```
+
+The reason this works is:
+
+```text
+npm run deploy
+  -> Wrangler bundles the files currently on disk
+  -> Cloudflare receives that Worker version
+
+npx wrangler dev --test-scheduled
+  -> Wrangler runs the same files currently on disk
+  -> /__scheduled calls the local scheduled(...) handler
+```
+
+This does not depend on Git staging or commits. Wrangler deploys the files on
+disk, even if the repo is dirty.
+
+The rule for this test is:
+
+```text
+Do not edit files between deploy and the local scheduled test.
+Do not switch branches.
+Do not pull.
+Do not run codegen.
+Do not change .dev.vars or wrangler.jsonc.
+```
+
+Under those conditions, the local scheduled test gives strong proof that the
+code path being tested is the same code path that was just deployed.
+
 What this does not fully prove:
 
 ```text
 Cloudflare's deployed scheduler will fire at the real weekend time.
+Cloudflare's deployed runtime will behave exactly the same as local Wrangler dev.
 ```
 
 That final part is only proven after the real deployed cron event appears in
 Cloudflare Observability / Past Cron Events.
+
+If immediate remote proof is ever required, add a temporary protected admin
+endpoint that calls the same scheduled handler, test it, and remove or keep it
+locked behind an admin token. Do not expose a public endpoint that can trigger
+scheduled jobs.
 
 Dashboard path:
 
@@ -5987,3 +6032,234 @@ That exact shortcut should use the same URL shape the app uses:
 If the shortcut uses `providerIds=...` but the app uses
 `watchMonetizationTypes=flatrate`, then the shortcut warms the wrong cache entry
 for the Add All streamers case.
+
+## Step 22: MyD1 SQL Client
+
+MyD1 is a desktop SQL client that can connect to Cloudflare D1.
+
+Use it as a visual query tool for checking tables, running `SELECT` statements,
+reviewing query history, and saving useful queries as bookmarks.
+
+### Step 22-1: Install MyD1
+
+Download MyD1 from:
+
+```text
+https://myd1.app/
+```
+
+On macOS, the downloaded file may be a `.dmg`.
+
+The `.dmg` is the installer container. It is not the app itself.
+
+Install it like this:
+
+```text
+1. Double-click the .dmg file.
+2. In the Finder window that opens, find MyD1.app.
+3. Drag MyD1.app into Applications.
+4. Open MyD1 from Applications.
+5. Eject the mounted MyD1 disk image.
+6. Delete the downloaded .dmg when the app works.
+```
+
+If macOS blocks the app:
+
+```text
+System Settings
+-> Privacy & Security
+-> Open Anyway
+```
+
+### Step 22-2: Connect MyD1 To Cloudflare D1
+
+Choose the `Cloudflare D1` connection type.
+
+Use:
+
+```text
+Account ID: your Cloudflare account ID
+API Token: your Cloudflare API token
+Database ID: leave blank first
+```
+
+Leaving `Database ID` blank lets MyD1 list the databases in the account.
+
+After the database list loads, choose:
+
+```text
+movieapp-db
+```
+
+Safe starter query:
+
+```sql
+SELECT COUNT(*) AS movie_count
+FROM movie_list_items;
+```
+
+Sample row query:
+
+```sql
+SELECT *
+FROM movie_list_items
+LIMIT 25;
+```
+
+### Step 22-3: About The `Not Secure` Badge
+
+MyD1 may show a `Not secure` badge for the Cloudflare D1 connection.
+
+For this D1 connection, that badge appears to be a generic MyD1 UI warning.
+
+Why:
+
+```text
+Cloudflare D1 access goes through the Cloudflare HTTPS API.
+The MyD1 logs show HTTPS requests to api.cloudflare.com.
+The saved connection also uses port 443.
+```
+
+So do not treat the badge as proof that the D1 API traffic is plain text.
+
+Still, keep the Cloudflare API token limited to the smallest permission that works.
+
+For read-only investigation, prefer a restricted token first.
+
+Only use broader D1 edit permission when the tool requires it for the operation.
+
+### Step 22-4: Query History
+
+Important MyD1 behavior:
+
+```text
+Manual SQL typed directly into the SQL editor may run successfully but not show up in History.
+History is created reliably when the query starts from MyD1's built-in table flow.
+```
+
+In plain English:
+
+```text
+If you type a brand-new query yourself and click Execute, it may not be saved to History.
+If you double-click a table and let MyD1 create the table query, that query is saved to History.
+After that, you can load that history row, edit it, run it again, and bookmark it.
+```
+
+Use this workflow when you want a query to become bookmarkable:
+
+```text
+1. Select movieapp-db.
+2. Double-click a table, such as movie_list_items.
+3. Let MyD1 create or run its built-in table query.
+4. Open History from the left Quick Actions area.
+5. Click that history row to expand it.
+6. Click Load if you want to edit the SQL.
+7. Run the edited SQL.
+8. Use the expanded History row's Bookmark button when you want to save it.
+```
+
+If history looks empty:
+
+```text
+1. Do not test history with a manually typed SQL query first.
+2. Reconnect to movieapp-db.
+3. Double-click a table so MyD1 creates a built-in table query.
+4. Run that built-in query.
+5. Open the History view from the left Quick Actions area.
+6. If needed, close and reopen MyD1.
+```
+
+Useful history behavior:
+
+```text
+Click a history row to expand it.
+The expanded row shows action buttons.
+```
+
+The action buttons can include:
+
+```text
+Load
+Execute
+Explain
+Bookmark
+Copy
+Delete
+```
+
+`Load` puts the query back in the SQL editor.
+
+`Execute` runs it again.
+
+`Copy` copies the SQL text.
+
+### Step 22-5: Bookmarks
+
+The important MyD1 bookmark detail:
+
+```text
+Do not look for the bookmark button only in the side Bookmarks panel.
+First click a row in Query History.
+That expands the row.
+Then click the Bookmark button shown inside that expanded history row.
+```
+
+Bookmark flow:
+
+```text
+1. Start with a query that exists in History.
+   The reliable way is to double-click a table and run MyD1's built-in table query first.
+2. Open History.
+3. Click the history row for that query.
+4. Click Bookmark in the expanded row.
+5. Choose or create a bookmark folder.
+6. Save the bookmark.
+7. Open the Bookmarks tab in the side panel to confirm it is there.
+```
+
+Example bookmark folder name:
+
+```text
+MyD1Bookmarks
+```
+
+### Step 22-6: Do Not Manually Edit Bookmarks In The Plist
+
+MyD1 stores preferences under:
+
+```text
+~/Library/Preferences/com.myd1.app.plist
+```
+
+The app settings may also mention an older path:
+
+```text
+~/Library/Preferences/com.rageagainstthedb.app.plist
+```
+
+Do not rely on manually editing either plist for bookmarks.
+
+Manual plist bookmark edits are fragile because MyD1 can rewrite or ignore the
+bookmark keys when it starts.
+
+Use the app's History row `Bookmark` button instead.
+
+### Step 22-7: Keep Important SQL In Repo Files Too
+
+Even if MyD1 bookmarks work, keep important SQL scripts in repo files so they
+are searchable, reviewable, and not tied to one desktop app.
+
+Recommended folder:
+
+```text
+/Users/croncallo/repo/MovieApp-Cloudflare/sql/
+```
+
+Good file names:
+
+```text
+movie-list-count.sql
+movie-list-sample.sql
+top-imdb-movies.sql
+horror-last-5-years-25k-votes.sql
+```
