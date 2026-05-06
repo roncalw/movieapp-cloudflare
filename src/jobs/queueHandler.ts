@@ -24,7 +24,11 @@ export async function handleQueue(
 			continue;
 		}
 
-		await insertImdbRatingQueueRows(env, message.body.rows);
+		await insertImdbRatingQueueRows(
+			env,
+			message.body.rows,
+			message.body.jobRunId,
+		);
 		message.ack();
 	}
 }

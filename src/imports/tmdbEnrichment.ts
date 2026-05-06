@@ -56,6 +56,7 @@ function buildTmdbEnrichmentStatements(
 	tmdbId: number,
 	details: TmdbMovieDetails,
 	env: Env,
+	loadRunId: string,
 ) {
 	const imdbId = details.external_ids?.imdb_id ?? null;
 	const usCertification = getUsCertification(details);
@@ -68,21 +69,44 @@ function buildTmdbEnrichmentStatements(
 			     tmdb_enriched_at = CURRENT_TIMESTAMP,
 			     tmdb_enrichment_error = NULL
 			 WHERE tmdb_id = ?`,
-		).bind(imdbId, usCertification, tmdbId),
-		env.DB.prepare(
-			`DELETE FROM movie_watch_providers
-			 WHERE tmdb_id = ?
-			   AND region = ?`,
-		).bind(tmdbId, "US"),
-	];
+			).bind(imdbId, usCertification, tmdbId),
+			env.DB.prepare(
+				`DELETE FROM movie_watch_providers_staging
+				 WHERE tmdb_id = ?
+				   AND region = ?`,
+			).bind(tmdbId, "US"),
+		];
 
-	for (const providerId of providerIds) {
+	if (providerIds.length === 0) {
 		statements.push(
 			env.DB.prepare(
-				`INSERT INTO movie_watch_providers (tmdb_id, provider_id, region)
-				 VALUES (?, ?, ?)`,
-			).bind(tmdbId, providerId, "US"),
+				`INSERT INTO movie_watch_providers_staging (
+					tmdb_id,
+					provider_id,
+					region,
+					load_run_id,
+					staged_at,
+					promoted_at
+				)
+				VALUES (?, NULL, ?, ?, CURRENT_TIMESTAMP, NULL)`,
+			).bind(tmdbId, "US", loadRunId),
 		);
+	} else {
+		for (const providerId of providerIds) {
+			statements.push(
+				env.DB.prepare(
+					`INSERT INTO movie_watch_providers_staging (
+						tmdb_id,
+						provider_id,
+						region,
+						load_run_id,
+						staged_at,
+						promoted_at
+					)
+					VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, NULL)`,
+				).bind(tmdbId, providerId, "US", loadRunId),
+			);
+		}
 	}
 
 	return {
@@ -109,11 +133,6 @@ function buildTmdbTerminalErrorStatements(
 			     tmdb_enrichment_error = ?
 			 WHERE tmdb_id = ?`,
 		).bind(message, tmdbId),
-		env.DB.prepare(
-			`DELETE FROM movie_watch_providers
-			 WHERE tmdb_id = ?
-			   AND region = ?`,
-		).bind(tmdbId, "US"),
 	];
 }
 
@@ -198,11 +217,12 @@ export async function processTmdbEnrichmentRows(
 					const details = await getTmdbMovieDetails(row.tmdb_id, env);
 					return {
 						row,
-						enrichment: buildTmdbEnrichmentStatements(
-							row.tmdb_id,
-							details,
-							env,
-						),
+							enrichment: buildTmdbEnrichmentStatements(
+								row.tmdb_id,
+								details,
+								env,
+								jobRunId,
+							),
 						error: null,
 					};
 				} catch (error) {

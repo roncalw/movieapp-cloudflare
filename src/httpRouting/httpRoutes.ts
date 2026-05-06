@@ -2,7 +2,14 @@ import {
 	dryRunReadImdbRatings,
 	enqueueImdbRatingRows,
 } from "../imports/imdbRatings";
-import { getRecentTmdbEnrichmentImportJobRuns } from "../jobs/importJobRuns";
+import {
+	checkMovieListPotentialLoadCounts,
+	recordMovieListCurrentCountSnapshot,
+} from "../imports/movieListLoadCounts";
+import {
+	getRecentImportJobRuns,
+	getRecentTmdbEnrichmentImportJobRuns,
+} from "../jobs/importJobRuns";
 import {
 	getCachedMovieSearchResponse,
 	RequestValidationError,
@@ -175,6 +182,21 @@ export async function handleFetch(
 		return Response.json({ runs });
 	}
 
+	if (url.pathname === "/admin/import/job-runs") {
+		const jobName = url.searchParams.get("jobName") ?? undefined;
+		const limit = Number(url.searchParams.get("limit") ?? 20);
+
+		if (!Number.isInteger(limit) || limit < 1) {
+			return Response.json(
+				{ error: "limit must be a positive integer." },
+				{ status: 400 },
+			);
+		}
+
+		const runs = await getRecentImportJobRuns(env, { jobName, limit });
+		return Response.json({ runs });
+	}
+
 	if (url.pathname === "/admin/import/tmdb/enrich-manual") {
 		const limit = Number(url.searchParams.get("limit") ?? 1000);
 		const refreshOlderThanDays = Number(
@@ -209,6 +231,16 @@ export async function handleFetch(
 
 	if (url.pathname === "/admin/import/movie-list/rebuild-manual") {
 		const result = await rebuildMovieListItems(env, "manual");
+		return Response.json(result);
+	}
+
+	if (url.pathname === "/admin/import/movie-list/potential-load-check") {
+		const result = await checkMovieListPotentialLoadCounts(env, "manual");
+		return Response.json(result);
+	}
+
+	if (url.pathname === "/admin/import/movie-list/current-count-snapshot") {
+		const result = await recordMovieListCurrentCountSnapshot(env, "manual");
 		return Response.json(result);
 	}
 

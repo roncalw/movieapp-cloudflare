@@ -33,46 +33,41 @@
   - Rollout Back Into MovieApp
     - [ ] [Step 15: Scale The Cloudflare Jobs Carefully](#step-15-scale-the-cloudflare-jobs-carefully)
     - [ ] [Step 16: Hook This Back Into MovieApp](#step-16-hook-this-back-into-movieapp)
+  - Production Jobs And Safety
+    - [ ] [Step 17: Job Summary](#step-17-job-summary)
+    - [ ] [Step 18: Scheduled Refresh Cron Jobs](#step-18-scheduled-refresh-cron-jobs)
+      - [ ] [Step 18-4: Manual Cron Testing](#step-18-4-manual-testing)
+    - [ ] [Step 19: Import Job Runs Table](#step-19-import-job-runs-table)
+    - [ ] [Step 20: Movie List Load Counts Safety Table](#step-20-movie-list-load-counts-safety-table)
   - Reference
-    - [ ] [Step 17: Recommended Build Order](#step-17-recommended-build-order)
-    - [ ] [Step 18: Useful Commands](#step-18-useful-commands)
-    - [ ] [Step 19: Data Usage Notes](#step-19-data-usage-notes)
-    - [ ] [Step 20: Scheduled Refresh Cron Jobs](#step-20-scheduled-refresh-cron-jobs)
-      - [ ] [Step 20-4: Manual Cron Testing](#step-20-4-manual-testing)
-    - [ ] [Step 21: Caching](#step-21-caching)
-    - [ ] [Step 22: MyD1 SQL Client](#step-22-myd1-sql-client)
+    - [ ] [Step 21: Recommended Build Order](#step-21-recommended-build-order)
+    - [ ] [Step 22: Useful Commands](#step-22-useful-commands)
+    - [ ] [Step 23: Data Usage Notes](#step-23-data-usage-notes)
+    - [ ] [Step 24: Caching](#step-24-caching)
+    - [ ] [Step 25: MyD1 SQL Client](#step-25-myd1-sql-client)
 
 ## Summary
 
-This plan replaces the slow live join from `MoviesToIMDBJoinTest` with a prebuilt Cloudflare D1 movie list table.
+This plan builds a precomputed Cloudflare D1 movie list table for the MovieApp search page.
 
-The proof-of-concept screen currently does this while the user is waiting:
-
-```text
-TMDB search results
--> TMDB external_ids lookup
--> IMDb/OMDb-style rating lookup
--> render poster/title/rating
-```
-
-That proved the join idea works, but it also proved that doing the join live is too slow for a normal search page.
-
-The better version is:
+The data-loading pipeline does this ahead of normal app searches:
 
 ```text
-TMDB movie data
-+ TMDB imdb_id mapping
-+ IMDb title.ratings.tsv
+TMDB primary catalog rows
++ TMDB enrichment fields
++ IMDb title.ratings.tsv rows
 = prebuilt movie_list_items table in Cloudflare D1
 ```
 
-Then the app can do this:
+The goal is to build search rows during scheduled jobs, before the app asks for them.
+
+Cloudflare owns the recurring data-loading work:
 
 ```text
-MovieApp search/list page
--> Cloudflare Worker endpoint
--> D1 movie_list_items query
--> immediate poster grid with IMDb rating and vote count
+IMDb ratings load
+TMDB primary load
+TMDB enrichment load
+movie_list_items build
 ```
 
 Important architecture rule:
@@ -319,7 +314,7 @@ minimum user vote count
 sort
 ```
 
-For the Cloudflare/D1 version, the old TMDB user-rating filter/sort data is being replaced by IMDb data:
+For the Cloudflare/D1 version, TMDB user-rating filter/sort data is replaced by IMDb data:
 
 ```text
 new IMDb filter/sort fields:
@@ -2068,7 +2063,7 @@ That is intended for the paid-plan D1 invocation limit.
 
 If testing on the free plan, use a smaller consumer batch size first.
 
-The recurring IMDb Cron Trigger is now part of the full production schedule in Step 20.
+The recurring IMDb Cron Trigger is now part of the full production schedule in Step 18.
 
 Current IMDb schedule:
 
@@ -3959,7 +3954,7 @@ max_concurrency: 1:
   the TMDB request rate at the same time
 ```
 
-Current cron config is listed in Step 20.
+Current cron config is listed in Step 18.
 
 The current recurring schedule has four cron entries:
 
@@ -3974,7 +3969,7 @@ The current recurring schedule has four cron entries:
 }
 ```
 
-Cloudflare cron expressions are UTC. See Step 20 for the Eastern-time meaning and the reason the enrichment/final-table jobs use fixed fallback times.
+Cloudflare cron expressions are UTC. See Step 18 for the Eastern-time meaning and the reason the enrichment/final-table jobs use fixed fallback times.
 
 ### Step 9B-4: Add The Queue Message Types And Constants
 
@@ -4198,6 +4193,7 @@ started_at
 last_progress_at
 ended_at
 last_error
+result_json
 ```
 
 ### Step 9B-8: Add The Enqueue Function
@@ -5078,7 +5074,7 @@ TMDB weekly recurring refresh:
 
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Do not schedule the historical TMDB backfill on Cron.</div>
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Use the recurring production schedule in Step 20 after the historical backfill is finished.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Use the recurring production schedule in Step 18 after the historical backfill is finished.</div>
 
 Recurring job scope:
 
@@ -5090,7 +5086,7 @@ TMDB recurring job:
   weekly incremental refresh from the latest release_date already stored
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Cron scheduling details now live on their own page in Step 20.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Cron scheduling details now live on their own page in Step 18.</div>
 
 Current recurring-job split:
 
@@ -5149,170 +5145,693 @@ Queue retries
 
 This is the handoff back into the app.
 
-Current POC screen:
+Temporary test screen:
 
 ```text
 /Users/croncallo/repo/MovieApp/src/screens/MoviesToIMDBJoinTest.tsx
 ```
 
-Current POC behavior:
+Use this screen only to verify the Cloudflare search endpoint before wiring the production search screen.
 
-```text
-fetch TMDB search results
-lookup TMDB external_ids
-lookup IMDb rating
-render joined result
-time the request
-```
-
-Future behavior:
+Target behavior:
 
 ```text
 fetch Cloudflare /movies/search
-render results immediately
-show IMDb rating badge on poster
+render returned movie_list_items rows
+show IMDb rating badge
 sort by IMDb rating
 filter by genre/provider
-tap poster to load details using existing MovieApp detail flow
+tap a movie to load details using the existing detail flow
 ```
 
-This means `MoviesToIMDBJoinTest` can become the bridge screen:
+The app should not call TMDB and IMDb rating lookups during the search screen.
+
+The app should call Cloudflare after the scheduled jobs have already prepared `movie_list_items`.
+
+Validation goal:
 
 ```text
-old mode:
-  prove live join timing
-
-new mode:
-  prove Cloudflare D1 response timing
+prove Cloudflare D1 response timing
+prove the response fields match the app search screen needs
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Use `MoviesToIMDBJoinTest` as the bridge screen when the Cloudflare path is ready.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Use `MoviesToIMDBJoinTest` only as a temporary Cloudflare response-timing test screen.</div>
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Do not change the old `MovieResults` / search architecture yet.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Do not change the production `MovieResults` / search architecture until the Cloudflare endpoint is verified.</div>
 
-<a id="phase-17-recommended-build-order"></a>
-## Step 17: Recommended Build Order
+<a id="phase-17-job-summary"></a>
+## Step 17: Job Summary
 
-Build order:
+This section is the plain-English map of the production data jobs.
 
-Use this order so each dependency exists before the next step begins.
-
-Foundation:
-
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Create the migration file.</div>
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Paste the database SQL.</div>
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Apply the migration locally as a quick schema check.</div>
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Apply the migration to remote D1.</div>
-
-IMDb path:
-
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Add `/admin/import/imdb-ratings/dry-run`.</div>
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Prove Cloudflare can stream-decompress and parse IMDb rows.</div>
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Create and wire up the IMDb Queue in `wrangler.jsonc`.</div>
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Enqueue a small IMDb ratings batch from Cloudflare.</div>
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Prove the Queue consumer writes IMDb ratings to remote D1.</div>
-
-TMDB path:
-
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Add the TMDB API key locally and in Cloudflare.</div>
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Build the Cloudflare TMDB movie-list load endpoint for manual kickoff.</div>
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Load a small TMDB sample into remote D1.</div>
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Run the one-time manual TMDB historical backfill in date windows.</div>
-
-Final query path:
-
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Build `movie_list_items` from the remote staging tables.</div>
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Add the future `/movies/search` Worker endpoint.</div>
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Test `/movies/search` from the browser.</div>
-
-MovieApp handoff:
-
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Update `MoviesToIMDBJoinTest` to call `/movies/search`.</div>
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Compare timing against the old live join.</div>
-
-Recurring jobs:
-
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Enable the smaller weekly TMDB recurring refresh after the historical backfill is finished.</div>
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Scale the Cloudflare jobs slowly.</div>
-
-<a id="phase-18-useful-commands"></a>
-## Step 18: Useful Commands
-
-Run local Worker:
-
-```bash
-npm run dev
-```
-
-Run remote-backed Worker locally:
-
-```bash
-npm run dev:remote
-```
-
-Run tests:
-
-```bash
-npm test
-```
-
-Query local current test table:
-
-```bash
-npm run db:query:local
-```
-
-Query remote current test table:
-
-```bash
-npm run db:query:remote
-```
-
-List local tables:
-
-```bash
-npx wrangler d1 execute movieapp-db --local --command "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;"
-```
-
-List remote tables:
-
-```bash
-npx wrangler d1 execute movieapp-db --remote --command "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;"
-```
-
-Get the current TMDB release-date cursor:
-
-```bash
-npx wrangler d1 execute movieapp-db --remote --command "SELECT MAX(release_date) AS max_release_date FROM tmdb_movies_staging;"
-```
-
-<a id="phase-19-data-usage-notes"></a>
-## Step 19: Data Usage Notes
-
-IMDb datasets are provided under IMDb's non-commercial dataset terms.
-
-TMDB data also has API terms and attribution requirements.
-
-Before making this public or commercial, verify that the planned use is allowed by both data providers.
-
-Useful links:
+The short version:
 
 ```text
-https://developer.imdb.com/non-commercial-datasets/
-https://developer.themoviedb.org/reference/discover-movie
-https://developer.themoviedb.org/reference/movie-details
-https://developer.themoviedb.org/reference/movie-watch-providers
-https://developer.themoviedb.org/reference/movie-release-dates
-https://developer.themoviedb.org/docs/getting-started
-https://developers.cloudflare.com/workers/runtime-apis/web-standards/
-https://developers.cloudflare.com/workers/platform/limits/
-https://developers.cloudflare.com/d1/platform/limits/
-https://developers.cloudflare.com/workers/configuration/cron-triggers/
-https://developers.cloudflare.com/queues/platform/limits/
+IMDb ratings job
+  loads IMDb rating and vote-count staging data
+
+TMDB primary job
+  loads TMDB movie catalog rows and genre links
+
+TMDB enrichment job
+  fills IMDb id, US certification, and US streaming-provider links
+
+Movie list build job
+  promotes ready staging data into the fast app search table
+
+Movie list current-count snapshot step
+  records the current movie_list_items counts after a successful build
 ```
 
-<a id="phase-20-scheduled-refresh-cron-jobs"></a>
-## Step 20: Scheduled Refresh Cron Jobs
+The jobs are separated because each data source has a different shape, size, and failure mode.
+
+IMDb is one very large downloadable file.
+
+TMDB primary movie data comes from paged API searches with a page cap.
+
+TMDB enrichment data comes from per-movie detail calls.
+
+The app search table is intentionally built last so it only uses data that has already landed in staging.
+
+### Step 17-1: IMDb Ratings Job
+
+What this tracked step does:
+
+```text
+Reads the IMDb ratings gzip file.
+Parses title.ratings.tsv.
+Queues batches of rating rows.
+Writes rating rows into imdb_ratings_staging.
+```
+
+Reason for this approach:
+
+```text
+IMDb publishes the ratings as one large gzip file.
+The Worker proved it can fetch, decompress, and parse that file.
+The D1 writes are separated through Cloudflare Queues so the import is retryable and does not depend on one huge request.
+The queue payload uses 33 rating rows per message because each row has 3 values and D1 allows 100 bound parameters per statement.
+```
+
+History:
+
+```text
+The first Cloudflare proof was only a dry run.
+Large dry runs initially hit Worker CPU/runtime limits.
+Paid Worker limits plus cpu_ms = 300000 allowed the full-file dry run to complete.
+After that, the import design moved to queues for the actual D1 load.
+```
+
+Complete fields in `imdb_ratings_staging` after this job:
+
+```text
+imdb_id
+average_rating
+num_votes
+imported_at
+```
+
+Observed timing:
+
+```text
+Cloudflare full-file dry run, parse only:
+  rowsRead: 1,665,567
+  cpuTimeMs: 1,224
+  wallTimeMs: 1,424
+
+Local full-file dry run:
+  about 1.077 seconds
+
+Real full D1 load:
+  roughly 8 hours from Page05 working memory
+  this is the important production timing because it includes queue delivery and D1 inserts
+
+Future full D1 queue-drain timing:
+  now written to import_job_runs after migration 0012 is applied and the Worker is deployed
+  started_at begins when the IMDb file stream/enqueue starts
+  ended_at is set after the final queue batch inserts into D1
+  top-level duration_ms from /admin/import/job-runs is the full job time
+```
+
+Important timing note:
+
+```text
+The 1.2 second Cloudflare number is not the real import duration.
+It only proves fetch, decompress, and parse speed.
+
+The real import duration is the full enqueue plus Queue consumer plus D1 insert time.
+Historically that was about 8 hours for the full IMDb file.
+
+For real job duration, use import_job_runs.
+```
+
+Manual run and schedule:
+
+```text
+Manual full enqueue endpoint:
+  /admin/import/imdb-ratings/enqueue-manual
+
+Manual limited enqueue endpoint:
+  /admin/import/imdb-ratings/enqueue-manual?limit=33000
+
+Production URL shape:
+  https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual
+
+Schedule:
+  0 22 * * 1
+  Sunday 6:00 PM Eastern while on EDT
+
+Status and timing:
+  /admin/import/job-runs?jobName=imdb-ratings&limit=10
+```
+
+Schedule details: [Step 18-1: Current `wrangler.jsonc` Schedule](#step-18-1-current-wranglerjsonc-schedule).
+
+### Step 17-2: TMDB Primary Job
+
+What this job does:
+
+```text
+Calls TMDB Discover pages by release-date windows.
+Splits date windows when a window would exceed TMDB Discover's page cap.
+Writes movie catalog rows into tmdb_movies_staging.
+Writes movie-to-genre links into movie_genres_staging.
+```
+
+Reason for this approach:
+
+```text
+TMDB Discover returns the movie list data and genre ids needed for the app's first catalog pass.
+TMDB Discover has a page cap, so the job uses release-date windows and splits large windows.
+Genre links are staged during this job because the genre ids are already present on the Discover response.
+No extra TMDB detail call is needed for genre links.
+```
+
+History:
+
+```text
+The earlier daily-export idea was rejected for the main catalog load.
+Discover was the better fit because it provides the searchable movie rows and genre ids together.
+The final process became a date-windowed Discover import instead of one broad unbounded scan.
+```
+
+Scheduled versus full-load behavior:
+
+```text
+The scheduled TMDB primary job is incremental.
+It starts at the latest release_date already in tmdb_movies_staging and runs through today.
+In SQL terms, the scheduled source window is release_date >= the current MAX(release_date).
+That keeps normal weekly work focused on newly released/future-dated movies.
+
+The full TMDB primary loader still exists.
+The manual endpoint accepts beginDate, endDate, and limit.
+If we ever need to blast/reseed the catalog, use a very old beginDate, today's endDate, and a large enough limit.
+```
+
+Manual full-load shape:
+
+```text
+/admin/import/tmdb/load-manual?beginDate=1874-01-01&endDate=YYYY-MM-DD&limit=1200000
+```
+
+That is not part of the normal weekly cron path.
+
+Manual run and schedule:
+
+```text
+Manual historical/full-load endpoint:
+  /admin/import/tmdb/load-manual?beginDate=1874-01-01&endDate=YYYY-MM-DD&limit=1200000
+
+Manual limited test endpoint:
+  /admin/import/tmdb/load-manual?beginDate=2000-01-01&endDate=2000-12-31&limit=1000
+
+Production URL shape:
+  https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/load-manual?beginDate=YYYY-MM-DD&endDate=YYYY-MM-DD&limit=100000
+
+Schedule:
+  0 4 * * 2
+  Monday 12:00 AM Eastern while on EDT
+
+Status and timing:
+  /admin/import/job-runs?jobName=tmdb-primary&limit=10
+```
+
+Schedule details: [Step 18-1: Current `wrangler.jsonc` Schedule](#step-18-1-current-wranglerjsonc-schedule).
+
+Complete fields in `tmdb_movies_staging` after this job:
+
+```text
+tmdb_id
+imdb_id
+title
+poster_path
+release_date
+us_certification
+popularity
+imported_at
+tmdb_enriched_at
+tmdb_enrichment_error
+```
+
+Fields intentionally left empty by this job:
+
+```text
+imdb_id
+us_certification
+tmdb_enriched_at
+tmdb_enrichment_error
+```
+
+Complete fields in `movie_genres_staging` after this job:
+
+```text
+tmdb_id
+genre_id
+load_run_id
+staged_at
+promoted_at
+```
+
+Observed historical result:
+
+```text
+tmdb_movies_staging rows: 1,011,396
+movie_genres rows before staging migration: 1,220,401
+release_date range: 1874-12-09 through 2026-04-29
+```
+
+Observed timing:
+
+```text
+Full historical duration:
+  now written to import_job_runs after migration 0012 is applied and the Worker is deployed
+
+Scheduled run limit:
+  100,000 primary rows per run
+
+Schedule buffer:
+  enrichment starts 6 hours after primary starts
+```
+
+### Step 17-3: TMDB Enrichment Job
+
+What this job does:
+
+```text
+Finds TMDB staging rows that need enrichment.
+Queues TMDB ids.
+Calls TMDB movie details for each queued id.
+Updates tmdb_movies_staging with IMDb id, US certification, enrichment time, and enrichment error.
+Replaces US watch-provider staging links in movie_watch_providers_staging.
+```
+
+Reason for this approach:
+
+```text
+TMDB Discover does not provide IMDb id, US certification, or watch providers.
+The movie details endpoint is required for those fields.
+The job uses tmdb_enriched_at to decide what needs work because empty IMDb id and empty US certification can be valid TMDB results.
+The job is queue-based because enrichment is many API calls and must be resumable.
+Provider rows are staged first because provider data is dynamic and should not change the live search filters before the movie-list safety check passes.
+```
+
+History:
+
+```text
+The TMDB changes endpoint was not used as the main driver because watch-provider changes were not reliable enough for the app filters.
+The final process uses D1 staging rows as the source of truth and refreshes rows based on tmdb_enriched_at.
+A larger enrichment run exposed the Worker subrequest limit, so wrangler.jsonc was raised to allow 50,000 subrequests.
+```
+
+Fields updated in `tmdb_movies_staging` by this job:
+
+```text
+imdb_id
+us_certification
+tmdb_enriched_at
+tmdb_enrichment_error
+```
+
+Complete fields in `movie_watch_providers_staging` after this job:
+
+```text
+tmdb_id
+provider_id
+region
+load_run_id
+staged_at
+promoted_at
+```
+
+`provider_id` can be NULL in staging only.
+
+That NULL row means TMDB checked the movie and returned no current US flatrate providers.
+
+Observed timing:
+
+```text
+100 selected rows:
+  about 8 seconds
+
+1,000 selected rows:
+  about 1 minute 4 seconds
+
+255,106 selected rows:
+  about 3 hours 50 minutes 15 seconds
+  updated: 255,062
+  errors: 44
+  provider rows inserted: 13,064
+```
+
+Manual run and schedule:
+
+```text
+Manual enqueue endpoint:
+  /admin/import/tmdb/enrich-manual?limit=300000&refreshOlderThanDays=7
+
+Progress endpoint:
+  /admin/import/tmdb/enrich-progress
+
+Production URL shape:
+  https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-manual?limit=300000&refreshOlderThanDays=7
+
+Schedule:
+  0 10 * * 2
+  Monday 6:00 AM Eastern while on EDT
+
+Status and timing:
+  /admin/import/job-runs?jobName=tmdb-enrich&limit=10
+```
+
+Schedule details: [Step 18-1: Current `wrangler.jsonc` Schedule](#step-18-1-current-wranglerjsonc-schedule).
+
+### Step 17-4: Movie List Build Job
+
+What this job does:
+
+```text
+Checks that staging data is ready.
+Skips if a TMDB enrichment run is still active.
+Runs the movie-list potential-load safety check.
+Skips if the potential-load counts dropped too much versus the last current-count snapshot.
+Promotes approved genre staging rows into movie_genres.
+Promotes approved watch-provider staging rows into movie_watch_providers.
+Builds movie_list_items from tmdb_movies_staging plus imdb_ratings_staging.
+Upserts movie_list_items rows incrementally.
+Does not delete unrelated old movie_list_items rows.
+Runs the current-count snapshot after a successful build.
+```
+
+Incremental source-selection rule:
+
+```text
+The first successful movie-list build can be a full build.
+That happens when there is no earlier successful movie-list build row in import_job_runs.
+
+After that, each movie-list build reads the ended_at timestamp from the latest successful
+movie-list-build row in import_job_runs.
+
+It then only upserts source rows where:
+  tmdb_movies_staging.imported_at is newer than that timestamp
+  or tmdb_movies_staging.tmdb_enriched_at is newer than that timestamp
+
+That means the normal scheduled build does not keep scanning the full staging table.
+It only rebuilds final movie-list rows for TMDB staging rows changed since the last
+successful movie-list build.
+```
+
+What still stays true:
+
+```text
+It still processes matching rows in tmdb_id chunks so one D1 statement does not become oversized.
+It still uses upsert behavior so existing movie_list_items rows can be refreshed.
+It still does not delete unrelated old movie_list_items rows.
+```
+
+Reason for this approach:
+
+```text
+The app needs fast search results.
+The final search rows should already exist before the app asks for them.
+The final table keeps only the list/search fields the app needs immediately.
+The staging tables stay separate so import jobs can prepare data before the live search tables change.
+```
+
+History:
+
+```text
+The data model settled on three source areas before the final search table:
+TMDB staging rows store the movie catalog fields.
+TMDB enrichment adds IMDb id, US certification, and staged watch-provider links.
+IMDb staging rows store IMDb rating and vote-count fields.
+Relationship staging rows protect genre and provider filters before promotion.
+
+The movie_list_items build runs after those source areas are ready.
+It combines the staged TMDB rows with the staged IMDb rating rows.
+It writes the final app-facing search rows into movie_list_items.
+
+US certification is separate from IMDb rating data.
+US certification comes from TMDB enrichment.
+IMDb rating data means imdb_rating and imdb_vote_count.
+
+The build uses chunks so the Worker logs progress during long runs.
+Chunking also avoids one oversized D1 insert/update statement.
+
+The potential-load safety check was added so a bad upstream load does not silently replace
+healthy live search data with a much smaller or less complete result.
+```
+
+Complete fields in `movie_list_items` after this job:
+
+```text
+tmdb_id
+title
+poster_path
+release_date
+us_certification
+imdb_rating
+imdb_vote_count
+popularity
+last_refreshed_at
+```
+
+Data this job reads but does not copy into `movie_list_items`:
+
+```text
+movie_genres
+movie_watch_providers
+```
+
+Those live tables stay separate because the search endpoint joins or filters against them when genre and streaming-provider filters are used.
+
+Observed timing:
+
+```text
+Full build duration:
+  now written to import_job_runs after migration 0012 is applied and the Worker is deployed
+
+Worker log event to search for:
+  movie-list-build-end
+
+The structured log and import_job_runs result_json include:
+  durationMs
+  upsertedRows
+  deletedRows
+  movieListCount
+
+Use import_job_runs as the durable source of truth.
+Worker logs are still useful for troubleshooting.
+```
+
+Cloudflare Observability log search:
+
+```text
+movie-list-build-end
+```
+
+Movie-list build timing query:
+
+```sql
+SELECT
+  job_run_id,
+  job_name,
+  status,
+  trigger,
+  selected_count,
+  processed_count,
+  updated_count,
+  error_count,
+  started_at,
+  ended_at,
+  ROUND((unixepoch(ended_at) - unixepoch(started_at)) / 60.0, 2) AS duration_minutes,
+  ROUND((unixepoch(ended_at) - unixepoch(started_at)) / 3600.0, 2) AS duration_hours,
+  result_json,
+  last_error
+FROM import_job_runs
+WHERE job_name = 'movie-list-build'
+ORDER BY started_at DESC
+LIMIT 10;
+```
+
+Manual run and schedule:
+
+```text
+Manual full movie-list path:
+  /admin/import/movie-list/rebuild-manual
+
+Production URL shape:
+  https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual
+
+This manual endpoint runs:
+  potential-load safety check
+  relationship promotion if safe
+  movie-list build if safe
+  current-count snapshot after success
+
+Schedule:
+  0 1 * * 3
+  Monday 9:00 PM Eastern while on EDT
+
+Status and timing:
+  /admin/import/job-runs?jobName=movie-list-build&limit=10
+```
+
+Schedule details: [Step 18-1: Current `wrangler.jsonc` Schedule](#step-18-1-current-wranglerjsonc-schedule).
+
+### Step 17-5: Movie List Potential-Load Safety Check
+
+What this job does:
+
+```text
+Counts the rows that would be loaded into movie_list_items before the build starts.
+Compares those potential-load counts to the most recent current-count snapshot.
+Writes the potential-load counts into movie_list_load_counts.
+Writes a job_stopped_reason if any count drops by more than the threshold.
+Stops the movie-list build when the threshold is crossed.
+```
+
+Important implementation detail:
+
+```text
+The Worker cannot change a Cloudflare dashboard environment variable at runtime.
+So this tracked step does not literally set MOVIE_LIST_JOB_PAUSED=true.
+Instead, it records the stop reason in D1 and the movie-list build skips itself from that D1 result.
+That gives the same protection without pretending dashboard variables are mutable from Worker code.
+```
+
+The default threshold is:
+
+```text
+1.0
+```
+
+That means a drop greater than 1% stops the movie-list build.
+
+Manual endpoint:
+
+```text
+/admin/import/movie-list/potential-load-check
+```
+
+Manual run and schedule:
+
+```text
+Manual endpoint:
+  /admin/import/movie-list/potential-load-check
+
+Production URL shape:
+  https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/potential-load-check
+
+Schedule:
+  no separate Cloudflare Cron Trigger
+  runs inside the movie-list scheduled job before the movie-list build
+
+Status and timing:
+  /admin/import/job-runs?jobName=movie-list-potential-load-check&limit=10
+```
+
+Schedule flow details: [Step 18-3: What `scheduled(...)` Does](#step-18-3-what-scheduled-does).
+
+### Step 17-6: Movie List Current-Count Snapshot
+
+What this tracked step does:
+
+```text
+Runs after a successful movie-list build.
+Counts the finished movie_list_items table.
+Writes the current-count columns into movie_list_load_counts for that load date.
+This becomes the next baseline for the future potential-load safety check.
+```
+
+Manual endpoint:
+
+```text
+/admin/import/movie-list/current-count-snapshot
+```
+
+Manual run and schedule:
+
+```text
+Manual endpoint:
+  /admin/import/movie-list/current-count-snapshot
+
+Production URL shape:
+  https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/current-count-snapshot
+
+Schedule:
+  no separate Cloudflare Cron Trigger
+  runs inside the movie-list scheduled job after a successful movie-list build
+
+Status and timing:
+  /admin/import/job-runs?jobName=movie-list-current-count-snapshot&limit=10
+```
+
+Schedule flow details: [Step 18-3: What `scheduled(...)` Does](#step-18-3-what-scheduled-does).
+
+### Step 17-7: Production Order
+
+The production order is:
+
+```text
+1. IMDb ratings job
+2. TMDB primary job
+3. TMDB enrichment job
+4. Movie list potential-load safety check
+5. Movie list build job
+6. Movie list current-count snapshot step
+```
+
+The order matters because:
+
+```text
+IMDb ratings must exist before the final movie list can copy rating and vote-count fields.
+TMDB primary rows must exist before enrichment can find TMDB ids.
+TMDB enrichment must finish before the movie list build can trust IMDb id, US certification, and provider links.
+The potential-load safety check runs before the movie list build so a bad source load can stop the final-table replacement.
+The movie list build writes the app-facing output.
+The current-count snapshot runs after a successful build so the next load has a fresh baseline.
+```
+
+The current weekly schedule intentionally leaves wide gaps between jobs:
+
+```text
+IMDb ratings:
+  Sunday 10:00 PM UTC
+
+TMDB primary:
+  Monday 4:00 AM UTC
+
+TMDB enrichment:
+  Monday 10:00 AM UTC
+
+Movie list build:
+  Tuesday 1:00 AM UTC
+  internally runs potential-load safety check first
+  internally records current-count snapshot after success
+```
+
+<a id="phase-18-scheduled-refresh-cron-jobs"></a>
+## Step 18: Scheduled Refresh Cron Jobs
 
 This page is the recurring production refresh schedule.
 
@@ -5337,7 +5856,7 @@ after daylight saving time changes, review these expressions when Eastern time
 switches between EDT and EST.
 ```
 
-### Step 20-1: Current `wrangler.jsonc` Schedule
+### Step 18-1: Current `wrangler.jsonc` Schedule
 
 The current cron list is:
 
@@ -5388,7 +5907,7 @@ Cloudflare's cron day-of-week values here are:
 
 That is why the Monday jobs use `2`, and the Tuesday UTC final-table job uses `3`.
 
-### Step 20-2: Why Enrichment And Final Build Use Fixed Times
+### Step 18-2: Why Enrichment And Final Build Use Fixed Times
 
 Preferred ideal:
 
@@ -5437,7 +5956,7 @@ job progress table says prior job completed
 
 Cloudflare Workflows could also be evaluated later if we want a first-class workflow engine.
 
-### Step 20-3: What `scheduled(...)` Does
+### Step 18-3: What `scheduled(...)` Does
 
 The Worker branches on `controller.cron`.
 
@@ -5461,14 +5980,16 @@ controller.cron === "0 10 * * 2"
 
 controller.cron === "0 1 * * 3"
   -> rebuildMovieListItems(env, "cron")
-  -> clears movie_list_items
+  -> runs movie-list potential-load safety check
+  -> skips the build if the potential-load counts crossed the threshold
   -> inserts final rows that have:
        tmdb_enriched_at IS NOT NULL
        tmdb_enrichment_error IS NULL
      with IMDb rating/vote fields populated only when a matching IMDb rating row exists
+  -> records movie-list current-count snapshot after a successful build
 ```
 
-### Step 20-4: Manual Testing
+### Step 18-4: Manual Testing
 
 Do not assume the Cloudflare dashboard can manually fire a Cron Trigger.
 
@@ -5494,7 +6015,7 @@ Use this map:
 0 22 * * 1 -> IMDb ratings
 0 4 * * 2  -> TMDB primary
 0 10 * * 2 -> TMDB enrichment
-0 1 * * 3  -> Final movie_list_items build
+0 1 * * 3  -> Potential-load safety check, final movie_list_items build, current-count snapshot
 ```
 
 What this proves:
@@ -5595,7 +6116,15 @@ curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/e
 curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual"
 ```
 
-### Step 20-5: Monitoring Order
+```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/potential-load-check"
+```
+
+```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/current-count-snapshot"
+```
+
+### Step 18-5: Monitoring Order
 
 Use this order after the weekly refresh begins:
 
@@ -5603,7 +6132,9 @@ Use this order after the weekly refresh begins:
 1. Check IMDb queue / IMDb staging counts.
 2. Check TMDB primary staging counts.
 3. Check TMDB enrichment progress.
-4. Check final movie_list_items counts.
+4. Check movie_list_load_counts potential-load safety result.
+5. Check final movie_list_items counts.
+6. Check movie_list_load_counts current-count snapshot.
 ```
 
 Useful VS Code tasks:
@@ -5644,7 +6175,765 @@ movie-list-build-start
 movie-list-build-end
 ```
 
-## Step 21: Caching
+## Step 19: Import Job Runs Table
+
+This section explains how to use `import_job_runs` as the durable status and timing table for production data jobs.
+
+Plain-English purpose:
+
+```text
+Cloudflare Observability is useful for logs.
+import_job_runs is the database source of truth for job status, progress, and timing.
+```
+
+Use this table when you want to answer:
+
+```text
+Did the job start?
+Is the job still running?
+How many rows did it select or queue?
+How many rows have finished processing?
+Did it complete, skip, or fail?
+How long did the whole job take?
+What job-specific summary did it produce?
+```
+
+### Step 19-1: Jobs And Tracked Steps That Write To `import_job_runs`
+
+Current jobs and tracked steps:
+
+```text
+imdb-ratings
+tmdb-primary
+tmdb-enrich
+movie-list-potential-load-check
+movie-list-build
+movie-list-current-count-snapshot
+```
+
+Each row represents one whole job run.
+
+For queue jobs, the row still represents the whole job run, not one queue message.
+
+Queue batches update the same row as they finish.
+
+### Step 19-2: Important Columns
+
+```text
+job_run_id
+  unique id for this one job run
+
+job_name
+  which job this is
+  examples: imdb-ratings, tmdb-primary, tmdb-enrich, movie-list-build
+
+status
+  queued, running, complete, complete_with_errors, skipped, or failed
+
+trigger
+  cron or manual
+
+selected_count
+  how many rows the job selected or decided to process
+
+queued_count
+  how many rows were put onto a queue
+  most useful for queue jobs
+
+processed_count
+  how many rows have finished processing
+
+updated_count
+  how many rows were inserted or updated by the job
+
+error_count
+  how many rows hit handled errors
+
+provider_rows_inserted
+  watch-provider rows inserted by TMDB enrichment
+
+started_at
+  when the job run started
+
+last_progress_at
+  when the job last wrote progress
+
+ended_at
+  when the job finished
+  null means the job has not ended yet
+
+last_error
+  latest stored error or skip reason
+
+result_json
+  job-specific summary data that does not deserve its own column
+```
+
+### Step 19-3: What `result_json` Is For
+
+`result_json` is a summary field.
+
+It is not a place to store every queue message or every batch.
+
+Examples:
+
+```text
+tmdb-primary:
+  pagesRead
+  windowsSplit
+  stopReason
+
+imdb-ratings:
+  rowsSeen
+  rowsQueued
+  queueMessageCount
+  enqueueDurationMs
+
+movie-list-build:
+  upsertedRows
+  deletedRows
+  movieListCount
+  durationMs
+```
+
+If the app ever needs a full per-batch audit trail, add a separate child table.
+
+Do not pack every batch into `result_json`.
+
+### Step 19-4: Production Endpoint
+
+After migration 0012 is applied and the Worker is deployed, this endpoint returns recent job runs:
+
+```text
+https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?limit=20
+```
+
+Filter by job:
+
+```text
+https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=imdb-ratings&limit=10
+https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-primary&limit=10
+https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-enrich&limit=10
+https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=movie-list-build&limit=10
+```
+
+Endpoint notes:
+
+```text
+limit defaults to 20
+limit is capped at 100
+jobName is optional
+duration_ms is calculated from ended_at - started_at
+duration_ms is useful after ended_at is populated
+```
+
+While a job is still running:
+
+```text
+status may be running
+ended_at will be null
+duration_ms may be null
+processed_count and last_progress_at show whether work is moving
+```
+
+### Step 19-5: How To Read Queue Jobs
+
+Queue jobs:
+
+```text
+imdb-ratings
+tmdb-enrich
+```
+
+These jobs have two phases:
+
+```text
+1. enqueue/select work
+2. queue consumers process the work
+```
+
+For `imdb-ratings`, `selected_count` is not known until the IMDb file stream finishes.
+
+That is intentional.
+
+The job counts rows while it is already streaming and enqueueing the file.
+
+It does not download and parse the file once just to count it, then download and parse it again to enqueue it.
+
+For queue jobs, the full job is done when:
+
+```text
+processed_count reaches selected_count
+ended_at is no longer null
+status is complete or complete_with_errors
+```
+
+### Step 19-6: Useful SQL
+
+Recent jobs:
+
+```sql
+SELECT
+  job_name,
+  status,
+  trigger,
+  selected_count,
+  queued_count,
+  processed_count,
+  updated_count,
+  error_count,
+  provider_rows_inserted,
+  started_at,
+  last_progress_at,
+  ended_at,
+  ROUND((unixepoch(ended_at) - unixepoch(started_at)) / 60.0, 2) AS duration_minutes,
+  ROUND((unixepoch(ended_at) - unixepoch(started_at)) / 3600.0, 2) AS duration_hours,
+  result_json,
+  last_error
+FROM import_job_runs
+ORDER BY started_at DESC
+LIMIT 20;
+```
+
+Only currently active jobs:
+
+```sql
+SELECT
+  job_name,
+  status,
+  trigger,
+  selected_count,
+  queued_count,
+  processed_count,
+  updated_count,
+  error_count,
+  started_at,
+  last_progress_at,
+  result_json,
+  last_error
+FROM import_job_runs
+WHERE status IN ('queued', 'running')
+ORDER BY started_at DESC;
+```
+
+Most recent timing for each job type:
+
+```sql
+SELECT
+  job_name,
+  MAX(started_at) AS latest_started_at
+FROM import_job_runs
+GROUP BY job_name
+ORDER BY latest_started_at DESC;
+```
+
+Full details for a specific job:
+
+```sql
+SELECT
+  job_run_id,
+  job_name,
+  status,
+  trigger,
+  selected_count,
+  queued_count,
+  processed_count,
+  updated_count,
+  error_count,
+  provider_rows_inserted,
+  started_at,
+  last_progress_at,
+  ended_at,
+  ROUND((unixepoch(ended_at) - unixepoch(started_at)) / 60.0, 2) AS duration_minutes,
+  ROUND((unixepoch(ended_at) - unixepoch(started_at)) / 3600.0, 2) AS duration_hours,
+  result_json,
+  last_error
+FROM import_job_runs
+WHERE job_name = 'imdb-ratings'
+ORDER BY started_at DESC
+LIMIT 10;
+```
+
+Change the last query's `job_name` value to:
+
+```text
+tmdb-primary
+tmdb-enrich
+movie-list-build
+```
+
+### Step 19-7: Required Migration Before Deploy
+
+The code expects `result_json` to exist.
+
+Before deploying the Worker code that reads or writes `result_json`, run:
+
+```bash
+npm run db:migrate:remote
+npm run deploy
+```
+
+If the Worker is deployed before the migration is applied, any job path that touches `result_json` can fail against remote D1.
+
+## Step 20: Movie List Load Counts Safety Table
+
+This table protects the movie-list build and relationship-table promotion from silent upstream data loss.
+
+Table name:
+
+```text
+movie_list_load_counts
+```
+
+Plain-English purpose:
+
+```text
+Before promoting staged data, count what would be loaded.
+Compare that potential load to the most recent successful current count.
+If the potential load dropped too much, stop the movie-list build and relationship promotion.
+After a successful build, record the new current count as the next baseline.
+```
+
+There is one row per load date.
+
+The current-count columns come first.
+
+The potential-load columns come after them.
+
+### Step 20-1: Columns
+
+```text
+load_date
+
+cc_count
+imdb_rating_cc_count
+imdb_vote_cc_count
+release_date_cc_count
+certification_cc_count
+popularity_cc_count
+genre_cc_count
+genre_per_movie_cc_count
+watch_provider_cc_count
+watch_provider_per_movie_cc_count
+cc_counted_at
+
+pl_count
+imdb_rating_pl_count
+imdb_vote_pl_count
+release_date_pl_count
+certification_pl_count
+popularity_pl_count
+genre_pl_count
+genre_per_movie_pl_count
+watch_provider_pl_count
+watch_provider_per_movie_pl_count
+pl_counted_at
+
+threshold
+watch_provider_threshold
+job_stopped_reason
+
+created_at
+updated_at
+```
+
+Column meanings:
+
+```text
+cc means current count.
+These are counts from the already-built movie_list_items table.
+They also include live relationship counts from movie_genres and movie_watch_providers.
+
+pl means potential load.
+These are counts from the source query that would feed movie_list_items.
+They also include staged relationship counts from movie_genres_staging and movie_watch_providers_staging.
+
+threshold is the percent allowed to drop.
+The default is 1.0, meaning more than a 1% drop stops the build.
+
+watch_provider_threshold is the percent allowed to drop for provider counts.
+The default is 10.0 because streaming availability changes more often than genre data.
+
+job_stopped_reason stores the exact count or field that crossed the threshold.
+```
+
+Relationship count meanings:
+
+```text
+genre_cc_count
+  total live movie-to-genre rows in movie_genres
+
+genre_per_movie_cc_count
+  unique live movies that have at least one genre
+
+genre_pl_count
+  total staged movie-to-genre rows in movie_genres_staging
+
+genre_per_movie_pl_count
+  unique staged movies that have at least one genre
+
+watch_provider_cc_count
+  total live US provider rows in movie_watch_providers
+
+watch_provider_per_movie_cc_count
+  unique live movies that have at least one US provider
+
+watch_provider_pl_count
+  total staged US provider rows in movie_watch_providers_staging, excluding NULL sentinel rows
+
+watch_provider_per_movie_pl_count
+  unique staged movies that have at least one real US provider
+```
+
+The provider staging table can contain a NULL `provider_id`.
+
+That NULL row is a staging-only sentinel.
+
+It means:
+
+```text
+TMDB checked this movie for US flatrate providers.
+TMDB returned zero current providers.
+```
+
+The null row is never copied into the live `movie_watch_providers` table.
+
+### Step 20-2: Potential-Load Query Shape
+
+The potential-load job uses the same source shape as the movie-list insert.
+
+It changes the insert into counts:
+
+```sql
+WITH movie_list_source AS (
+  SELECT
+    tmdb.tmdb_id,
+    tmdb.title,
+    tmdb.poster_path,
+    tmdb.release_date,
+    tmdb.us_certification,
+    imdb.average_rating AS imdb_rating,
+    imdb.num_votes AS imdb_vote_count,
+    COALESCE(tmdb.popularity, 0) AS popularity
+  FROM tmdb_movies_staging AS tmdb
+  LEFT JOIN imdb_ratings_staging AS imdb
+    ON imdb.imdb_id = tmdb.imdb_id
+  WHERE tmdb.tmdb_enriched_at IS NOT NULL
+    AND tmdb.tmdb_enrichment_error IS NULL
+    AND tmdb.poster_path IS NOT NULL
+    AND tmdb.poster_path <> ''
+)
+SELECT
+  COUNT(*) AS pl_count,
+  COUNT(imdb_rating) AS imdb_rating_pl_count,
+  COUNT(imdb_vote_count) AS imdb_vote_pl_count,
+  COUNT(release_date) AS release_date_pl_count,
+  COUNT(us_certification) AS certification_pl_count,
+  COUNT(popularity) AS popularity_pl_count,
+  (SELECT COUNT(*) FROM movie_genres_staging) AS genre_pl_count,
+  (
+    SELECT COUNT(DISTINCT tmdb_id)
+    FROM movie_genres_staging
+  ) AS genre_per_movie_pl_count,
+  (
+    SELECT COUNT(*)
+    FROM movie_watch_providers_staging
+    WHERE region = 'US'
+      AND provider_id IS NOT NULL
+  ) AS watch_provider_pl_count,
+  (
+    SELECT COUNT(DISTINCT tmdb_id)
+    FROM movie_watch_providers_staging
+    WHERE region = 'US'
+      AND provider_id IS NOT NULL
+  ) AS watch_provider_per_movie_pl_count
+FROM movie_list_source;
+```
+
+### Step 20-3: Movie-List Build Step Order
+
+The order around the final table is:
+
+```text
+1. movie-list-potential-load-check
+   counts potential source rows
+   counts staged genre/provider rows
+   compares against latest current-count snapshot
+   writes PL counts and any job_stopped_reason
+
+2. movie-genres-promote
+   only runs if the potential-load check passes
+   promotes unpromoted movie_genres_staging rows into movie_genres
+
+3. movie-watch-providers-promote
+   only runs if the potential-load check passes
+   promotes unpromoted movie_watch_providers_staging rows into movie_watch_providers
+   uses NULL staging rows to clear live providers for movies that now have none
+
+4. movie-list-build
+   only runs if the potential-load check passes
+   skips if job_stopped_reason was created
+   upserts movie_list_items incrementally from TMDB staging rows changed since the last successful movie-list build
+   does not delete unrelated old movie_list_items rows
+
+5. movie-list-current-count-snapshot
+   only runs after a successful movie-list build
+   writes CC counts for the finished live tables
+```
+
+These are not separate Cloudflare Cron Triggers.
+
+They run inside the existing movie-list scheduled job:
+
+```text
+0 1 * * 3
+```
+
+### Step 20-4: Manual Endpoints
+
+Run only the safety check:
+
+```text
+https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/potential-load-check
+```
+
+Record only the current-count snapshot:
+
+```text
+https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/current-count-snapshot
+```
+
+Run the full movie-list rebuild path:
+
+```text
+https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual
+```
+
+The full rebuild path does this:
+
+```text
+potential-load safety check
+relationship promotion if safe
+movie-list build if safe
+current-count snapshot after success
+```
+
+### Step 20-5: Useful SQL
+
+Most recent safety rows:
+
+```sql
+SELECT
+  load_date,
+  cc_count,
+  imdb_rating_cc_count,
+  imdb_vote_cc_count,
+  release_date_cc_count,
+  certification_cc_count,
+  popularity_cc_count,
+  genre_cc_count,
+  genre_per_movie_cc_count,
+  watch_provider_cc_count,
+  watch_provider_per_movie_cc_count,
+  cc_counted_at,
+  pl_count,
+  imdb_rating_pl_count,
+  imdb_vote_pl_count,
+  release_date_pl_count,
+  certification_pl_count,
+  popularity_pl_count,
+  genre_pl_count,
+  genre_per_movie_pl_count,
+  watch_provider_pl_count,
+  watch_provider_per_movie_pl_count,
+  pl_counted_at,
+  threshold,
+  watch_provider_threshold,
+  job_stopped_reason,
+  updated_at
+FROM movie_list_load_counts
+ORDER BY load_date DESC
+LIMIT 20;
+```
+
+Rows that stopped a build:
+
+```sql
+SELECT
+  load_date,
+  threshold,
+  watch_provider_threshold,
+  job_stopped_reason,
+  cc_count,
+  pl_count,
+  imdb_rating_cc_count,
+  imdb_rating_pl_count,
+  imdb_vote_cc_count,
+  imdb_vote_pl_count,
+  release_date_cc_count,
+  release_date_pl_count,
+  certification_cc_count,
+  certification_pl_count,
+  popularity_cc_count,
+  popularity_pl_count,
+  genre_cc_count,
+  genre_pl_count,
+  genre_per_movie_cc_count,
+  genre_per_movie_pl_count,
+  watch_provider_cc_count,
+  watch_provider_pl_count,
+  watch_provider_per_movie_cc_count,
+  watch_provider_per_movie_pl_count,
+  pl_counted_at
+FROM movie_list_load_counts
+WHERE job_stopped_reason IS NOT NULL
+ORDER BY load_date DESC;
+```
+
+### Step 20-6: Required Migration
+
+The base table is created by:
+
+```text
+migrations/0013_add_movie_list_load_counts.sql
+```
+
+Relationship staging and the extra genre/provider safety columns are added by:
+
+```text
+migrations/0014_add_relationship_staging_and_safety_counts.sql
+```
+
+Apply migrations before deploying code that calls the safety steps:
+
+```bash
+npm run db:migrate:remote
+npm run deploy
+```
+<a id="phase-21-recommended-build-order"></a>
+## Reference
+
+## Step 21: Recommended Build Order
+
+Build order:
+
+Use this order so each dependency exists before the next step begins.
+
+Foundation:
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Create the migration file.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Paste the database SQL.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Apply the migration locally as a quick schema check.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Apply the migration to remote D1.</div>
+
+IMDb path:
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Add `/admin/import/imdb-ratings/dry-run`.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Prove Cloudflare can stream-decompress and parse IMDb rows.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Create and wire up the IMDb Queue in `wrangler.jsonc`.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Enqueue a small IMDb ratings batch from Cloudflare.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Prove the Queue consumer writes IMDb ratings to remote D1.</div>
+
+TMDB path:
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Add the TMDB API key locally and in Cloudflare.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Build the Cloudflare TMDB movie-list load endpoint for manual kickoff.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Load a small TMDB sample into remote D1.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Run the one-time manual TMDB historical backfill in date windows.</div>
+
+Final query path:
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Build `movie_list_items` from the remote staging tables.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Add the future `/movies/search` Worker endpoint.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Test `/movies/search` from the browser.</div>
+
+MovieApp handoff:
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Update `MoviesToIMDBJoinTest` to call `/movies/search`.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Confirm `/movies/search` returns fast enough for the app search page.</div>
+
+Recurring jobs:
+
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Enable the smaller weekly TMDB recurring refresh after the historical backfill is finished.</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Scale the Cloudflare jobs slowly.</div>
+
+<a id="phase-22-useful-commands"></a>
+## Step 22: Useful Commands
+
+Run local Worker:
+
+```bash
+npm run dev
+```
+
+Run remote-backed Worker locally:
+
+```bash
+npm run dev:remote
+```
+
+Run tests:
+
+```bash
+npm test
+```
+
+Query local current test table:
+
+```bash
+npm run db:query:local
+```
+
+Query remote current test table:
+
+```bash
+npm run db:query:remote
+```
+
+List local tables:
+
+```bash
+npx wrangler d1 execute movieapp-db --local --command "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;"
+```
+
+List remote tables:
+
+```bash
+npx wrangler d1 execute movieapp-db --remote --command "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;"
+```
+
+Get the current TMDB release-date cursor:
+
+```bash
+npx wrangler d1 execute movieapp-db --remote --command "SELECT MAX(release_date) AS max_release_date FROM tmdb_movies_staging;"
+```
+
+<a id="phase-23-data-usage-notes"></a>
+## Step 23: Data Usage Notes
+
+IMDb datasets are provided under IMDb's non-commercial dataset terms.
+
+TMDB data also has API terms and attribution requirements.
+
+Before making this public or commercial, verify that the planned use is allowed by both data providers.
+
+Useful links:
+
+```text
+https://developer.imdb.com/non-commercial-datasets/
+https://developer.themoviedb.org/reference/discover-movie
+https://developer.themoviedb.org/reference/movie-details
+https://developer.themoviedb.org/reference/movie-watch-providers
+https://developer.themoviedb.org/reference/movie-release-dates
+https://developer.themoviedb.org/docs/getting-started
+https://developers.cloudflare.com/workers/runtime-apis/web-standards/
+https://developers.cloudflare.com/workers/platform/limits/
+https://developers.cloudflare.com/d1/platform/limits/
+https://developers.cloudflare.com/workers/configuration/cron-triggers/
+https://developers.cloudflare.com/queues/platform/limits/
+```
+
+## Step 24: Caching
 
 This page explains how `/movies/search` caching works.
 
@@ -5665,7 +6954,7 @@ The code lives here:
 /Users/croncallo/repo/MovieApp-Cloudflare/src/httpRouting/movieSearch.ts
 ```
 
-### Step 21-1: Where The Cache Time Is Configured
+### Step 24-1: Where The Cache Time Is Configured
 
 The cache timing is configured in Worker code, not in `wrangler.jsonc`.
 
@@ -5711,7 +7000,7 @@ The stale window is:
 
 That lets Cloudflare serve an older cached response briefly while refreshing it.
 
-### Step 21-2: Which Headers Tell Cloudflare To Cache
+### Step 24-2: Which Headers Tell Cloudflare To Cache
 
 The Worker creates cache headers in `movieSearchCacheHeaders(...)`:
 
@@ -5748,7 +7037,7 @@ X-MovieApp-Cache
 `X-MovieApp-Cache` is not a Cloudflare feature. It is a label we add so we can
 read responses more easily.
 
-### Step 21-3: How A Cache Entry Gets Entered
+### Step 24-3: How A Cache Entry Gets Entered
 
 This is the exact flow.
 
@@ -5849,7 +7138,7 @@ If there is no ctx:
   wait for the cache save.
 ```
 
-### Step 21-4: Why Exact URLs Matter
+### Step 24-4: Why Exact URLs Matter
 
 Cloudflare's cache key is:
 
@@ -5914,7 +7203,7 @@ Warming entry A does not warm entry B.
 
 Warming entry B does not warm entry A.
 
-### Step 21-5: HIT Versus MISS
+### Step 24-5: HIT Versus MISS
 
 When a request is a `MISS`, the flow is:
 
@@ -5938,7 +7227,7 @@ App asks same exact URL
 That is why the first request can take longer and the next matching request can
 be much faster.
 
-### Step 21-6: Query Parameter Order Can Matter
+### Step 24-6: Query Parameter Order Can Matter
 
 Because the cache key uses the exact URL string, these may become different
 cache entries even if they mean the same thing to a person:
@@ -5975,7 +7264,7 @@ That code lives here:
 /Users/croncallo/repo/MovieApp/src/api/tmdb/services/movieService.ts
 ```
 
-### Step 21-7: How To Test Cache Behavior
+### Step 24-7: How To Test Cache Behavior
 
 Use `curl` with response headers:
 
@@ -6011,7 +7300,7 @@ headers that prevent caching
 Cloudflare cache behavior by edge location
 ```
 
-### Step 21-8: Why Add Package Shortcuts
+### Step 24-8: Why Add Package Shortcuts
 
 Package shortcuts are just saved commands that request important URLs on purpose.
 
@@ -6033,14 +7322,14 @@ If the shortcut uses `providerIds=...` but the app uses
 `watchMonetizationTypes=flatrate`, then the shortcut warms the wrong cache entry
 for the Add All streamers case.
 
-## Step 22: MyD1 SQL Client
+## Step 25: MyD1 SQL Client
 
 MyD1 is a desktop SQL client that can connect to Cloudflare D1.
 
 Use it as a visual query tool for checking tables, running `SELECT` statements,
 reviewing query history, and saving useful queries as bookmarks.
 
-### Step 22-1: Install MyD1
+### Step 25-1: Install MyD1
 
 Download MyD1 from:
 
@@ -6071,7 +7360,7 @@ System Settings
 -> Open Anyway
 ```
 
-### Step 22-2: Connect MyD1 To Cloudflare D1
+### Step 25-2: Connect MyD1 To Cloudflare D1
 
 Choose the `Cloudflare D1` connection type.
 
@@ -6106,7 +7395,7 @@ FROM movie_list_items
 LIMIT 25;
 ```
 
-### Step 22-3: About The `Not Secure` Badge
+### Step 25-3: About The `Not Secure` Badge
 
 MyD1 may show a `Not secure` badge for the Cloudflare D1 connection.
 
@@ -6128,7 +7417,7 @@ For read-only investigation, prefer a restricted token first.
 
 Only use broader D1 edit permission when the tool requires it for the operation.
 
-### Step 22-4: Query History
+### Step 25-4: Query History
 
 Important MyD1 behavior:
 
@@ -6193,7 +7482,7 @@ Delete
 
 `Copy` copies the SQL text.
 
-### Step 22-5: Bookmarks
+### Step 25-5: Bookmarks
 
 The important MyD1 bookmark detail:
 
@@ -6223,7 +7512,7 @@ Example bookmark folder name:
 MyD1Bookmarks
 ```
 
-### Step 22-6: Do Not Manually Edit Bookmarks In The Plist
+### Step 25-6: Do Not Manually Edit Bookmarks In The Plist
 
 MyD1 stores preferences under:
 
@@ -6244,7 +7533,7 @@ bookmark keys when it starts.
 
 Use the app's History row `Bookmark` button instead.
 
-### Step 22-7: Keep Important SQL In Repo Files Too
+### Step 25-7: Keep Important SQL In Repo Files Too
 
 Even if MyD1 bookmarks work, keep important SQL scripts in repo files so they
 are searchable, reviewable, and not tied to one desktop app.

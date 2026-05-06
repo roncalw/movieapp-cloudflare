@@ -3,7 +3,22 @@ import {
 	createJobOwner,
 	releaseImportJobLock,
 } from "../jobs/importJobLocks";
-import { getActiveTmdbEnrichmentImportJobRun } from "../jobs/importJobRuns";
+import {
+	checkMovieListPotentialLoadCounts,
+	recordMovieListCurrentCountSnapshot,
+} from "./movieListLoadCounts";
+import {
+	promotePendingMovieGenres,
+	promotePendingMovieWatchProviders,
+} from "./movieRelationshipPromotions";
+import {
+	createImportJobRun,
+	createImportJobRunId,
+	finishImportJobRun,
+	getActiveTmdbEnrichmentImportJobRun,
+	MOVIE_LIST_BUILD_JOB_NAME,
+	updateImportJobRunProgress,
+} from "../jobs/importJobRuns";
 import type { Env } from "../shared/types";
 
 type MovieListBuildReadiness = {
@@ -19,16 +34,15 @@ type MovieListBuildChunk = {
 	lastTmdbId: number | null;
 };
 
-const MOVIE_LIST_BUILD_JOB_NAME = "movie-list-build";
 const MOVIE_LIST_BUILD_LOCK_MINUTES = 60;
 const MOVIE_LIST_BUILD_REFRESH_OLDER_THAN_DAYS = 7;
 const MOVIE_LIST_BUILD_INSERT_CHUNK_ROWS = 10000;
-const MOVIE_LIST_BUILD_CLEANUP_CHUNK_ROWS = 10000;
 const MOVIE_LIST_BUILD_PROGRESS_EVERY_ROWS = 100000;
 
 async function getMovieListBuildReadiness(
 	env: Env,
 	refreshOlderThanDays: number,
+	changedAfter: string | null,
 ): Promise<MovieListBuildReadiness> {
 	const row = await env.DB.prepare(
 		`SELECT
@@ -55,9 +69,14 @@ async function getMovieListBuildReadiness(
 		        AND tmdb.tmdb_enrichment_error IS NULL
 		        AND tmdb.poster_path IS NOT NULL
 		        AND tmdb.poster_path <> ''
+		        AND (
+		          ? IS NULL
+		          OR tmdb.imported_at > ?
+		          OR tmdb.tmdb_enriched_at > ?
+		        )
 		    ) AS movieListCandidateRows`,
 	)
-		.bind(refreshOlderThanDays)
+		.bind(refreshOlderThanDays, changedAfter, changedAfter, changedAfter)
 		.first<MovieListBuildReadiness>();
 
 	return {
@@ -86,17 +105,30 @@ function getMovieListBuildReadinessBlockers(
 		blockers.push("tmdb_enrichment_not_current");
 	}
 
-	if (readiness.movieListCandidateRows === 0) {
-		blockers.push("no_movie_list_candidates");
-	}
-
 	return blockers;
+}
+
+async function getLastSuccessfulMovieListBuildEndedAt(env: Env) {
+	const row = await env.DB.prepare(
+		`SELECT ended_at
+		 FROM import_job_runs
+		 WHERE job_name = ?
+		   AND status = 'complete'
+		   AND ended_at IS NOT NULL
+		 ORDER BY ended_at DESC
+		 LIMIT 1`,
+	)
+		.bind(MOVIE_LIST_BUILD_JOB_NAME)
+		.first<{ ended_at: string | null }>();
+
+	return row?.ended_at ?? null;
 }
 
 async function getNextMovieListBuildChunk(
 	env: Env,
 	lastTmdbId: number,
 	chunkRows: number,
+	changedAfter: string | null,
 ) {
 	const row = await env.DB.prepare(
 		`SELECT
@@ -110,11 +142,16 @@ async function getNextMovieListBuildChunk(
 		      AND tmdb.poster_path IS NOT NULL
 		      AND tmdb.poster_path <> ''
 		      AND tmdb.tmdb_id > ?
+		      AND (
+		        ? IS NULL
+		        OR tmdb.imported_at > ?
+		        OR tmdb.tmdb_enriched_at > ?
+		      )
 		    ORDER BY tmdb.tmdb_id
 		    LIMIT ?
 		 )`,
 	)
-		.bind(lastTmdbId, chunkRows)
+		.bind(lastTmdbId, changedAfter, changedAfter, changedAfter, chunkRows)
 		.first<MovieListBuildChunk>();
 
 	return {
@@ -127,6 +164,7 @@ async function upsertMovieListItemsChunk(
 	env: Env,
 	firstTmdbIdExclusive: number,
 	lastTmdbIdInclusive: number,
+	changedAfter: string | null,
 ) {
 	await env.DB.prepare(
 		`INSERT OR REPLACE INTO movie_list_items (
@@ -153,37 +191,26 @@ async function upsertMovieListItemsChunk(
 		FROM tmdb_movies_staging AS tmdb
 		LEFT JOIN imdb_ratings_staging AS imdb
 			ON imdb.imdb_id = tmdb.imdb_id
-		WHERE tmdb.tmdb_enriched_at IS NOT NULL
-			AND tmdb.tmdb_enrichment_error IS NULL
-			AND tmdb.poster_path IS NOT NULL
-			AND tmdb.poster_path <> ''
-			AND tmdb.tmdb_id > ?
-			AND tmdb.tmdb_id <= ?`,
+			WHERE tmdb.tmdb_enriched_at IS NOT NULL
+				AND tmdb.tmdb_enrichment_error IS NULL
+				AND tmdb.poster_path IS NOT NULL
+				AND tmdb.poster_path <> ''
+				AND tmdb.tmdb_id > ?
+				AND tmdb.tmdb_id <= ?
+				AND (
+				  ? IS NULL
+				  OR tmdb.imported_at > ?
+				  OR tmdb.tmdb_enriched_at > ?
+				)`,
 	)
-		.bind(firstTmdbIdExclusive, lastTmdbIdInclusive)
+		.bind(
+			firstTmdbIdExclusive,
+			lastTmdbIdInclusive,
+			changedAfter,
+			changedAfter,
+			changedAfter,
+		)
 		.run();
-}
-
-async function cleanupInvalidMovieListItemsChunk(env: Env, chunkRows: number) {
-	const result = await env.DB.prepare(
-		`DELETE FROM movie_list_items
-		 WHERE tmdb_id IN (
-		    SELECT movie.tmdb_id
-		    FROM movie_list_items AS movie
-		    LEFT JOIN tmdb_movies_staging AS tmdb
-		      ON tmdb.tmdb_id = movie.tmdb_id
-		     AND tmdb.tmdb_enriched_at IS NOT NULL
-		     AND tmdb.tmdb_enrichment_error IS NULL
-		     AND tmdb.poster_path IS NOT NULL
-		     AND tmdb.poster_path <> ''
-		    WHERE tmdb.tmdb_id IS NULL
-		    LIMIT ?
-		 )`,
-	)
-		.bind(chunkRows)
-		.run();
-
-	return result.meta.changes ?? 0;
 }
 
 export async function rebuildMovieListItems(
@@ -192,7 +219,14 @@ export async function rebuildMovieListItems(
 ) {
 	const startedAtMs = Date.now();
 	const startedAt = new Date(startedAtMs).toISOString();
+	const jobRunId = createImportJobRunId(MOVIE_LIST_BUILD_JOB_NAME, trigger);
 	const lockOwner = createJobOwner(trigger);
+	await createImportJobRun(env, {
+		jobRunId,
+		jobName: MOVIE_LIST_BUILD_JOB_NAME,
+		trigger,
+	});
+
 	const lockAcquired = await acquireImportJobLock(
 		env,
 		MOVIE_LIST_BUILD_JOB_NAME,
@@ -203,7 +237,8 @@ export async function rebuildMovieListItems(
 	if (!lockAcquired) {
 		const endedAtMs = Date.now();
 		const endedAt = new Date(endedAtMs).toISOString();
-		return {
+		const result = {
+			jobRunId,
 			trigger,
 			skipped: true,
 			skipReason: "job_already_running",
@@ -211,7 +246,17 @@ export async function rebuildMovieListItems(
 			endedAt,
 			durationMs: endedAtMs - startedAtMs,
 		};
+
+		await finishImportJobRun(env, jobRunId, {
+			status: "skipped",
+			result,
+			lastError: result.skipReason,
+		});
+
+		return result;
 	}
+
+	let trackedUpsertedRows = 0;
 
 	try {
 		console.log(
@@ -229,6 +274,7 @@ export async function rebuildMovieListItems(
 			const endedAtMs = Date.now();
 			const endedAt = new Date(endedAtMs).toISOString();
 			const result = {
+				jobRunId,
 				trigger,
 				skipped: true,
 				skipReason: "tmdb_enrichment_job_active",
@@ -241,6 +287,12 @@ export async function rebuildMovieListItems(
 				durationMs: endedAtMs - startedAtMs,
 			};
 
+			await finishImportJobRun(env, jobRunId, {
+				status: "skipped",
+				result,
+				lastError: result.skipReason,
+			});
+
 			console.log(
 				JSON.stringify({
 					event: "movie-list-build-skipped",
@@ -251,9 +303,12 @@ export async function rebuildMovieListItems(
 			return result;
 		}
 
+		const lastSuccessfulBuildEndedAt =
+			await getLastSuccessfulMovieListBuildEndedAt(env);
 		const readiness = await getMovieListBuildReadiness(
 			env,
 			MOVIE_LIST_BUILD_REFRESH_OLDER_THAN_DAYS,
+			lastSuccessfulBuildEndedAt,
 		);
 		const readinessBlockers = getMovieListBuildReadinessBlockers(readiness);
 
@@ -261,16 +316,24 @@ export async function rebuildMovieListItems(
 			const endedAtMs = Date.now();
 			const endedAt = new Date(endedAtMs).toISOString();
 			const result = {
+				jobRunId,
 				trigger,
 				skipped: true,
 				skipReason: "staging_not_ready",
 				readinessBlockers,
 				refreshOlderThanDays: MOVIE_LIST_BUILD_REFRESH_OLDER_THAN_DAYS,
+				lastSuccessfulBuildEndedAt,
 				readiness,
 				startedAt,
 				endedAt,
 				durationMs: endedAtMs - startedAtMs,
 			};
+
+			await finishImportJobRun(env, jobRunId, {
+				status: "skipped",
+				result,
+				lastError: readinessBlockers.join(","),
+			});
 
 			console.log(
 				JSON.stringify({
@@ -281,6 +344,48 @@ export async function rebuildMovieListItems(
 
 			return result;
 		}
+
+		const potentialLoadCheck = await checkMovieListPotentialLoadCounts(
+			env,
+			trigger,
+		);
+
+		if (potentialLoadCheck.shouldStopMovieListBuild) {
+			const endedAtMs = Date.now();
+			const endedAt = new Date(endedAtMs).toISOString();
+			const result = {
+				jobRunId,
+				trigger,
+				skipped: true,
+				skipReason: "movie_list_potential_load_threshold_exceeded",
+				potentialLoadCheck,
+				startedAt,
+				endedAt,
+				durationMs: endedAtMs - startedAtMs,
+			};
+
+			await finishImportJobRun(env, jobRunId, {
+				status: "skipped",
+				selected: potentialLoadCheck.plCounts.count,
+				processed: 0,
+				updated: 0,
+				result,
+				lastError: potentialLoadCheck.jobStoppedReason,
+			});
+
+			console.log(
+				JSON.stringify({
+					event: "movie-list-build-skipped",
+					...result,
+				}),
+			);
+
+			return result;
+		}
+
+		const genrePromotion = await promotePendingMovieGenres(env, trigger);
+		const watchProviderPromotion =
+			await promotePendingMovieWatchProviders(env, trigger);
 
 		let lastTmdbId = 0;
 		let upsertedRows = 0;
@@ -291,51 +396,54 @@ export async function rebuildMovieListItems(
 				env,
 				lastTmdbId,
 				MOVIE_LIST_BUILD_INSERT_CHUNK_ROWS,
+				lastSuccessfulBuildEndedAt,
 			);
 
 			if (chunk.chunkRows === 0 || chunk.lastTmdbId === null) {
 				break;
 			}
 
-			await upsertMovieListItemsChunk(env, lastTmdbId, chunk.lastTmdbId);
+			await upsertMovieListItemsChunk(
+				env,
+				lastTmdbId,
+				chunk.lastTmdbId,
+				lastSuccessfulBuildEndedAt,
+			);
 
 			lastTmdbId = chunk.lastTmdbId;
 			upsertedRows += chunk.chunkRows;
+			trackedUpsertedRows = upsertedRows;
 
 			if (
 				upsertedRows >= nextProgressLogAt ||
 				upsertedRows === readiness.movieListCandidateRows
 			) {
+				const progressResult = {
+					upsertedRows,
+					candidateRows: readiness.movieListCandidateRows,
+					lastTmdbId,
+					durationMs: Date.now() - startedAtMs,
+				};
+
 				console.log(
 					JSON.stringify({
 						event: "movie-list-build-progress",
 						trigger,
-						upsertedRows,
-						candidateRows: readiness.movieListCandidateRows,
-						lastTmdbId,
-						durationMs: Date.now() - startedAtMs,
+						...progressResult,
 					}),
 				);
+
+				await updateImportJobRunProgress(env, jobRunId, {
+					selected: readiness.movieListCandidateRows,
+					processed: upsertedRows,
+					updated: upsertedRows,
+					result: progressResult,
+				});
 
 				while (nextProgressLogAt <= upsertedRows) {
 					nextProgressLogAt += MOVIE_LIST_BUILD_PROGRESS_EVERY_ROWS;
 				}
 			}
-		}
-
-		let deletedRows = 0;
-
-		while (true) {
-			const chunkDeletedRows = await cleanupInvalidMovieListItemsChunk(
-				env,
-				MOVIE_LIST_BUILD_CLEANUP_CHUNK_ROWS,
-			);
-
-			if (chunkDeletedRows === 0) {
-				break;
-			}
-
-			deletedRows += chunkDeletedRows;
 		}
 
 		const countResult = await env.DB.prepare(
@@ -344,27 +452,65 @@ export async function rebuildMovieListItems(
 		const endedAtMs = Date.now();
 		const endedAt = new Date(endedAtMs).toISOString();
 		const result = {
+			jobRunId,
 			trigger,
 			movieListCount: countResult?.movie_list_count ?? 0,
 			refreshOlderThanDays: MOVIE_LIST_BUILD_REFRESH_OLDER_THAN_DAYS,
+			lastSuccessfulBuildEndedAt,
 			insertChunkRows: MOVIE_LIST_BUILD_INSERT_CHUNK_ROWS,
-			cleanupChunkRows: MOVIE_LIST_BUILD_CLEANUP_CHUNK_ROWS,
 			upsertedRows,
-			deletedRows,
+			deletedRows: 0,
+			genrePromotion,
+			watchProviderPromotion,
 			readiness,
 			startedAt,
 			endedAt,
 			durationMs: endedAtMs - startedAtMs,
 		};
 
+		await finishImportJobRun(env, jobRunId, {
+			status: "complete",
+			selected: readiness.movieListCandidateRows,
+			processed: upsertedRows,
+			updated: upsertedRows,
+			result,
+		});
+
+		const currentCountSnapshot =
+			await recordMovieListCurrentCountSnapshot(env, trigger);
+
 		console.log(
 			JSON.stringify({
 				event: "movie-list-build-end",
 				...result,
+				currentCountSnapshot,
 			}),
 		);
 
-		return result;
+		return {
+			...result,
+			currentCountSnapshot,
+		};
+	} catch (error) {
+		const lastError =
+			error instanceof Error ? error.message : "Movie list build failed.";
+
+		await finishImportJobRun(env, jobRunId, {
+			status: "failed",
+			selected: trackedUpsertedRows,
+			processed: trackedUpsertedRows,
+			updated: trackedUpsertedRows,
+			result: {
+				jobRunId,
+				trigger,
+				upsertedRows: trackedUpsertedRows,
+				startedAt,
+				durationMs: Date.now() - startedAtMs,
+			},
+			lastError,
+		});
+
+		throw error;
 	} finally {
 		await releaseImportJobLock(env, MOVIE_LIST_BUILD_JOB_NAME, lockOwner);
 	}

@@ -3,6 +3,13 @@ import {
 	TMDB_DISCOVER_MAX_PAGE,
 	type TmdbDiscoverResult,
 } from "../externalApis/tmdbClient";
+import {
+	createImportJobRun,
+	createImportJobRunId,
+	finishImportJobRun,
+	TMDB_PRIMARY_JOB_NAME,
+	type ImportJobTrigger,
+} from "../jobs/importJobRuns";
 import type { Env } from "../shared/types";
 
 type TmdbDateWindow = {
@@ -64,6 +71,7 @@ function splitDateWindow(window: TmdbDateWindow) {
 function buildTmdbPrimaryStatements(
 	discoverResult: TmdbDiscoverResult,
 	env: Env,
+	loadRunId: string,
 ) {
 	const tmdbId = discoverResult.id;
 	const genreIds = Array.isArray(discoverResult.genre_ids)
@@ -89,15 +97,23 @@ function buildTmdbPrimaryStatements(
 			discoverResult.release_date ?? null,
 			discoverResult.popularity ?? 0,
 		),
-		env.DB.prepare("DELETE FROM movie_genres WHERE tmdb_id = ?").bind(tmdbId),
+		env.DB.prepare("DELETE FROM movie_genres_staging WHERE tmdb_id = ?").bind(
+			tmdbId,
+		),
 	];
 
 	for (const genreId of genreIds) {
 		statements.push(
 			env.DB.prepare(
-				`INSERT INTO movie_genres (tmdb_id, genre_id)
-				 VALUES (?, ?)`,
-			).bind(tmdbId, genreId),
+				`INSERT INTO movie_genres_staging (
+					tmdb_id,
+					genre_id,
+					load_run_id,
+					staged_at,
+					promoted_at
+				)
+				VALUES (?, ?, ?, CURRENT_TIMESTAMP, NULL)`,
+			).bind(tmdbId, genreId, loadRunId),
 		);
 	}
 
@@ -109,7 +125,9 @@ export async function loadTmdbPrimaryRowsManual(
 	beginDate: string,
 	endDate: string,
 	limit: number,
+	trigger: ImportJobTrigger = "manual",
 ) {
+	const jobRunId = createImportJobRunId(TMDB_PRIMARY_JOB_NAME, trigger);
 	let pagesRead = 0;
 	let rowsSeen = 0;
 	let rowsInserted = 0;
@@ -123,116 +141,164 @@ export async function loadTmdbPrimaryRowsManual(
 	let stoppedWindow: TmdbDateWindow | null = null;
 	const pendingWindows: TmdbDateWindow[] = [{ beginDate, endDate }];
 
-	while (pendingWindows.length > 0 && rowsInserted < limit) {
-		const currentWindow = pendingWindows.shift();
+	await createImportJobRun(env, {
+		jobRunId,
+		jobName: TMDB_PRIMARY_JOB_NAME,
+		trigger,
+	});
 
-		if (!currentWindow) {
-			break;
-		}
+	try {
+		while (pendingWindows.length > 0 && rowsInserted < limit) {
+			const currentWindow = pendingWindows.shift();
 
-		const firstPage = await getTmdbDiscoverPage(
-			1,
-			currentWindow.beginDate,
-			env,
-			currentWindow.endDate,
-		);
+			if (!currentWindow) {
+				break;
+			}
 
-		pagesRead += 1;
-		totalPagesSeen = Math.max(totalPagesSeen ?? 0, firstPage.total_pages);
+			const firstPage = await getTmdbDiscoverPage(
+				1,
+				currentWindow.beginDate,
+				env,
+				currentWindow.endDate,
+			);
 
-		if (firstPage.total_pages > TMDB_DISCOVER_MAX_PAGE) {
-			const splitWindow = splitDateWindow(currentWindow);
+			pagesRead += 1;
+			totalPagesSeen = Math.max(totalPagesSeen ?? 0, firstPage.total_pages);
 
-			if (!splitWindow) {
-				stopReason = "single_day_page_cap_reached";
-				stoppedWindow = currentWindow;
+			if (firstPage.total_pages > TMDB_DISCOVER_MAX_PAGE) {
+				const splitWindow = splitDateWindow(currentWindow);
+
+				if (!splitWindow) {
+					stopReason = "single_day_page_cap_reached";
+					stoppedWindow = currentWindow;
+					console.log(
+						JSON.stringify({
+							event: "tmdb-window-single-day-cap",
+							beginDate: currentWindow.beginDate,
+							endDate: currentWindow.endDate,
+							totalPagesSeen: firstPage.total_pages,
+							tmdbDiscoverMaxPage: TMDB_DISCOVER_MAX_PAGE,
+						}),
+					);
+					break;
+				}
+
+				windowsSplit += 1;
 				console.log(
 					JSON.stringify({
-						event: "tmdb-window-single-day-cap",
+						event: "tmdb-window-split",
 						beginDate: currentWindow.beginDate,
 						endDate: currentWindow.endDate,
 						totalPagesSeen: firstPage.total_pages,
 						tmdbDiscoverMaxPage: TMDB_DISCOVER_MAX_PAGE,
+						leftWindow: splitWindow.left,
+						rightWindow: splitWindow.right,
 					}),
 				);
-				break;
+
+				pendingWindows.unshift(splitWindow.right);
+				pendingWindows.unshift(splitWindow.left);
+				continue;
 			}
 
-			windowsSplit += 1;
-			console.log(
-				JSON.stringify({
-					event: "tmdb-window-split",
-					beginDate: currentWindow.beginDate,
-					endDate: currentWindow.endDate,
-					totalPagesSeen: firstPage.total_pages,
-					tmdbDiscoverMaxPage: TMDB_DISCOVER_MAX_PAGE,
-					leftWindow: splitWindow.left,
-					rightWindow: splitWindow.right,
-				}),
-			);
+			windowsLoaded += 1;
 
-			pendingWindows.unshift(splitWindow.right);
-			pendingWindows.unshift(splitWindow.left);
-			continue;
-		}
+			for (let page = 1; page <= firstPage.total_pages; page += 1) {
+				const discoverPage =
+					page === 1
+						? firstPage
+						: await getTmdbDiscoverPage(
+								page,
+								currentWindow.beginDate,
+								env,
+								currentWindow.endDate,
+							);
 
-		windowsLoaded += 1;
-
-		for (let page = 1; page <= firstPage.total_pages; page += 1) {
-			const discoverPage =
-				page === 1
-					? firstPage
-					: await getTmdbDiscoverPage(
-							page,
-							currentWindow.beginDate,
-							env,
-							currentWindow.endDate,
-						);
-
-			if (page !== 1) {
-				pagesRead += 1;
-			}
-
-			const pageStatements: D1PreparedStatement[] = [];
-
-			for (const discoverResult of discoverPage.results) {
-				rowsSeen += 1;
-
-				if (discoverResult.adult) {
-					continue;
+				if (page !== 1) {
+					pagesRead += 1;
 				}
 
-				pageStatements.push(...buildTmdbPrimaryStatements(discoverResult, env));
-				rowsInserted += 1;
+				const pageStatements: D1PreparedStatement[] = [];
+
+				for (const discoverResult of discoverPage.results) {
+					rowsSeen += 1;
+
+					if (discoverResult.adult) {
+						continue;
+					}
+
+					pageStatements.push(
+						...buildTmdbPrimaryStatements(discoverResult, env, jobRunId),
+					);
+					rowsInserted += 1;
+
+					if (rowsInserted >= limit) {
+						break;
+					}
+				}
+
+				if (pageStatements.length > 0) {
+					await env.DB.batch(pageStatements);
+				}
 
 				if (rowsInserted >= limit) {
+					stopReason = "limit_reached";
 					break;
 				}
 			}
-
-			if (pageStatements.length > 0) {
-				await env.DB.batch(pageStatements);
-			}
-
-			if (rowsInserted >= limit) {
-				stopReason = "limit_reached";
-				break;
-			}
 		}
-	}
 
-	return {
-		beginDate,
-		endDate: endDate ?? null,
-		pagesRead,
-		rowsSeen,
-		rowsInserted,
-		totalPagesSeen,
-		tmdbDiscoverMaxPage: TMDB_DISCOVER_MAX_PAGE,
-		windowsLoaded,
-		windowsSplit,
-		pendingWindows: pendingWindows.length,
-		stoppedWindow,
-		stopReason,
-	};
+		const result = {
+			jobRunId,
+			beginDate,
+			endDate: endDate ?? null,
+			pagesRead,
+			rowsSeen,
+			rowsInserted,
+			totalPagesSeen,
+			tmdbDiscoverMaxPage: TMDB_DISCOVER_MAX_PAGE,
+			windowsLoaded,
+			windowsSplit,
+			pendingWindows: pendingWindows.length,
+			stoppedWindow,
+			stopReason,
+		};
+
+		await finishImportJobRun(env, jobRunId, {
+			status: "complete",
+			selected: rowsSeen,
+			processed: rowsSeen,
+			updated: rowsInserted,
+			result,
+		});
+
+		return result;
+	} catch (error) {
+		const lastError =
+			error instanceof Error ? error.message : "TMDB primary load failed.";
+
+		await finishImportJobRun(env, jobRunId, {
+			status: "failed",
+			selected: rowsSeen,
+			processed: rowsSeen,
+			updated: rowsInserted,
+			result: {
+				jobRunId,
+				beginDate,
+				endDate,
+				pagesRead,
+				rowsSeen,
+				rowsInserted,
+				totalPagesSeen,
+				windowsLoaded,
+				windowsSplit,
+				pendingWindows: pendingWindows.length,
+				stoppedWindow,
+				stopReason,
+			},
+			lastError,
+		});
+
+		throw error;
+	}
 }

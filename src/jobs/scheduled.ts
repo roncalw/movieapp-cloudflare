@@ -8,6 +8,12 @@ import {
 	getTmdbRefreshStartDate,
 	loadTmdbPrimaryRowsManual,
 } from "../imports/tmdbPrimary";
+import {
+	createImportJobRun,
+	createImportJobRunId,
+	finishImportJobRun,
+	TMDB_PRIMARY_JOB_NAME,
+} from "../jobs/importJobRuns";
 import type { Env } from "../shared/types";
 
 const TMDB_PRIMARY_CRON_LIMIT = 100000;
@@ -78,7 +84,7 @@ async function runScheduledImdbRatingsRefresh(env: Env) {
 		}),
 	);
 
-	const result = await enqueueImdbRatingRows(env);
+	const result = await enqueueImdbRatingRows(env, undefined, "cron");
 	const endedAtMs = Date.now();
 	const endedAt = new Date(endedAtMs).toISOString();
 
@@ -109,7 +115,9 @@ async function runScheduledTmdbPrimaryRefresh(env: Env) {
 	if (beginDate > endDate) {
 		const endedAtMs = Date.now();
 		const endedAt = new Date(endedAtMs).toISOString();
+		const jobRunId = createImportJobRunId(TMDB_PRIMARY_JOB_NAME, "cron");
 		const result = {
+			jobRunId,
 			skipped: true,
 			skipReason: "begin_date_after_end_date",
 			beginDate,
@@ -118,6 +126,18 @@ async function runScheduledTmdbPrimaryRefresh(env: Env) {
 			endedAt,
 			durationMs: endedAtMs - startedAtMs,
 		};
+
+		await createImportJobRun(env, {
+			jobRunId,
+			jobName: TMDB_PRIMARY_JOB_NAME,
+			trigger: "cron",
+			status: "running",
+		});
+		await finishImportJobRun(env, jobRunId, {
+			status: "skipped",
+			result,
+			lastError: result.skipReason,
+		});
 
 		console.log(
 			JSON.stringify({
@@ -144,6 +164,7 @@ async function runScheduledTmdbPrimaryRefresh(env: Env) {
 		beginDate,
 		endDate,
 		TMDB_PRIMARY_CRON_LIMIT,
+		"cron",
 	);
 	const endedAtMs = Date.now();
 	const endedAt = new Date(endedAtMs).toISOString();

@@ -17,6 +17,8 @@ export type ImdbRatingRow = {
 };
 
 export type ImdbRatingQueueMessage = {
+	kind?: "imdb-ratings";
+	jobRunId?: string;
 	rows: ImdbRatingRow[];
 };
 
