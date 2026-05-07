@@ -5186,22 +5186,75 @@ This section is the plain-English map of the production data jobs.
 
 The short version:
 
-```text
-IMDb ratings job
-  loads IMDb rating and vote-count staging data
+**IMDb ratings job**
 
-TMDB primary job
-  loads TMDB movie catalog rows and genre links
+* Details: [Step 17-1: IMDb Ratings Job](#step-17-1-imdb-ratings-job).
+* Description: Loads IMDb rating and vote-count staging data.
+* Manual Endpoint: `/admin/import/imdb-ratings/enqueue-manual` or `/admin/import/imdb-ratings/enqueue-manual?limit=33000`.
+* Cron Job: `0 22 * * 1` = <span class="green">Sunday 6:00 PM ET while on EDT; Sunday 22:00 UTC.</span>
+* Job Type: Queue enqueue means the Worker reads the IMDb file and puts small work messages on a queue. Queue consumer D1 batches means Cloudflare later processes those messages and writes groups of rows into D1.
+* Source: IMDb `title.ratings.tsv.gz` file.
+* Query to Monitor Progress: `/admin/import/job-runs?jobName=imdb-ratings&limit=10` / `SELECT * FROM import_job_runs WHERE job_name = 'imdb-ratings' ORDER BY started_at DESC LIMIT 10;`
+* Safety Check Contribution: `imdb_rating_cc_count`, `imdb_vote_cc_count` - the current-count snapshot uses these as current counts for final movie-list rows with IMDb rating and vote-count data.
 
-TMDB enrichment job
-  fills IMDb id, US certification, and US streaming-provider links
+**TMDB primary job**
 
-Movie list build job
-  promotes ready staging data into the fast app search table
+* Details: [Step 17-2: TMDB Primary Job](#step-17-2-tmdb-primary-job).
+* Description: Loads TMDB movie catalog rows and staged genre links.
+* Manual Endpoint: `/admin/import/tmdb/load-manual?beginDate=1874-01-01&endDate=YYYY-MM-DD&limit=1200000` or `/admin/import/tmdb/load-manual?beginDate=2000-01-01&endDate=2000-12-31&limit=1000`.
+* Cron Job: `0 4 * * 2` = <span class="green">Monday 12:00 AM ET while on EDT; Monday 04:00 UTC.</span>
+* Job Type: TMDB Discover API pages means the Worker calls TMDB one page at a time. Release-date windows mean the job splits the search by date ranges so each TMDB request stays manageable. D1 upserts mean existing rows are updated and new rows are inserted.
+* Source: TMDB Discover API.
+* Query to Monitor Progress: `/admin/import/job-runs?jobName=tmdb-primary&limit=10` / `SELECT * FROM import_job_runs WHERE job_name = 'tmdb-primary' ORDER BY started_at DESC LIMIT 10;`
+* Safety Check Contribution: `cc_count`, `release_date_cc_count`, `popularity_cc_count`, `genre_cc_count`, `genre_per_movie_cc_count` - the current-count snapshot uses these as current counts for final movie-list rows, release dates, popularity values, genre links, and movies with at least one genre.
 
-Movie list current-count snapshot step
-  records the current movie_list_items counts after a successful build
-```
+**TMDB enrichment job**
+
+* Details: [Step 17-3: TMDB Enrichment Job](#step-17-3-tmdb-enrichment-job).
+* Description: Fills IMDb id, US certification, enrichment status, and staged US streaming-provider links.
+* Manual Endpoint: `/admin/import/tmdb/enrich-manual?limit=300000&refreshOlderThanDays=7`; progress endpoint is `/admin/import/tmdb/enrich-progress`.
+* Cron Job: `0 10 * * 2` = <span class="green">Monday 6:00 AM ET while on EDT; Monday 10:00 UTC.</span>
+* Job Type: Queue enqueue means the Worker creates one small work item per movie id. Per-movie TMDB detail API calls mean each queued movie is checked against TMDB details to get fields that Discover does not return. Queue consumers mean Cloudflare processes that work safely in small pieces.
+* Source: TMDB movie details API for staged TMDB movie ids.
+* Query to Monitor Progress: `/admin/import/job-runs?jobName=tmdb-enrich&limit=10` / `SELECT * FROM import_job_runs WHERE job_name = 'tmdb-enrich' ORDER BY started_at DESC LIMIT 10;`
+* Safety Check Contribution: `certification_cc_count`, `watch_provider_cc_count`, `watch_provider_per_movie_cc_count` - the current-count snapshot uses these as current counts for final movie-list rows with US certification, US provider links, and movies with at least one US provider. This job's IMDb ids also allow the movie-list insert step to match IMDb rows.
+
+**Movie list build job**
+
+* Details: [Step 17-4: Movie List Build Job](#step-17-4-movie-list-build-job).
+* Description: Parent scheduled job that controls the three movie-list steps below.
+* Cron Job: `0 1 * * 3` = <span class="green">Monday 9:00 PM ET while on EDT; Tuesday 01:00 UTC.</span>
+* Job Type: Parent scheduled job means one cron trigger runs the safety check, then the insert/upsert, then the snapshot. The parent is orchestration only; the concrete endpoints, sources, and progress checks are listed on the steps.
+
+  **Step 1 - Movie list potential-load safety check**
+
+  * Details: [Step 17-5: Movie List Potential-Load Safety Check](#step-17-5-movie-list-potential-load-safety-check).
+  * Description: Counts what would be loaded before the movie-list insert/upsert step and compares it to the latest current-count baseline.
+  * Manual Endpoint: `/admin/import/movie-list/potential-load-check`.
+  * Job Type: D1 SQL count query means the Worker counts the candidate data before loading it. Threshold guard means the Worker stops the movie-list insert/upsert if the candidate counts dropped too far compared to the last healthy live snapshot.
+  * Source: The same movie-list source shape used by the insert/upsert step, plus relationship staging tables.
+  * Query to Monitor Progress: `/admin/import/job-runs?jobName=movie-list-potential-load-check&limit=10` / `SELECT * FROM import_job_runs WHERE job_name = 'movie-list-potential-load-check' ORDER BY started_at DESC LIMIT 10;`
+  * Safety Check Contribution: This is the before-load guard. It does not write CC columns because the live table has not been loaded yet.
+
+  **Step 2 - Movie list insert/upsert**
+
+  * Details: [Step 17-4: Movie List Build Job](#step-17-4-movie-list-build-job).
+  * Description: Promotes approved relationship staging rows and upserts ready staging data into the fast app search table.
+  * Manual Endpoint: `/admin/import/movie-list/rebuild-manual`.
+  * Job Type: Relationship promotion means staged genres and providers become live after the safety check passes. Chunked movie-list upserts mean the final `movie_list_items` table is updated in smaller groups instead of one oversized database statement.
+  * Source: `tmdb_movies_staging`, `imdb_ratings_staging`, `movie_genres_staging`, and `movie_watch_providers_staging`.
+  * Query to Monitor Progress: `/admin/import/job-runs?jobName=movie-list-build&limit=10` / `SELECT * FROM import_job_runs WHERE job_name = 'movie-list-build' ORDER BY started_at DESC LIMIT 10;`
+  * Safety Check Contribution: `movie_list_items`, `movie_genres`, `movie_watch_providers` - this step writes the live tables that the current-count snapshot counts.
+
+  **Step 3 - Movie list current-count snapshot**
+
+  * Details: [Step 17-6: Movie List Current-Count Snapshot](#step-17-6-movie-list-current-count-snapshot).
+  * Description: Records current live counts after a successful movie-list insert/upsert step.
+  * Manual Endpoint: `/admin/import/movie-list/current-count-snapshot`.
+  * Job Type: D1 SQL count snapshot means the Worker counts the finished live tables and stores those numbers as the next baseline.
+  * Source: `movie_list_items`, `movie_genres`, and `movie_watch_providers`.
+  * Query to Monitor Progress: `/admin/import/job-runs?jobName=movie-list-current-count-snapshot&limit=10` / `SELECT * FROM import_job_runs WHERE job_name = 'movie-list-current-count-snapshot' ORDER BY started_at DESC LIMIT 10;`
+  * Safety Check Contribution: `cc_count`, `imdb_rating_cc_count`, `imdb_vote_cc_count`, `release_date_cc_count`, `certification_cc_count`, `popularity_cc_count`, `genre_cc_count`, `genre_per_movie_cc_count`, `watch_provider_cc_count`, `watch_provider_per_movie_cc_count` - this step writes the current-count baseline fields used by the next potential-load safety check.
 
 The jobs are separated because each data source has a different shape, size, and failure mode.
 

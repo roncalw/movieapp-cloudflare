@@ -76,7 +76,14 @@ export async function handleFetch(
 	}
 
 	if (url.pathname === "/admin/import/imdb-ratings/enqueue-manual") {
-		const limit = Number(url.searchParams.get("limit") ?? 330);
+		const rawLimit = url.searchParams.get("limit");
+		const limit = rawLimit === null ? undefined : Number(rawLimit);
+		if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
+			return Response.json(
+				{ error: "limit must be a positive integer." },
+				{ status: 400 },
+			);
+		}
 		const result = await enqueueImdbRatingRows(env, limit);
 		return Response.json(result);
 	}
