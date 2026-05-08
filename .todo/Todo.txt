@@ -1,0 +1,6 @@
+This has a mistake, how can the TMDB primary job be popupating the promoted_at field in the movie_genres_staging Table
+    DB Table and Fields: tmdb_movies_staging loads tmdb_id, title, poster_path, release_date, popularity, imported_at; movie_genres_staging loads tmdb_id, genre_id, load_run_id, staged_at, promoted_at.
+
+Update the guide for the new changes to the tmdb enrichment job
+
+Update the guide for the jq commans that have json values for some of the json keys

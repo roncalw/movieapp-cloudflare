@@ -26,17 +26,6 @@ type MovieListLoadCounts = {
 
 type MovieListLoadCountRow = {
 	load_date: string;
-	cc_count: number;
-	imdb_rating_cc_count: number;
-	imdb_vote_cc_count: number;
-	release_date_cc_count: number;
-	certification_cc_count: number;
-	popularity_cc_count: number;
-	genre_cc_count: number;
-	genre_per_movie_cc_count: number;
-	watch_provider_cc_count: number;
-	watch_provider_per_movie_cc_count: number;
-	cc_counted_at: string | null;
 	threshold: number;
 	watch_provider_threshold: number;
 };
@@ -51,21 +40,6 @@ type CountDrop = {
 
 function todayLoadDate() {
 	return new Date(Date.now()).toISOString().slice(0, 10);
-}
-
-function toCurrentCounts(row: MovieListLoadCountRow): MovieListLoadCounts {
-		return {
-			count: row.cc_count,
-			imdbRatingCount: row.imdb_rating_cc_count,
-			imdbVoteCount: row.imdb_vote_cc_count,
-			releaseDateCount: row.release_date_cc_count,
-			certificationCount: row.certification_cc_count,
-			popularityCount: row.popularity_cc_count,
-			genreCount: row.genre_cc_count,
-			genrePerMovieCount: row.genre_per_movie_cc_count,
-			watchProviderCount: row.watch_provider_cc_count,
-			watchProviderPerMovieCount: row.watch_provider_per_movie_cc_count,
-		};
 }
 
 function getCountDrops(
@@ -140,25 +114,13 @@ function formatJobStoppedReason(drops: CountDrop[]) {
 		.join(" | ");
 }
 
-async function getLatestCurrentCountRow(env: Env) {
+async function getLatestLoadThresholdRow(env: Env) {
 	return env.DB.prepare(
 		`SELECT load_date,
-		        cc_count,
-		        imdb_rating_cc_count,
-			        imdb_vote_cc_count,
-			        release_date_cc_count,
-			        certification_cc_count,
-			        popularity_cc_count,
-			        genre_cc_count,
-			        genre_per_movie_cc_count,
-			        watch_provider_cc_count,
-			        watch_provider_per_movie_cc_count,
-			        cc_counted_at,
-			        threshold,
-			        watch_provider_threshold
+		        threshold,
+		        watch_provider_threshold
 			 FROM movie_list_load_counts
-			 WHERE cc_counted_at IS NOT NULL
-			 ORDER BY cc_counted_at DESC
+			 ORDER BY updated_at DESC
 			 LIMIT 1`,
 	).first<MovieListLoadCountRow>();
 }
@@ -386,46 +348,66 @@ export async function checkMovieListPotentialLoadCounts(
 	});
 
 	try {
-			const baselineRow = await getLatestCurrentCountRow(env);
-			const threshold =
-				baselineRow?.threshold ?? MOVIE_LIST_LOAD_DEFAULT_THRESHOLD;
-			const watchProviderThreshold =
-				baselineRow?.watch_provider_threshold ??
-				MOVIE_LIST_LOAD_DEFAULT_WATCH_PROVIDER_THRESHOLD;
-			const plCounts = await getMovieListPotentialLoadCounts(env);
-			const ccCounts = baselineRow ? toCurrentCounts(baselineRow) : null;
-			const drops = ccCounts
-				? getCountDrops(
-						ccCounts,
-						plCounts,
-						threshold,
-						watchProviderThreshold,
-					)
-				: [];
-			const jobStoppedReason =
-				drops.length > 0 ? formatJobStoppedReason(drops) : null;
+		const thresholdRow = await getLatestLoadThresholdRow(env);
+		const threshold =
+			thresholdRow?.threshold ?? MOVIE_LIST_LOAD_DEFAULT_THRESHOLD;
+		const watchProviderThreshold =
+			thresholdRow?.watch_provider_threshold ??
+			MOVIE_LIST_LOAD_DEFAULT_WATCH_PROVIDER_THRESHOLD;
+		const ccCounts = await getMovieListCurrentCounts(env);
+		const plCounts = await getMovieListPotentialLoadCounts(env);
+		const drops = getCountDrops(
+			ccCounts,
+			plCounts,
+			threshold,
+			watchProviderThreshold,
+		);
+		const jobStoppedReason =
+			drops.length > 0 ? formatJobStoppedReason(drops) : null;
 
 		await env.DB.prepare(
 			`INSERT INTO movie_list_load_counts (
 			    load_date,
+			    cc_count,
+			    imdb_rating_cc_count,
+			    imdb_vote_cc_count,
+			    release_date_cc_count,
+			    certification_cc_count,
+			    popularity_cc_count,
+			    genre_cc_count,
+			    genre_per_movie_cc_count,
+			    watch_provider_cc_count,
+			    watch_provider_per_movie_cc_count,
+			    cc_counted_at,
 			    pl_count,
-				    imdb_rating_pl_count,
-				    imdb_vote_pl_count,
-				    release_date_pl_count,
-				    certification_pl_count,
-				    popularity_pl_count,
-				    genre_pl_count,
-				    genre_per_movie_pl_count,
-				    watch_provider_pl_count,
-				    watch_provider_per_movie_pl_count,
-				    pl_counted_at,
-				    threshold,
-				    watch_provider_threshold,
-				    job_stopped_reason,
-				    updated_at
+			    imdb_rating_pl_count,
+			    imdb_vote_pl_count,
+			    release_date_pl_count,
+			    certification_pl_count,
+			    popularity_pl_count,
+			    genre_pl_count,
+			    genre_per_movie_pl_count,
+			    watch_provider_pl_count,
+			    watch_provider_per_movie_pl_count,
+			    pl_counted_at,
+			    threshold,
+			    watch_provider_threshold,
+			    job_stopped_reason,
+			    updated_at
 				 )
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, CURRENT_TIMESTAMP)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, CURRENT_TIMESTAMP)
 				 ON CONFLICT(load_date) DO UPDATE SET
+				    cc_count = excluded.cc_count,
+				    imdb_rating_cc_count = excluded.imdb_rating_cc_count,
+				    imdb_vote_cc_count = excluded.imdb_vote_cc_count,
+				    release_date_cc_count = excluded.release_date_cc_count,
+				    certification_cc_count = excluded.certification_cc_count,
+				    popularity_cc_count = excluded.popularity_cc_count,
+				    genre_cc_count = excluded.genre_cc_count,
+				    genre_per_movie_cc_count = excluded.genre_per_movie_cc_count,
+				    watch_provider_cc_count = excluded.watch_provider_cc_count,
+				    watch_provider_per_movie_cc_count = excluded.watch_provider_per_movie_cc_count,
+				    cc_counted_at = CURRENT_TIMESTAMP,
 				    pl_count = excluded.pl_count,
 				    imdb_rating_pl_count = excluded.imdb_rating_pl_count,
 				    imdb_vote_pl_count = excluded.imdb_vote_pl_count,
@@ -444,6 +426,16 @@ export async function checkMovieListPotentialLoadCounts(
 			)
 				.bind(
 					loadDate,
+					ccCounts.count,
+					ccCounts.imdbRatingCount,
+					ccCounts.imdbVoteCount,
+					ccCounts.releaseDateCount,
+					ccCounts.certificationCount,
+					ccCounts.popularityCount,
+					ccCounts.genreCount,
+					ccCounts.genrePerMovieCount,
+					ccCounts.watchProviderCount,
+					ccCounts.watchProviderPerMovieCount,
 					plCounts.count,
 					plCounts.imdbRatingCount,
 					plCounts.imdbVoteCount,
@@ -460,14 +452,14 @@ export async function checkMovieListPotentialLoadCounts(
 				)
 				.run();
 
-			const result = {
-				jobRunId,
-				loadDate,
-				baselineLoadDate: baselineRow?.load_date ?? null,
-				threshold,
-				watchProviderThreshold,
-				ccCounts,
-				plCounts,
+		const result = {
+			jobRunId,
+			loadDate,
+			thresholdSourceLoadDate: thresholdRow?.load_date ?? null,
+			threshold,
+			watchProviderThreshold,
+			ccCounts,
+			plCounts,
 			drops,
 			jobStoppedReason,
 			shouldStopMovieListBuild: drops.length > 0,

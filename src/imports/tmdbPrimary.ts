@@ -18,6 +18,16 @@ type TmdbDateWindow = {
 };
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+export const TMDB_PRIMARY_STANDARD_LIMIT = 2000000;
+export const TMDB_PRIMARY_MAX_REFRESH_AGE_DAYS = 28;
+
+function todayIsoDate(nowMs = Date.now()) {
+	return new Date(nowMs).toISOString().slice(0, 10);
+}
+
+function isoDateDaysAgo(daysAgo: number, nowMs = Date.now()) {
+	return timeToIsoDate(nowMs - daysAgo * ONE_DAY_MS);
+}
 
 export async function getTmdbRefreshStartDate(
 	env: Env,
@@ -42,6 +52,136 @@ function timeToIsoDate(value: number) {
 
 export function isIsoDate(value: string) {
 	return /^\d{4}-\d{2}-\d{2}$/.test(value) && timeToIsoDate(isoDateToTime(value)) === value;
+}
+
+async function finishSkippedTmdbPrimaryRun(
+	env: Env,
+	trigger: ImportJobTrigger,
+	result: {
+		skipReason: string;
+		beginDate: string;
+		endDate: string;
+		limit: number;
+		oldestAllowedBeginDate?: string;
+		startedAt: string;
+		endedAt: string;
+		durationMs: number;
+	},
+) {
+	const jobRunId = createImportJobRunId(TMDB_PRIMARY_JOB_NAME, trigger);
+	const skippedResult = {
+		jobRunId,
+		skipped: true,
+		...result,
+	};
+
+	await createImportJobRun(env, {
+		jobRunId,
+		jobName: TMDB_PRIMARY_JOB_NAME,
+		trigger,
+		status: "running",
+	});
+	await finishImportJobRun(env, jobRunId, {
+		status: "skipped",
+		result: skippedResult,
+		lastError: result.skipReason,
+	});
+
+	return skippedResult;
+}
+
+export async function loadNewTmdbPrimaryRows(
+	env: Env,
+	trigger: ImportJobTrigger = "manual",
+	options: {
+		nowMs?: number;
+		enforceMaxRefreshAge?: boolean;
+	} = {},
+) {
+	const startedAtMs = Date.now();
+	const startedAt = new Date(startedAtMs).toISOString();
+	const beginDate = await getTmdbRefreshStartDate(env);
+	const nowMs = options.nowMs ?? startedAtMs;
+	const endDate = todayIsoDate(nowMs);
+	const limit = TMDB_PRIMARY_STANDARD_LIMIT;
+
+	if (beginDate > endDate) {
+		const endedAtMs = Date.now();
+		const endedAt = new Date(endedAtMs).toISOString();
+
+		return finishSkippedTmdbPrimaryRun(env, trigger, {
+			skipReason: "begin_date_after_end_date",
+			beginDate,
+			endDate,
+			limit,
+			startedAt,
+			endedAt,
+			durationMs: endedAtMs - startedAtMs,
+		});
+	}
+
+	const oldestAllowedBeginDate = isoDateDaysAgo(
+		TMDB_PRIMARY_MAX_REFRESH_AGE_DAYS,
+		nowMs,
+	);
+
+	if (
+		options.enforceMaxRefreshAge !== false &&
+		beginDate < oldestAllowedBeginDate
+	) {
+		const endedAtMs = Date.now();
+		const endedAt = new Date(endedAtMs).toISOString();
+
+		return finishSkippedTmdbPrimaryRun(env, trigger, {
+			skipReason: "begin_date_older_than_28_days",
+			beginDate,
+			endDate,
+			limit,
+			oldestAllowedBeginDate,
+			startedAt,
+			endedAt,
+			durationMs: endedAtMs - startedAtMs,
+		});
+	}
+
+	console.log(
+		JSON.stringify({
+			event: "tmdb-primary-refresh-start",
+			trigger,
+			startedAt,
+			beginDate,
+			endDate,
+			limit,
+			oldestAllowedBeginDate,
+		}),
+	);
+
+	const result = await loadTmdbPrimaryRowsManual(
+		env,
+		beginDate,
+		endDate,
+		limit,
+		trigger,
+	);
+	const endedAtMs = Date.now();
+	const endedAt = new Date(endedAtMs).toISOString();
+	const responseBody = {
+		...result,
+		startedAt,
+		endedAt,
+		durationMs: endedAtMs - startedAtMs,
+		oldestAllowedBeginDate,
+	};
+
+	console.log(
+		JSON.stringify({
+			event: "tmdb-primary-refresh-end",
+			trigger,
+			...responseBody,
+		}),
+	);
+
+	return responseBody;
 }
 
 function splitDateWindow(window: TmdbDateWindow) {

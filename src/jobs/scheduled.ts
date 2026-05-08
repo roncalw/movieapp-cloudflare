@@ -4,19 +4,9 @@ import {
 	enqueueTmdbEnrichmentJob,
 	TMDB_ENRICH_TMDB_CONCURRENCY,
 } from "../imports/tmdbEnrichment";
-import {
-	getTmdbRefreshStartDate,
-	loadTmdbPrimaryRowsManual,
-} from "../imports/tmdbPrimary";
-import {
-	createImportJobRun,
-	createImportJobRunId,
-	finishImportJobRun,
-	TMDB_PRIMARY_JOB_NAME,
-} from "../jobs/importJobRuns";
+import { loadNewTmdbPrimaryRows } from "../imports/tmdbPrimary";
 import type { Env } from "../shared/types";
 
-const TMDB_PRIMARY_CRON_LIMIT = 100000;
 const TMDB_ENRICHMENT_CRON_LIMIT = 300000;
 const SCHEDULED_IMDB_CRON = "0 22 * * 1";
 const SCHEDULED_TMDB_PRIMARY_CRON = "0 4 * * 2";
@@ -69,10 +59,6 @@ function skipPausedScheduledJob(
 	return true;
 }
 
-function todayIsoDate() {
-	return new Date(Date.now()).toISOString().slice(0, 10);
-}
-
 async function runScheduledImdbRatingsRefresh(env: Env) {
 	const startedAtMs = Date.now();
 	const startedAt = new Date(startedAtMs).toISOString();
@@ -107,84 +93,7 @@ async function runScheduledImdbRatingsRefresh(env: Env) {
 }
 
 async function runScheduledTmdbPrimaryRefresh(env: Env) {
-	const startedAtMs = Date.now();
-	const startedAt = new Date(startedAtMs).toISOString();
-	const beginDate = await getTmdbRefreshStartDate(env);
-	const endDate = todayIsoDate();
-
-	if (beginDate > endDate) {
-		const endedAtMs = Date.now();
-		const endedAt = new Date(endedAtMs).toISOString();
-		const jobRunId = createImportJobRunId(TMDB_PRIMARY_JOB_NAME, "cron");
-		const result = {
-			jobRunId,
-			skipped: true,
-			skipReason: "begin_date_after_end_date",
-			beginDate,
-			endDate,
-			startedAt,
-			endedAt,
-			durationMs: endedAtMs - startedAtMs,
-		};
-
-		await createImportJobRun(env, {
-			jobRunId,
-			jobName: TMDB_PRIMARY_JOB_NAME,
-			trigger: "cron",
-			status: "running",
-		});
-		await finishImportJobRun(env, jobRunId, {
-			status: "skipped",
-			result,
-			lastError: result.skipReason,
-		});
-
-		console.log(
-			JSON.stringify({
-				event: "tmdb-primary-cron-skipped",
-				...result,
-			}),
-		);
-
-		return result;
-	}
-
-	console.log(
-		JSON.stringify({
-			event: "tmdb-primary-cron-start",
-			startedAt,
-			beginDate,
-			endDate,
-			limit: TMDB_PRIMARY_CRON_LIMIT,
-		}),
-	);
-
-	const result = await loadTmdbPrimaryRowsManual(
-		env,
-		beginDate,
-		endDate,
-		TMDB_PRIMARY_CRON_LIMIT,
-		"cron",
-	);
-	const endedAtMs = Date.now();
-	const endedAt = new Date(endedAtMs).toISOString();
-
-	console.log(
-		JSON.stringify({
-			event: "tmdb-primary-cron-end",
-			...result,
-			startedAt,
-			endedAt,
-			durationMs: endedAtMs - startedAtMs,
-		}),
-	);
-
-	return {
-		...result,
-		startedAt,
-		endedAt,
-		durationMs: endedAtMs - startedAtMs,
-	};
+	return loadNewTmdbPrimaryRows(env, "cron");
 }
 
 export function handleScheduled(

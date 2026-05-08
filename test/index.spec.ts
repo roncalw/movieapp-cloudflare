@@ -489,6 +489,44 @@ describe("MovieApp Worker", () => {
 		expect(mock.getPreparedSql()).not.toContain("provider.provider_id IN");
 	});
 
+	it("rejects query strings on the normal TMDB primary manual endpoint", async () => {
+		const mock = createMockEnv([]);
+		const request = new IncomingRequest(
+			"http://example.com/admin/import/tmdb/new-primary-manual?limit=100",
+		);
+		const response = await worker.fetch(request, mock.env);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error:
+				"new-primary-manual does not accept beginDate, endDate, or limit. Use limited-primary-manual for explicit ranges.",
+		});
+	});
+
+	it("requires an explicit limit on the limited TMDB primary manual endpoint", async () => {
+		const mock = createMockEnv([]);
+		const request = new IncomingRequest(
+			"http://example.com/admin/import/tmdb/limited-primary-manual?beginDate=2000-01-01&endDate=2000-12-31",
+		);
+		const response = await worker.fetch(request, mock.env);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: "limit is required and must be a positive integer.",
+		});
+	});
+
+	it("does not keep the old TMDB primary load-manual route", async () => {
+		const mock = createMockEnv([]);
+		const request = new IncomingRequest(
+			"http://example.com/admin/import/tmdb/load-manual?limit=100&beginDate=2000-01-01&endDate=2000-12-31",
+		);
+		const response = await worker.fetch(request, mock.env);
+
+		expect(response.status).toBe(404);
+		expect(await response.json()).toEqual({ error: "Not found." });
+	});
+
 	/*
 		This test checks the fallback route.
 

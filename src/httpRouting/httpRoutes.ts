@@ -20,9 +20,10 @@ import {
 	TMDB_ENRICH_TMDB_CONCURRENCY,
 } from "../imports/tmdbEnrichment";
 import {
-	getTmdbRefreshStartDate,
 	isIsoDate,
+	loadNewTmdbPrimaryRows,
 	loadTmdbPrimaryRowsManual,
+	TMDB_PRIMARY_STANDARD_LIMIT,
 } from "../imports/tmdbPrimary";
 import type { Env } from "../shared/types";
 
@@ -88,14 +89,44 @@ export async function handleFetch(
 		return Response.json(result);
 	}
 
-	if (url.pathname === "/admin/import/tmdb/load-manual") {
+	if (url.pathname === "/admin/import/tmdb/new-primary-manual") {
+		if (url.search !== "") {
+			return Response.json(
+				{
+					error:
+						"new-primary-manual does not accept beginDate, endDate, or limit. Use limited-primary-manual for explicit ranges.",
+				},
+				{ status: 400 },
+			);
+		}
+
+		const result = await loadNewTmdbPrimaryRows(env, "manual");
+		const status =
+			"skipped" in result &&
+			result.skipped &&
+			result.skipReason === "begin_date_older_than_28_days"
+				? 409
+				: 200;
+
+		return Response.json(result, {
+			status,
+		});
+	}
+
+	if (url.pathname === "/admin/import/tmdb/limited-primary-manual") {
 		const startedAtMs = Date.now();
 		const startedAt = new Date(startedAtMs).toISOString();
-		const limit = Number(url.searchParams.get("limit") ?? 100);
-		const beginDate =
-			url.searchParams.get("beginDate") ??
-			(await getTmdbRefreshStartDate(env));
+		const rawLimit = url.searchParams.get("limit");
+		const limit = Number(rawLimit);
+		const beginDate = url.searchParams.get("beginDate");
 		const endDate = url.searchParams.get("endDate");
+
+		if (!rawLimit) {
+			return Response.json(
+				{ error: "limit is required and must be a positive integer." },
+				{ status: 400 },
+			);
+		}
 
 		if (!Number.isInteger(limit) || limit < 1) {
 			return Response.json(
@@ -104,9 +135,22 @@ export async function handleFetch(
 			);
 		}
 
-		if (!isIsoDate(beginDate)) {
+		if (limit > TMDB_PRIMARY_STANDARD_LIMIT) {
 			return Response.json(
-				{ error: "beginDate must use YYYY-MM-DD format.", beginDate },
+				{
+					error: `limit must be less than or equal to ${TMDB_PRIMARY_STANDARD_LIMIT}.`,
+					limit,
+				},
+				{ status: 400 },
+			);
+		}
+
+		if (!beginDate || !isIsoDate(beginDate)) {
+			return Response.json(
+				{
+					error: "beginDate is required and must use YYYY-MM-DD format.",
+					beginDate,
+				},
 				{ status: 400 },
 			);
 		}
@@ -134,7 +178,7 @@ export async function handleFetch(
 
 		console.log(
 			JSON.stringify({
-				event: "tmdb-load-manual-start",
+				event: "tmdb-limited-primary-manual-start",
 				startedAt,
 				limit,
 				beginDate,
@@ -161,7 +205,7 @@ export async function handleFetch(
 
 		console.log(
 			JSON.stringify({
-				event: "tmdb-load-manual-end",
+				event: "tmdb-limited-primary-manual-end",
 				startedAt,
 				endedAt,
 				durationMs,
