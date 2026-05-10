@@ -33,6 +33,15 @@ export type TmdbMovieDetails = {
 	};
 };
 
+export type TmdbWatchProviderResponse = {
+	id: number;
+	results?: {
+		US?: {
+			flatrate?: TmdbWatchProvider[];
+		};
+	};
+};
+
 type TmdbReleaseDateCountry = {
 	iso_3166_1?: string;
 	release_dates?: TmdbReleaseDateItem[];
@@ -47,7 +56,8 @@ type TmdbWatchProvider = {
 };
 
 const TMDB_MAX_REQUESTS_PER_SECOND = 35;
-const TMDB_MAX_RETRIES = 3;
+const TMDB_MAX_RETRIES = 5;
+const TMDB_RETRY_DELAY_MS = 3000;
 export const TMDB_DISCOVER_MAX_PAGE = 500;
 const tmdbRequestTimestamps: number[] = [];
 
@@ -94,7 +104,12 @@ async function fetchTmdbJson<T>(url: URL, env: Env): Promise<T> {
 			},
 		});
 
-		if (response.status !== 429 && response.status < 500) {
+		const shouldRetry =
+			response.status === 404 ||
+			response.status === 429 ||
+			response.status >= 500;
+
+		if (!shouldRetry) {
 			if (!response.ok) {
 				throw new Error(
 					`TMDB request failed: ${response.status} ${response.statusText}`,
@@ -113,7 +128,7 @@ async function fetchTmdbJson<T>(url: URL, env: Env): Promise<T> {
 		const retryAfterSeconds = Number(response.headers.get("Retry-After"));
 		const retryAfterMs = Number.isFinite(retryAfterSeconds)
 			? retryAfterSeconds * 1000
-			: 1000 * (attempt + 1);
+			: TMDB_RETRY_DELAY_MS;
 
 		await sleep(retryAfterMs);
 	}
@@ -142,6 +157,28 @@ export async function getTmdbDiscoverPage(
 	return fetchTmdbJson<TmdbDiscoverPage>(url, env);
 }
 
+export async function getTmdbUsFlatrateDiscoverPage(
+	page: number,
+	beginDate: string,
+	env: Env,
+	endDate?: string,
+) {
+	const url = new URL("https://api.themoviedb.org/3/discover/movie");
+	url.searchParams.set("page", String(page));
+	url.searchParams.set("sort_by", "popularity.desc");
+	url.searchParams.set("primary_release_date.gte", beginDate);
+	url.searchParams.set("watch_region", "US");
+	url.searchParams.set("with_watch_monetization_types", "flatrate");
+	url.searchParams.set("include_adult", "false");
+	url.searchParams.set("include_video", "false");
+
+	if (endDate) {
+		url.searchParams.set("primary_release_date.lte", endDate);
+	}
+
+	return fetchTmdbJson<TmdbDiscoverPage>(url, env);
+}
+
 export async function getTmdbMovieDetails(tmdbId: number, env: Env) {
 	const url = new URL(`https://api.themoviedb.org/3/movie/${tmdbId}`);
 	url.searchParams.set(
@@ -150,6 +187,14 @@ export async function getTmdbMovieDetails(tmdbId: number, env: Env) {
 	);
 
 	return fetchTmdbJson<TmdbMovieDetails>(url, env);
+}
+
+export async function getTmdbMovieWatchProviders(tmdbId: number, env: Env) {
+	const url = new URL(
+		`https://api.themoviedb.org/3/movie/${tmdbId}/watch/providers`,
+	);
+
+	return fetchTmdbJson<TmdbWatchProviderResponse>(url, env);
 }
 
 export function getUsCertification(details: TmdbMovieDetails) {
@@ -169,6 +214,18 @@ export function getUsCertification(details: TmdbMovieDetails) {
 export function getUsFlatrateProviderIds(details: TmdbMovieDetails) {
 	const providers = details["watch/providers"]?.results?.US?.flatrate ?? [];
 
+	return getDistinctProviderIds(providers);
+}
+
+export function getUsFlatrateProviderIdsFromWatchProviders(
+	response: TmdbWatchProviderResponse,
+) {
+	const providers = response.results?.US?.flatrate ?? [];
+
+	return getDistinctProviderIds(providers);
+}
+
+function getDistinctProviderIds(providers: TmdbWatchProvider[]) {
 	return [
 		...new Set(
 			providers

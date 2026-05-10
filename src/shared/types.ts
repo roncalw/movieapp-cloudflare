@@ -1,11 +1,16 @@
 export interface Env extends Cloudflare.Env {
 	DB: D1Database;
 	IMDB_RATING_QUEUE: Queue<ImdbRatingQueueMessage>;
-	TMDB_ENRICHMENT_QUEUE: Queue<TmdbEnrichmentQueueMessage>;
+	TMDB_ENRICHMENT_QUEUE: Queue<
+		| TmdbEnrichmentQueueMessage
+		| TmdbNewMovieDetailsQueueMessage
+		| TmdbProviderRefreshQueueMessage
+	>;
 	TMDB_API_KEY: string;
 	ALL_JOBS_PAUSED?: string;
 	IMDB_JOB_PAUSED?: string;
 	TMDB_PRIMARY_JOB_PAUSED?: string;
+	TMDB_NEW_MOVIE_DETAILS_JOB_PAUSED?: string;
 	TMDB_ENRICH_JOB_PAUSED?: string;
 	MOVIE_LIST_JOB_PAUSED?: string;
 }
@@ -28,6 +33,20 @@ export type TmdbEnrichmentQueueMessage = {
 	tmdbIds: number[];
 };
 
+export type TmdbNewMovieDetailsQueueMessage = {
+	kind: "tmdb-new-movie-details";
+	jobRunId: string;
+	tmdbIds: number[];
+};
+
+export type TmdbProviderRefreshQueueMessage = {
+	kind: "tmdb-provider-refresh";
+	jobRunId: string;
+	tmdbIds: number[];
+};
+
 export type WorkerQueueMessage =
 	| ImdbRatingQueueMessage
-	| TmdbEnrichmentQueueMessage;
+	| TmdbEnrichmentQueueMessage
+	| TmdbNewMovieDetailsQueueMessage
+	| TmdbProviderRefreshQueueMessage;

@@ -35,9 +35,22 @@
     - [ ] [Step 16: Hook This Back Into MovieApp](#step-16-hook-this-back-into-movieapp)
   - Production Jobs And Safety
     - [ ] [Step 17: Job Summary](#step-17-job-summary)
-      - [ ] [Step 17-8: Historical Job Info](#step-17-8-historical-job-info)
+      - [ ] [Step 17-1: IMDb Ratings Job](#step-17-1-imdb-ratings-job)
+      - [ ] [Step 17-2: TMDB Primary Job](#step-17-2-tmdb-primary-job)
+      - [ ] [Step 17-3: TMDB New Movie Details Job](#step-17-3-tmdb-new-movie-details-job)
+      - [ ] [Step 17-4: TMDB Provider Refresh Job](#step-17-4-tmdb-provider-refresh-job)
+      - [ ] [Step 17-5: Movie List Build Job](#step-17-5-movie-list-build-job)
+      - [ ] [Step 17-6: Movie List Potential-Load Safety Check](#step-17-6-movie-list-potential-load-safety-check)
+      - [ ] [Step 17-7: Movie List Current-Count Snapshot](#step-17-7-movie-list-current-count-snapshot)
+      - [ ] [Step 17-8: Production Order](#step-17-8-production-order)
+      - [ ] [Step 17-9: Historical Job Info](#step-17-9-historical-job-info)
+      - [ ] [Step 17-10: Manual-Only Jobs](#step-17-10-manual-only-jobs)
     - [ ] [Step 18: Scheduled Refresh Cron Jobs](#step-18-scheduled-refresh-cron-jobs)
-      - [ ] [Step 18-4: Manual Cron Testing](#step-18-4-manual-testing)
+      - [ ] [Step 18-1: Current `wrangler.jsonc` Schedule](#step-18-1-current-wranglerjsonc-schedule)
+      - [ ] [Step 18-2: Why Scheduled Jobs Use Fixed Times](#step-18-2-why-scheduled-jobs-use-fixed-times)
+      - [ ] [Step 18-3: What `scheduled(...)` Does](#step-18-3-what-scheduled-does)
+      - [ ] [Step 18-4: Manual Testing](#step-18-4-manual-testing)
+      - [ ] [Step 18-5: Monitoring Order](#step-18-5-monitoring-order)
     - [ ] [Step 19: Import Job Runs Table](#step-19-import-job-runs-table)
     - [ ] [Step 20: Movie List Load Counts Safety Table](#step-20-movie-list-load-counts-safety-table)
   - Reference
@@ -1199,6 +1212,33 @@ Task buffer:
     Cloudflare's temporary task storage.
     The producer sends small IMDb row batches into the Queue.
     The consumer later receives those batches and writes them to D1.
+
+    Think of the Queue like a stack of work tickets, not like a database transaction log.
+
+    A ticket says:
+      Write these 33 IMDb rows.
+
+    A Worker picks up the ticket, writes the 33 rows, and then tells Cloudflare:
+      Done. Remove this ticket.
+
+    But in distributed systems, writing the rows and removing the ticket are two separate steps.
+
+    So this can happen:
+      1. Worker gets ticket #123.
+      2. Worker writes the 33 IMDb rows successfully.
+      3. Before Cloudflare is fully satisfied the ticket is done, the ticket gets delivered again.
+      4. Another Worker runs ticket #123 again.
+      5. The same 33 IMDb rows are written again.
+
+    Because imdb_ratings_staging is keyed by imdb_id, the second write does not create duplicate rows.
+    It is more like replacing the same contact card with the same contact card again.
+
+    The problem we hit was the progress counter was too trusting:
+      first write: +33 processed
+      duplicate replay: +33 processed again
+
+    So the table data can be fine while the scoreboard over-counts.
+    The deployed counter guard caps the scoreboard at the expected total, so future job rows should not show processed_count greater than selected_count.
 
 Handler names Cloudflare expects:
   fetch(...)
@@ -3530,6 +3570,7 @@ Expected response shape:
   "endDate": "2000-12-31",
   "pagesRead": 1,
   "rowsSeen": 100,
+  "rowsUpserted": 100,
   "rowsInserted": 100,
   "totalPagesSeen": 422,
   "tmdbDiscoverMaxPage": 500,
@@ -3630,6 +3671,7 @@ Expected response shape:
   "endDate": "2000-12-31",
   "pagesRead": 1,
   "rowsSeen": 100,
+  "rowsUpserted": 100,
   "rowsInserted": 100,
   "totalPagesSeen": 422,
   "tmdbDiscoverMaxPage": 500,
@@ -3657,7 +3699,10 @@ tmdb-limited-primary-manual-start
 tmdb-limited-primary-manual-end
 ```
 
-The end log includes `durationMs`, `pagesRead`, `rowsSeen`, and `rowsInserted`.
+The end log includes `durationMs`, `pagesRead`, `rowsSeen`, `rowsUpserted`, and `rowsInserted`.
+
+`rowsUpserted` means rows refreshed or inserted in `tmdb_movies_staging`.
+`rowsInserted` means true new movie IDs inserted into the new-movie-details handoff table.
 
 <div><span class="ooo">[</span> X<span class="ooo">]</span> Confirm remote TMDB staging rows were inserted:</div>
 
@@ -4205,7 +4250,7 @@ What it does:
 
 ```text
 1. optionally gets the import-job lock
-2. checks import_job_runs for an already queued/running TMDB enrichment job
+2. checks import_job_runs for an already queued/running TMDB enrichment or provider-refresh job
 3. selects qualifying tmdb_id rows
 4. creates an import_job_runs row
 5. groups IDs into queue messages
@@ -4232,6 +4277,11 @@ for each message in batch.messages:
     process those TMDB IDs
     update import_job_runs
     ack the message
+  else if message.body.kind === "tmdb-provider-refresh":
+    read tmdbIds from the message
+    refresh provider staging for those TMDB IDs
+    update import_job_runs
+    ack the message
   else:
     process the IMDb rating rows
     ack the message
@@ -4243,6 +4293,8 @@ Queue events to expect:
 tmdb-enrich-queue-message-start
 tmdb-enrich-row-error
 tmdb-enrich-queue-message-end
+tmdb-provider-refresh-queue-message-start
+tmdb-provider-refresh-queue-message-end
 ```
 
 The queue consumer uses `processTmdbEnrichmentRows(...)`.
@@ -4264,13 +4316,13 @@ That function:
 Route:
 
 ```text
-/admin/import/tmdb/enrich-manual
+/admin/import/tmdb/enrich-all-manual
 ```
 
 Remote example:
 
 ```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-manual?limit=300000&refreshOlderThanDays=7"
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-all-manual?limit=300000&refreshOlderThanDays=7"
 ```
 
 Parameters:
@@ -4368,7 +4420,7 @@ npm run deploy
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Enqueue a small remote test first.</div>
 
 ```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-manual?limit=1000&refreshOlderThanDays=7"
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-all-manual?limit=1000&refreshOlderThanDays=7"
 ```
 
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Check D1-backed progress.</div>
@@ -4576,7 +4628,7 @@ The final long-term plan should not be:
 The long-term plan should be an ordered automation:
   1. IMDb ratings staging refresh finishes
   2. TMDB primary staging refresh finishes
-  3. TMDB enrichment refresh finishes
+  3. TMDB provider refresh finishes
   4. movie_list_items rebuild runs last
 
 The saved SQL stays useful because it gives us a known-good runnable version
@@ -4608,33 +4660,49 @@ Do not assume it has the same rollback safety as the Worker batch path
 unless that has been explicitly verified.
 ```
 
-The Worker rebuild has a readiness guard before it runs the destructive
-delete/reinsert batch.
-
-The guard checks:
+The Worker rebuild has dependency checks before the count-delta safety check:
 
 ```text
-1. no TMDB enrichment job is still queued/running
-2. tmdb_movies_staging has rows
-3. imdb_ratings_staging has rows
-4. no non-terminal TMDB rows still need enrichment under the 7-day freshness rule
-5. the final TMDB rows would produce at least one movie_list_items row
+1. IMDb ratings latest run is complete, error-free, and ended
+2. TMDB primary latest run is complete, error-free, and ended
+3. TMDB new movie details latest run is complete, error-free, ended, and after TMDB primary
+4. TMDB provider refresh latest run is complete, error-free, ended, and after TMDB new movie details
+5. no manual full TMDB enrichment job is still queued/running
 ```
 
-The key readiness condition is:
+The real data-quality hard stop is the potential-load safety check.
+That check compares current live counts against potential load counts before
+the movie-list insert/upsert runs. If TMDB staging, IMDb staging, genre staging,
+or provider staging is empty or badly reduced, that should appear as a drop in
+the potential counts and stop the build there.
+
+The build result can still report this diagnostic enrichment count:
+
+```text
+tmdbRowsMissingEnrichment
+```
+
+That count is not a separate hard stop. The hard stop is the job dependency
+chain plus the potential-load count deltas. The scheduled weekly path enriches
+new movies through the TMDB new movie details job, refreshes dynamic streamer
+data through the provider refresh job, and reserves the full TMDB detail
+enrichment endpoint for rare manual repair/backfill.
+
+The key movie-list candidate condition is:
 
 ```sql
-WHERE (tmdb_enriched_at IS NULL
-   OR tmdb_enriched_at < datetime('now', '-7 days'))
+WHERE tmdb_enriched_at IS NOT NULL
   AND tmdb_enrichment_error IS NULL
+  AND poster_path IS NOT NULL
+  AND poster_path <> ''
 ```
 
 Plain meaning:
 
 ```text
-Do not rebuild movie_list_items while there are still usable TMDB rows that
-have never been enriched, or whose enrichment is older than the same 7-day
-freshness rule used by the enrichment job.
+The movie-list build uses rows that have been enriched at least once,
+did not hit a terminal enrichment error, and have a poster.
+It does not require every row to have been re-enriched in the last 7 days.
 
 Terminal TMDB errors are allowed because those rows are intentionally excluded
 from the final public table.
@@ -5185,26 +5253,68 @@ prove the response fields match the app search screen needs
 
 This section is the plain-English map of the production data jobs.
 
+**Job Dependency**
+
+Manual endpoints and cron jobs follow the same dependency chain. A job is allowed to start only when the required previous job has a latest `import_job_runs` row with `status = complete`, `error_count = 0`, and `ended_at` filled in. If the previous job is missing, queued, running, cancelled, skipped, complete-with-errors, or older than the job it depends on, the next job records `skipped: true` with `skipReason: job_dependency_not_ready`.
+
+The production dependency chain is:
+
+```text
+IMDb ratings -> TMDB primary -> TMDB new movie details -> TMDB provider refresh -> Movie list build
+```
+
+That means if you manually run TMDB primary and it fails, `/admin/import/tmdb/new-movie-details-manual` will not continue. It will look at the latest `tmdb-primary` row in `import_job_runs`, see that it is not a clean completed run, and return a dependency skip instead of enriching against bad or incomplete source data.
+
 The short version:
+
+```text
+curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual" | jq
+  For enques, monitor progress with this: (response comes back in under a minute that enqueing has started takes about 8 minutes to complete)
+    curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=imdb-ratings&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+
+curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-primary-manual" | jq
+  Straight up sql, so response takes from 10 seconds to a minute
+    curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-primary&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+
+curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-movie-details-manual" | jq
+  For enques, monitor progress with this: (response comes back in just a few seconds that enqueing has started takes about another few seconds to complete)
+    curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-new-movie-details&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+
+
+
+curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/provider-refresh-manual" | jq
+curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual" | jq
+
+```
+
 
 **IMDb ratings job**
 
 * Details: [Step 17-1: IMDb Ratings Job](#step-17-1-imdb-ratings-job).
 * Description: Loads IMDb rating and vote-count staging data.
-* Source: IMDb `title.ratings.tsv.gz` file.
-* DB Table and Fields: `imdb_ratings_staging` loads `imdb_id`, `average_rating`, `num_votes`, `imported_at`.
+* DB Table and Fields:
+  * `imdb_ratings_staging`
+    * Updated by IMDb `title.ratings.tsv.gz`
+      * `imdb_id`
+      * `average_rating`
+      * `num_votes`
+    * Updated by IMDb import metadata
+      * `imported_at`
+* DB Update Type: Upsert (Only new data is inserted; all other data already existing is updated) - `imdb_ratings_staging`.
 * Manual Kickoff:
   * Endpoint: `/admin/import/imdb-ratings/enqueue-manual` or `/admin/import/imdb-ratings/enqueue-manual?limit=33000`.
   * Command:
     * Full Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual" | jq</code> - expect the JSON to return in under a minute with `jobRunId`, `rowsSeen`, `rowsQueued`, and queue counts showing the full enqueue shape, currently about 1.6M rows.
     * Partial Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual?limit=33000" | jq</code> - expect the same JSON shape with `rowsSeen` and `rowsQueued` capped at the requested limit.
-  * Type: Asynchronous after enqueue response - wait for the JSON response, then you can walk away or close the computer because the Cloudflare Queue drains remotely.
+  * Type:
+    * Asynchronous after enqueue response - wait for the JSON response, then you can walk away or close the computer because the Cloudflare Queue drains remotely.
+    * Queue enqueue means the Worker reads the IMDb file and puts small work messages on a queue.
+    * Queue consumer D1 batches mean Cloudflare later processes those messages and writes groups of rows into D1.
 * Cron Job: `0 22 * * 1` = <span class="green">Sunday 6:00 PM ET while on EDT; Sunday 22:00 UTC.</span>
-* Job Type: Queue enqueue means the Worker reads the IMDb file and puts small work messages on a queue. Queue consumer D1 batches means Cloudflare later processes those messages and writes groups of rows into D1.
-* Expected Duration for Full Job: About 9-13 minutes end to end for the current full IMDb file. The manual endpoint returns after enqueue; the queue continues draining remotely.
+* Expected Duration for Full Job: <span class="green">About 9-13 minutes</span> (the enqueues kickoff after about <span class="green">60 seconds</span> when the command returns the JSON) end to end for the current full IMDb file. The manual endpoint returns after enqueue; the queue continues draining remotely.
 * Query to Monitor Progress:
   * Endpoint: `/admin/import/job-runs?jobName=imdb-ratings&limit=1` (`limit=1` shows the latest run; increase the limit to see previous runs).
-  * Command: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=imdb-ratings&amp;limit=1" | jq</code>
+  * Command: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=imdb-ratings&amp;limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'</code>
   * SQL: `SELECT * FROM import_job_runs WHERE job_name = 'imdb-ratings' ORDER BY started_at DESC LIMIT 1;`
 * Safety Check Contribution: `imdb_rating_cc_count`, `imdb_vote_cc_count` - the current-count snapshot uses these as current counts for final movie-list rows with IMDb rating and vote-count data.
 
@@ -5212,111 +5322,309 @@ The short version:
 
 * Details: [Step 17-2: TMDB Primary Job](#step-17-2-tmdb-primary-job).
 * Description: Loads TMDB movie catalog rows and staged genre links.
-* Source: TMDB Discover API.
-* DB Table and Fields: `tmdb_movies_staging` loads `tmdb_id`, `title`, `poster_path`, `release_date`, `popularity`, `imported_at`; `movie_genres_staging` loads `tmdb_id`, `genre_id`, `load_run_id`, `staged_at`, `promoted_at`.
+* DB Table and Fields:
+  * `tmdb_primary_new_movie_ids_for_new_movie_details_staging`
+    * Updated by TMDB primary load metadata
+      * `job_run_id`
+      * `tmdb_id`
+      * `loaded_at`
+  * `tmdb_movies_staging`
+    * Updated by TMDB Discover API
+      * `tmdb_id`
+      * `title`
+      * `poster_path`
+      * `release_date`
+      * `popularity`
+    * Updated by TMDB primary load metadata
+      * `imported_at`
+  * `movie_genres_staging`
+    * Updated by TMDB Discover API
+      * `tmdb_id`
+      * `genre_id`
+    * Updated by TMDB primary load metadata
+      * `load_run_id`
+      * `staged_at`
+    * Not Updated in this Job
+      * `promoted_at`
+* DB Update Type:
+  * Delete / Insert (Deletes the prior primary-run movie ID handoff list before loading the new primary run, then inserts only movie IDs that did not already exist in `tmdb_movies_staging` before this primary upsert. The new movie details job reads this true-new-movie staging list, so the list is not deleted by the details job.) - `tmdb_primary_new_movie_ids_for_new_movie_details_staging`.
+  * Upsert (Only new data is inserted; all other data already existing is updated) - `tmdb_movies_staging`.
+  * Delete / Insert (Deletes existing staged genre rows for each movie id being loaded, then inserts the current genre rows for that same movie id.) - `movie_genres_staging`.
 * Manual Kickoff:
   * Endpoint: `/admin/import/tmdb/new-primary-manual` for the normal full refresh, or `/admin/import/tmdb/limited-primary-manual?beginDate=YYYY-MM-DD&endDate=YYYY-MM-DD&limit=1000` for an explicit limited run.
   * Command:
-    * Full Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-primary-manual" | jq</code> - uses the latest staged TMDB release date as `beginDate`, today as `endDate`, and the standard 2M cap; if the begin date is older than 28 days, expect `skipped: true` with `skipReason`, `beginDate`, `endDate`, and `oldestAllowedBeginDate`.
-    * Partial Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/limited-primary-manual?beginDate=2000-01-01&amp;endDate=2000-12-31&amp;limit=1000" | jq</code> - use this when you intentionally want an explicit date range and row cap; timing depends on the date range and limit.
-  * Type: Synchronous - keep the command running until the JSON response returns because this endpoint does the TMDB page reads and D1 writes directly.
+    * Full- Only New Movies Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-primary-manual" | jq</code> - uses the latest staged TMDB release date as `beginDate`, today as `endDate`, and the standard 2M cap; on success expect `jobRunId`, `beginDate`, `endDate`, `pagesRead`, `rowsSeen`, `rowsUpserted`, `rowsInserted`, `windowsLoaded`, `windowsSplit`, `stopReason`, and `durationMs`; `rowsUpserted` means rows refreshed or inserted in `tmdb_movies_staging`; `rowsInserted` means true new movie IDs inserted into the new-movie-details handoff table; if the begin date is older than 28 days, expect `skipped: true` with `skipReason`, `beginDate`, `endDate`, and `oldestAllowedBeginDate`.
+    * Partial- Only New Movies Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/limited-primary-manual?beginDate=2000-01-01&amp;endDate=2000-12-31&amp;limit=1000" | jq</code> - use this when you intentionally want an explicit date range and row cap; on success expect `jobRunId`, `beginDate`, `endDate`, `pagesRead`, `rowsSeen`, `rowsUpserted`, `rowsInserted`, `windowsLoaded`, `windowsSplit`, `stopReason`, and `durationMs`.
+  * Type:
+    * Synchronous - keep the command running until the JSON response returns because this endpoint does the TMDB page reads and D1 writes directly.
+    * TMDB Discover API pages mean the Worker calls TMDB one page at a time.
+    * Release-date windows mean the job splits the search by date ranges so each TMDB request stays manageable.
+    * D1 upserts mean existing rows are updated and new rows are inserted.
 * Cron Job: `0 4 * * 2` = <span class="green">Monday 12:00 AM ET while on EDT; Monday 04:00 UTC.</span>
-* Job Type: TMDB Discover API pages means the Worker calls TMDB one page at a time. Release-date windows mean the job splits the search by date ranges so each TMDB request stays manageable. D1 upserts mean existing rows are updated and new rows are inserted.
-* Expected Duration for Full Job: Normal weekly incremental loads should be minutes because they start from the latest staged release date. Historical backfill timing is in [Step 17-8: Historical Job Info](#step-17-8-historical-job-info).
+* Expected Duration for Full Only New Movies Job: <span class="green">From 10 seconds to minutes tops</span> - Normal weekly incremental loads start from the latest staged release date. Historical backfill timing is in [Step 17-9: Historical Job Info](#step-17-9-historical-job-info).
 * Query to Monitor Progress:
   * Endpoint: `/admin/import/job-runs?jobName=tmdb-primary&limit=1` (`limit=1` shows the latest run; increase the limit to see previous runs).
-  * Command: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-primary&amp;limit=1" | jq</code>
+  * Command: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-primary&amp;limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'</code>
   * SQL: `SELECT * FROM import_job_runs WHERE job_name = 'tmdb-primary' ORDER BY started_at DESC LIMIT 1;`
 * Safety Check Contribution: `cc_count`, `release_date_cc_count`, `popularity_cc_count`, `genre_cc_count`, `genre_per_movie_cc_count` - the current-count snapshot uses these as current counts for final movie-list rows, release dates, popularity values, genre links, and movies with at least one genre.
 
-**TMDB enrichment job**
+**TMDB new movie details job**
 
-* Details: [Step 17-3: TMDB Enrichment Job](#step-17-3-tmdb-enrichment-job).
-* Description: Fills IMDb id, US certification, enrichment status, and staged US streaming-provider links.
-* Source: TMDB movie details API for staged TMDB movie ids.
-* DB Table and Fields: `tmdb_movies_staging` updates `imdb_id`, `us_certification`, `tmdb_enriched_at`, `tmdb_enrichment_error`; `movie_watch_providers_staging` loads `tmdb_id`, `provider_id`, `region`, `load_run_id`, `staged_at`, `promoted_at`.
+* Details: [Step 17-3: TMDB New Movie Details Job](#step-17-3-tmdb-new-movie-details-job).
+* Description: Enriches only movies from the latest successful TMDB primary run that still need static detail fields.
+  * The TMDB primary job writes the movie IDs for its latest run into `tmdb_primary_new_movie_ids_for_new_movie_details_staging`.
+  * This details job reads that staging list and does not delete it, so you can inspect which primary-run IDs were eligible for new movie details.
+* DB Table and Fields:
+  * `tmdb_movies_staging`
+    * Updated by TMDB movie details API
+      * `imdb_id`
+      * `us_certification`
+    * Updated by new-movie-details metadata
+      * `tmdb_enriched_at`
+      * `tmdb_enrichment_error`
+* DB Update Type: Update only - `tmdb_movies_staging`.
+* Manual Kickoff:
+  * Endpoint: `/admin/import/tmdb/new-movie-details-manual`.
+  * Command:
+    * Full Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-movie-details-manual" | jq</code> - on success expect `jobRunId`, `primaryJobRunId`, `selected`, `rowsQueued`, `messagesQueued`, and `durationMs`; if the latest primary job failed or is still running, expect `skipped: true` with `skipReason: job_dependency_not_ready`.
+  * Type:
+    * Asynchronous after enqueue response - wait for the JSON response, then you can walk away or close the computer because the TMDB details queue drains remotely.
+    * Dependency check means this will only run after a clean completed TMDB primary run.
+    * Per-movie details API calls mean each queued movie is checked for IMDb id and US certification.
+    * Controlled failure means a final TMDB API failure marks the row error, cancels the job, and stops later dependent jobs.
+* Cron Job: `0 6 * * 2` = <span class="green">Monday 2:00 AM ET while on EDT; Monday 06:00 UTC.</span>
+* Expected Duration for Full Job: <span class="green">Usually minutes or less for normal weekly new movies</span>. It only processes movies from the latest TMDB primary run that still have no detail enrichment.
+* Query to Monitor Progress:
+  * Endpoint: `/admin/import/job-runs?jobName=tmdb-new-movie-details&limit=1` (`limit=1` shows the latest run; increase the limit to see previous runs).
+  * Command: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-new-movie-details&amp;limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'</code>
+  * SQL: `SELECT * FROM import_job_runs WHERE job_name = 'tmdb-new-movie-details' ORDER BY started_at DESC LIMIT 1;`
+* Safety Check Contribution: `certification_cc_count` - the current-count snapshot uses this as the current count for final movie-list rows with US certification.
+
+**TMDB Watch Provider Refresh Job (Streamers like Netflix, Hulu, Paramount +, etc.)**
+
+* Details: [Step 17-4: TMDB Provider Refresh Job](#step-17-4-tmdb-provider-refresh-job).
+* Description: Refreshes the dynamic US flatrate watch-provider staging data used by streamer filters.
+  * Simple provider-table explanation:
+    * Streamers are not stored as one field on `tmdb_movies_staging`.
+    * Streamers live in `movie_watch_providers_staging` because one movie can have many streamer rows.
+    * Before a full provider refresh, the job clears the old US provider staging rows.
+    * It then inserts only the current US flatrate streamer rows that TMDB returns now.
+    * If a movie used to have streamers but TMDB no longer returns it as US flatrate, that movie gets no new provider staging rows.
+    * After promotion, that movie still exists in search when no streamer filter is used, but it will not match streamer-filtered searches.
+    * The full-refresh marker is `movie_watch_providers_staging.is_full_refresh`; `1` means the row came from the full provider refresh, and `0` means it came from a partial/manual enrichment path.
+* DB Table and Fields:
+  * `tmdb_us_flatrate_movies_staging`
+    * Updated by TMDB Discover API with US flatrate filters
+      * `tmdb_id`
+    * Updated by provider-refresh load metadata
+      * `load_run_id`
+      * `discovered_at`
+  * `movie_watch_providers_staging`
+    * Updated by TMDB watch-provider API
+      * `tmdb_id`
+      * `provider_id`
+      * `region`
+    * Updated by provider-refresh load metadata
+      * `load_run_id`
+      * `is_full_refresh`
+      * `staged_at`
+    * Not Updated in this Job
+      * `promoted_at`
   * Watch-provider note:
     * Movie search stores US flatrate provider links only for streamer filters.
     * If the user does not search by streamer, the search still returns other movies, including rent-only, buy-only, ads-only, free-only, non-US-only, or no-provider movies.
     * The movie detail screen can still call TMDB for full rent, buy, ads, free, and region data.
+* DB Update Type:
+  * Delete / Insert (Deletes the old full US flatrate movie-id staging set, then inserts the current TMDB Discover result set. This is staging only; live search tables are not changed here.) - `tmdb_us_flatrate_movies_staging`.
+  * Delete / Insert (Deletes old US provider staging rows before inserting current provider rows with `is_full_refresh = 1`; live provider rows are promoted later only after the refresh completes cleanly.) - `movie_watch_providers_staging`.
 * Manual Kickoff:
-  * Endpoint: `/admin/import/tmdb/enrich-manual?limit=300000&refreshOlderThanDays=7`; progress endpoint is `/admin/import/tmdb/enrich-progress`.
+  * Endpoint: `/admin/import/tmdb/provider-refresh-manual`.
   * Command:
-    * Full Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-manual?limit=300000&amp;refreshOlderThanDays=7" | jq</code> - expect `jobRunId` and queued/enqueue counts; the endpoint returns after enqueue, then TMDB detail queue drain continues remotely.
-    * Partial Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-manual?limit=1000&amp;refreshOlderThanDays=7" | jq</code> - use this as a smaller enrichment enqueue test.
-  * Type: Asynchronous after enqueue response - wait for the JSON response, then you can walk away or close the computer because the TMDB enrichment queue drains remotely.
+    * Full Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/provider-refresh-manual" | jq</code> - on success expect `jobRunId`, `beginDate`, `endDate`, Discover window counts, `candidateCount`, `selected`, `rowsQueued`, `messagesQueued`, `stopReason`, and `durationMs`; the endpoint returns after enqueue, then provider queue drain continues remotely.
+  * Type:
+    * Asynchronous after enqueue response - wait for the JSON response, then you can walk away or close the computer because the TMDB provider queue drains remotely.
+    * Discover staging means the Worker first records the current US flatrate movie-id set in D1.
+    * Queue enqueue means the Worker then creates one small work item per group of movie ids.
+    * Per-movie watch-provider API calls mean each queued movie is checked for current US flatrate provider ids.
+    * Queue consumers mean Cloudflare processes that work safely in small pieces.
 * Cron Job: `0 10 * * 2` = <span class="green">Monday 6:00 AM ET while on EDT; Monday 10:00 UTC.</span>
-* Job Type: Queue enqueue means the Worker creates one small work item per movie id. Per-movie TMDB detail API calls mean each queued movie is checked against TMDB details to get fields that Discover does not return. Queue consumers mean Cloudflare processes that work safely in small pieces.
-* Expected Duration for Full Job: The only large timing we have is a catch-up run that checked about 255,000 movies and took about 3 hours 50 minutes. A full 1M-movie enrichment pass would take longer, roughly 15 hours if it scaled the same way. Normal weekly runs should be smaller because they only select movies that were never checked or are stale.
+* Expected Duration for Full Job:
+  * This is expected to be much smaller than full enrichment because it only refreshes provider data for the current US flatrate candidate set. Use `import_job_runs` after the first full run as the source of truth for observed timing.
+  * 5/8 - The full watch-provider refresh took 3,738,000 ms, which is 62 minutes 18 seconds.
+    * Breakdown:
+      * Discovery/enqueue phase: 147,669 ms, about 2 minutes 28 seconds.
+      * Queue drain/provider lookup phase: about 59 minutes 50 seconds.
+      * Rows processed (movies returned from TMDB): 80,041.
+      * Provider rows staged: 173,582.
+      * Errors: 0.
 * Query to Monitor Progress:
-  * Endpoint: `/admin/import/job-runs?jobName=tmdb-enrich&limit=1` (`limit=1` shows the latest run; increase the limit to see previous runs).
-  * Command: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-enrich&amp;limit=1" | jq</code>
-  * SQL: `SELECT * FROM import_job_runs WHERE job_name = 'tmdb-enrich' ORDER BY started_at DESC LIMIT 1;`
-* Safety Check Contribution: `certification_cc_count`, `watch_provider_cc_count`, `watch_provider_per_movie_cc_count` - the current-count snapshot uses these as current counts for final movie-list rows with US certification, US provider links, and movies with at least one US provider. This job's IMDb ids also allow the movie-list insert step to match IMDb rows.
+  * Endpoint: `/admin/import/job-runs?jobName=tmdb-provider-refresh&limit=1` (`limit=1` shows the latest run; increase the limit to see previous runs).
+  * Command: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-provider-refresh&amp;limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'</code>
+  * SQL: `SELECT * FROM import_job_runs WHERE job_name = 'tmdb-provider-refresh' ORDER BY started_at DESC LIMIT 1;`
+* Safety Check Contribution: `watch_provider_cc_count`, `watch_provider_per_movie_cc_count` - the current-count snapshot uses these as current counts for final movie-list rows with US provider links and movies with at least one US provider.
 
 **Movie list build job**
 
-* Details: [Step 17-4: Movie List Build Job](#step-17-4-movie-list-build-job).
+* Details: [Step 17-5: Movie List Build Job](#step-17-5-movie-list-build-job).
 * Description: Parent scheduled job that controls the three movie-list steps below.
-* DB Table and Fields: Orchestration only; this parent does not load a table directly. The three child steps below write the safety-count, live search, genre, and watch-provider tables.
+  * This job runs three steps:
+    * Uses one endpoint that runs the whole movie-list build job. You do not have to manually run the three child-step endpoints for a normal full build.
+      * Endpoint: `/admin/import/movie-list/rebuild-manual`.
+      * Command:
+        * Full Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual" | jq</code> - this runs Step 1, then Step 2, then Step 3 in order.
+    * What it runs:
+      * Step 1: movie list potential-load safety check.
+      * Step 2: movie list insert/upsert and relationship promotion.
+      * Step 3: movie list current-count snapshot.
+  * Use the individual child-step endpoints only when you intentionally want to test or inspect one step by itself.
+* DB Table and Fields:
+  * Orchestration only
+    * Not Updated in this Job
+      * This parent does not load a table directly.
+      * The three child steps below write the safety-count, live search, genre, and watch-provider tables.
 * Cron Job: `0 1 * * 3` = <span class="green">Monday 9:00 PM ET while on EDT; Tuesday 01:00 UTC.</span>
-* Job Type: Parent scheduled job means one cron trigger runs the safety check, then the insert/upsert, then the snapshot. The parent is orchestration only; the concrete endpoints, sources, and progress checks are listed on the steps.
+* Type:
+  * Parent scheduled job means one cron trigger runs the safety check, then the insert/upsert, then the snapshot.
+  * The parent is orchestration only; the concrete endpoints, sources, and progress checks are listed on the steps.
 * Expected Duration for Full Job: About 4-6 minutes to build the current app search table, which is about 810,000 searchable movies after excluding movies with no poster or terminal enrichment errors.
 
   **Step 1 - Movie list potential-load safety check**
 
-  * Details: [Step 17-5: Movie List Potential-Load Safety Check](#step-17-5-movie-list-potential-load-safety-check).
+  * Details: [Step 17-6: Movie List Potential-Load Safety Check](#step-17-6-movie-list-potential-load-safety-check).
   * Description: Counts the live tables fresh, counts what would be loaded before the movie-list insert/upsert step, and compares those two sets of counts.
-  * Source: The same movie-list source shape used by the insert/upsert step, plus relationship staging tables.
-  * DB Table and Fields: `movie_list_load_counts` loads fresh current-count fields `cc_count`, `imdb_rating_cc_count`, `imdb_vote_cc_count`, `release_date_cc_count`, `certification_cc_count`, `popularity_cc_count`, `genre_cc_count`, `genre_per_movie_cc_count`, `watch_provider_cc_count`, `watch_provider_per_movie_cc_count`, `cc_counted_at`; potential-load fields `pl_count`, `imdb_rating_pl_count`, `imdb_vote_pl_count`, `release_date_pl_count`, `certification_pl_count`, `popularity_pl_count`, `genre_pl_count`, `genre_per_movie_pl_count`, `watch_provider_pl_count`, `watch_provider_per_movie_pl_count`, `pl_counted_at`; and control fields `threshold`, `watch_provider_threshold`, `job_stopped_reason`, `updated_at`.
+  * DB Table and Fields:
+    * `movie_list_load_counts`
+      * Updated by live current-count SQL from `movie_list_items`, `movie_genres`, and `movie_watch_providers`
+        * `cc_count`
+        * `imdb_rating_cc_count`
+        * `imdb_vote_cc_count`
+        * `release_date_cc_count`
+        * `certification_cc_count`
+        * `popularity_cc_count`
+        * `genre_cc_count`
+        * `genre_per_movie_cc_count`
+        * `watch_provider_cc_count`
+        * `watch_provider_per_movie_cc_count`
+        * `cc_counted_at`
+      * Updated by potential-load SQL from `tmdb_movies_staging`, `imdb_ratings_staging`, `movie_genres_staging`, and `movie_watch_providers_staging`
+        * `pl_count`
+        * `imdb_rating_pl_count`
+        * `imdb_vote_pl_count`
+        * `release_date_pl_count`
+        * `certification_pl_count`
+        * `popularity_pl_count`
+        * `genre_pl_count`
+        * `genre_per_movie_pl_count`
+        * `watch_provider_pl_count`
+        * `watch_provider_per_movie_pl_count`
+        * `pl_counted_at`
+      * Updated by safety-threshold logic
+        * `threshold`
+        * `watch_provider_threshold`
+        * `job_stopped_reason`
+      * Updated by safety-check metadata
+        * `updated_at`
+  * DB Update Type: Upsert (Only new data is inserted; all other data already existing is updated) - `movie_list_load_counts`.
   * Manual Kickoff:
     * Endpoint: `/admin/import/movie-list/potential-load-check`.
     * Command:
-      * Full Check: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/potential-load-check" | jq</code> - expect current counts, potential-load counts, `drops`, `shouldStopMovieListBuild`, and `durationMs`; recent full check was about 12.4 seconds.
-    * Type: Synchronous - keep the command running until the JSON response returns because this endpoint does the count check directly.
-  * Job Type: D1 SQL count query means the Worker counts the current live tables and the candidate data before loading. Threshold guard means the Worker stops the movie-list insert/upsert if the candidate counts dropped too far compared to the fresh live counts taken during this same check.
+      * Full Check: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/potential-load-check" | jq</code> - on success expect `jobRunId`, `loadDate`, current counts, potential-load counts, `drops`, `shouldStopMovieListBuild`, and `durationMs`; recent full check was about 12.4 seconds.
+    * Type:
+      * Synchronous - keep the command running until the JSON response returns because this endpoint does the count check directly.
+      * D1 SQL count query means the Worker counts the current live tables and the candidate data before loading.
+      * Threshold guard means the Worker stops the movie-list insert/upsert if the candidate counts dropped too far compared to the fresh live counts taken during this same check.
   * Expected Duration for Full Job: About 9-13 seconds for the current full count check.
   * Query to Monitor Progress:
     * Endpoint: `/admin/import/job-runs?jobName=movie-list-potential-load-check&limit=1` (`limit=1` shows the latest run; increase the limit to see previous runs).
-    * Command: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=movie-list-potential-load-check&amp;limit=1" | jq</code>
+    * Command: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=movie-list-potential-load-check&amp;limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'</code>
     * SQL: `SELECT * FROM import_job_runs WHERE job_name = 'movie-list-potential-load-check' ORDER BY started_at DESC LIMIT 1;`
   * Safety Check Contribution: This is the before-load guard. It writes fresh CC columns and PL columns in the same row, so a manual current-count snapshot cannot become a stale baseline for the next safety check.
 
   **Step 2 - Movie list insert/upsert**
 
-  * Details: [Step 17-4: Movie List Build Job](#step-17-4-movie-list-build-job).
+  * Details: [Step 17-5: Movie List Build Job](#step-17-5-movie-list-build-job).
   * Description: Promotes approved relationship staging rows and upserts ready staging data into the fast app search table.
-  * Source: `tmdb_movies_staging`, `imdb_ratings_staging`, `movie_genres_staging`, and `movie_watch_providers_staging`.
-  * DB Table and Fields: `movie_list_items` loads `tmdb_id`, `title`, `poster_path`, `release_date`, `us_certification`, `imdb_rating`, `imdb_vote_count`, `popularity`, `last_refreshed_at`; `movie_genres` loads `tmdb_id`, `genre_id`, `promotion_run_id`, `promoted_at`; `movie_watch_providers` loads `tmdb_id`, `provider_id`, `region`, `promotion_run_id`, `promoted_at`.
+  * DB Table and Fields:
+    * `movie_list_items`
+      * Updated by `tmdb_movies_staging`
+        * `tmdb_id`
+        * `title`
+        * `poster_path`
+        * `release_date`
+        * `us_certification`
+        * `popularity`
+      * Updated by `imdb_ratings_staging`
+        * `imdb_rating`
+        * `imdb_vote_count`
+      * Updated by movie-list insert/upsert metadata
+        * `last_refreshed_at`
+    * `movie_genres`
+      * Updated by `movie_genres_staging`
+        * `tmdb_id`
+        * `genre_id`
+      * Updated by relationship-promotion metadata
+        * `promotion_run_id`
+        * `promoted_at`
+    * `movie_watch_providers`
+      * Updated by `movie_watch_providers_staging`
+        * `tmdb_id`
+        * `provider_id`
+        * `region`
+      * Updated by relationship-promotion metadata
+        * `promotion_run_id`
+        * `promoted_at`
+  * DB Update Type:
+    * Upsert (Only new data is inserted; all other data already existing is updated) - `movie_list_items`.
+    * Delete / Insert (After the safety check passes, deletes live genre rows for movies represented in genre staging, then inserts the approved staged genre rows.) - `movie_genres`.
+    * Delete / Insert (After the safety check passes and the latest provider refresh is complete, deletes live US provider rows and inserts approved staged provider rows.) - `movie_watch_providers`.
   * Manual Kickoff:
-    * Endpoint: `/admin/import/movie-list/rebuild-manual`.
+    * Endpoint: `/admin/import/movie-list/rebuild-manual`; this is the parent full-job endpoint listed above.
     * Command:
-      * Full Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual" | jq</code> - expect `jobRunId`, safety-check result, upsert/delete counts, `movieListCount`, and `durationMs`; timing depends on how many changed staging rows qualify.
-    * Type: Synchronous - keep the command running until the JSON response returns because this endpoint runs the safety check, relationship promotion, movie-list upsert, and snapshot in one request.
-  * Job Type: Relationship promotion means staged genres and providers become live after the safety check passes. Chunked movie-list upserts mean the final `movie_list_items` table is updated in smaller groups instead of one oversized database statement.
+      * Full Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual" | jq</code> - on success expect `jobRunId`, safety-check result, relationship promotion summaries, `upsertedRows`, `movieListCount`, current-count snapshot result, and `durationMs`; timing depends on how many changed staging rows qualify.
+    * Type:
+      * Synchronous - keep the command running until the JSON response returns because this endpoint runs the safety check, relationship promotion, movie-list upsert, and snapshot in one request.
+      * Relationship promotion means staged genres and providers become live after the safety check passes.
+      * Chunked movie-list upserts mean the final `movie_list_items` table is updated in smaller groups instead of one oversized database statement.
   * Expected Duration for Full Job: About 4 minutes for the core `movie_list_items` write, currently about 810,000 searchable movie rows. The full endpoint can take slightly longer because it also runs the safety check, relationship promotion, and snapshot.
   * Query to Monitor Progress:
     * Endpoint: `/admin/import/job-runs?jobName=movie-list-build&limit=1` (`limit=1` shows the latest run; increase the limit to see previous runs).
-    * Command: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=movie-list-build&amp;limit=1" | jq</code>
+    * Command: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=movie-list-build&amp;limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'</code>
     * SQL: `SELECT * FROM import_job_runs WHERE job_name = 'movie-list-build' ORDER BY started_at DESC LIMIT 1;`
   * Safety Check Contribution: `movie_list_items`, `movie_genres`, `movie_watch_providers` - this step writes the live tables that the current-count snapshot counts.
 
   **Step 3 - Movie list current-count snapshot**
 
-  * Details: [Step 17-6: Movie List Current-Count Snapshot](#step-17-6-movie-list-current-count-snapshot).
+  * Details: [Step 17-7: Movie List Current-Count Snapshot](#step-17-7-movie-list-current-count-snapshot).
   * Description: Records current live counts after a successful movie-list insert/upsert step.
-  * Source: `movie_list_items`, `movie_genres`, and `movie_watch_providers`.
-  * DB Table and Fields: `movie_list_load_counts` loads `load_date`, `cc_count`, `imdb_rating_cc_count`, `imdb_vote_cc_count`, `release_date_cc_count`, `certification_cc_count`, `popularity_cc_count`, `genre_cc_count`, `genre_per_movie_cc_count`, `watch_provider_cc_count`, `watch_provider_per_movie_cc_count`, `cc_counted_at`, `updated_at`.
+  * DB Table and Fields:
+    * `movie_list_load_counts`
+      * Updated by live current-count SQL from `movie_list_items`, `movie_genres`, and `movie_watch_providers`
+        * `load_date`
+        * `cc_count`
+        * `imdb_rating_cc_count`
+        * `imdb_vote_cc_count`
+        * `release_date_cc_count`
+        * `certification_cc_count`
+        * `popularity_cc_count`
+        * `genre_cc_count`
+        * `genre_per_movie_cc_count`
+        * `watch_provider_cc_count`
+        * `watch_provider_per_movie_cc_count`
+        * `cc_counted_at`
+      * Updated by current-count snapshot metadata
+        * `updated_at`
+  * DB Update Type: Upsert (Only new data is inserted; all other data already existing is updated) - `movie_list_load_counts`.
   * Manual Kickoff:
     * Endpoint: `/admin/import/movie-list/current-count-snapshot`.
     * Command:
-      * Full Snapshot: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/current-count-snapshot" | jq</code> - expect `jobRunId`, `loadDate`, current counts, and `durationMs`; recent snapshot counted about 810,000 searchable movies in 341 ms.
-    * Type: Synchronous - keep the command running until the JSON response returns because this endpoint writes the current-count snapshot directly.
-  * Job Type: D1 SQL count snapshot means the Worker counts the finished live tables and stores those numbers for review and history.
+      * Full Snapshot: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/current-count-snapshot" | jq</code> - on success expect `jobRunId`, `loadDate`, current counts, and `durationMs`; recent snapshot counted about 810,000 searchable movies in 341 ms.
+    * Type:
+      * Synchronous - keep the command running until the JSON response returns because this endpoint writes the current-count snapshot directly.
+      * D1 SQL count snapshot means the Worker counts the finished live tables and stores those numbers for review and history.
   * Expected Duration for Full Job: Usually under 2 seconds for the current live table sizes; one recent snapshot of about 810,000 searchable movies returned in 341 ms.
   * Query to Monitor Progress:
     * Endpoint: `/admin/import/job-runs?jobName=movie-list-current-count-snapshot&limit=1` (`limit=1` shows the latest run; increase the limit to see previous runs).
-    * Command: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=movie-list-current-count-snapshot&amp;limit=1" | jq</code>
+    * Command: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=movie-list-current-count-snapshot&amp;limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'</code>
     * SQL: `SELECT * FROM import_job_runs WHERE job_name = 'movie-list-current-count-snapshot' ORDER BY started_at DESC LIMIT 1;`
   * Safety Check Contribution: `cc_count`, `imdb_rating_cc_count`, `imdb_vote_cc_count`, `release_date_cc_count`, `certification_cc_count`, `popularity_cc_count`, `genre_cc_count`, `genre_per_movie_cc_count`, `watch_provider_cc_count`, `watch_provider_per_movie_cc_count` - this step records the finished live-table counts after a successful build.
 
@@ -5466,6 +5774,11 @@ The normal TMDB primary endpoint does not accept dates or limits.
 It uses the latest staged release date through today with the standard 2M cap.
 If that latest staged release date is older than 28 days, it returns `skipped: true` with a `skipReason` instead of running.
 If we intentionally need an explicit range, use the limited primary endpoint with beginDate, endDate, and limit.
+
+The normal window is inclusive, so the job can see movies from the latest staged release date again.
+Those existing movies are refreshed in `tmdb_movies_staging`, but they are not inserted into the new-movie-details handoff table.
+Only movie IDs that did not exist before the primary upsert are inserted into `tmdb_primary_new_movie_ids_for_new_movie_details_staging`.
+In the response, `rowsUpserted` is the refreshed-or-inserted count, while `rowsInserted` is the true-new-movie handoff count.
 ```
 
 Normal manual refresh shape:
@@ -5550,46 +5863,114 @@ Scheduled run limit:
   100,000 primary rows per run
 
 Schedule buffer:
-  enrichment starts 6 hours after primary starts
+  new movie details starts 2 hours after primary starts
+  provider refresh starts 4 hours after new movie details starts
 ```
 
-### Step 17-3: TMDB Enrichment Job
+### Step 17-3: TMDB New Movie Details Job
 
 What this job does:
 
 ```text
-Finds TMDB staging rows that need enrichment.
-Queues TMDB ids.
-Calls TMDB movie details for each queued id.
-Updates tmdb_movies_staging with IMDb id, US certification, enrichment time, and enrichment error.
-Replaces US watch-provider staging links in movie_watch_providers_staging.
+Reads the TMDB IDs recorded by the latest successful TMDB primary job.
+Filters that list to movies where tmdb_enriched_at is still empty.
+Queues those movie ids.
+Calls the TMDB movie details API for each queued id.
+Writes IMDb id, US certification, tmdb_enriched_at, and tmdb_enrichment_error into tmdb_movies_staging.
+Does not update watch-provider tables.
 ```
 
 Reason for this approach:
 
 ```text
-TMDB Discover does not provide IMDb id, US certification, or watch providers.
-The movie details endpoint is required for those fields.
-The job uses tmdb_enriched_at to decide what needs work because empty IMDb id and empty US certification can be valid TMDB results.
-The job is queue-based because enrichment is many API calls and must be resumable.
-Provider rows are staged first because provider data is dynamic and should not change the live search filters before the movie-list safety check passes.
+The primary job tells us which movie ids were part of the latest new-movie load.
+Only those new rows need static detail enrichment during the normal weekly process.
+IMDb id and US certification are treated as static enough that the weekly process should not re-check the whole catalog.
+Provider availability is dynamic, so it is handled by the separate provider-refresh job.
 ```
 
-History:
+Dependency rule:
 
 ```text
-The TMDB changes endpoint was not used as the main driver because watch-provider changes were not reliable enough for the app filters.
-The final process uses D1 staging rows as the source of truth and refreshes rows based on tmdb_enriched_at.
-A larger enrichment run exposed the Worker subrequest limit, so wrangler.jsonc was raised to allow 50,000 subrequests.
+This job requires the latest tmdb-primary row in import_job_runs to be complete, error-free, and ended.
+If the latest primary run failed, is still running, was skipped, or completed with errors, this job returns skipped: true.
+The skip result includes skipReason: job_dependency_not_ready and dependencyBlockers.
 ```
 
-Fields updated in `tmdb_movies_staging` by this job:
+Failure rule:
+
+```text
+If the TMDB details API still fails after controlled retries, the job records tmdb_enrichment_error for that movie id.
+It does not set tmdb_enriched_at for that failed movie.
+It cancels the import job run instead of silently skipping the movie.
+Later dependent jobs will not run because the latest tmdb-new-movie-details row is not a clean complete run.
+```
+
+Manual run and schedule:
+
+```text
+Manual endpoint:
+  /admin/import/tmdb/new-movie-details-manual
+
+Production URL shape:
+  https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-movie-details-manual
+
+Schedule:
+  0 6 * * 2
+  Monday 2:00 AM Eastern while on EDT
+
+Status and timing:
+  /admin/import/job-runs?jobName=tmdb-new-movie-details&limit=1
+```
+
+Complete fields in `tmdb_movies_staging` after this job:
 
 ```text
 imdb_id
 us_certification
 tmdb_enriched_at
 tmdb_enrichment_error
+```
+
+Schedule details: [Step 18-1: Current `wrangler.jsonc` Schedule](#step-18-1-current-wranglerjsonc-schedule).
+
+### Step 17-4: TMDB Provider Refresh Job
+
+What this job does:
+
+```text
+Runs TMDB Discover with watch_region=US and with_watch_monetization_types=flatrate.
+Writes that current movie-id set into tmdb_us_flatrate_movies_staging.
+Queues those TMDB ids.
+Calls the TMDB watch-provider API for each queued id.
+Rebuilds US flatrate provider staging rows in movie_watch_providers_staging.
+```
+
+Reason for this approach:
+
+```text
+IMDb id and US certification are mostly static after the movie is enriched, but watch-provider availability is dynamic.
+The scheduled job should therefore refresh provider data without re-checking every movie's IMDb id and US certification.
+TMDB Discover can identify the current US flatrate movie set, but it does not return the actual provider ids.
+The provider refresh records the Discover result in D1 first, then queues provider lookups from that staging table.
+Provider rows are staged first because dynamic provider data should not change the live search filters before the movie-list safety check passes.
+```
+
+History:
+
+```text
+The TMDB changes endpoint was not used as the main driver because watch-provider changes were not reliable enough for the app filters.
+The earlier scheduled enrichment path checked movie details and providers together.
+That was too expensive for normal weekly provider refreshes because IMDb id and US certification do not need the same frequent refresh.
+The final scheduled process uses a dedicated US-flatrate candidate staging table, then refreshes only provider rows.
+```
+
+Complete fields in `tmdb_us_flatrate_movies_staging` after this job:
+
+```text
+tmdb_id
+load_run_id
+discovered_at
 ```
 
 Complete fields in `movie_watch_providers_staging` after this job:
@@ -5599,66 +5980,56 @@ tmdb_id
 provider_id
 region
 load_run_id
+is_full_refresh
 staged_at
 promoted_at
 ```
 
-`provider_id` can be NULL in staging only.
-
-That NULL row means TMDB checked the movie and returned no current US flatrate providers.
+Provider refresh rows use `is_full_refresh = 1`.
+That tells the later provider promotion step that it can replace the full live US provider set, not just one movie at a time.
 
 Observed timing:
 
 ```text
-100 selected rows:
-  about 8 seconds
+2026-05-08 full provider refresh:
+  total duration: 3,738,000 ms, about 62 minutes 18 seconds
+  discovery/enqueue phase: 147,669 ms, about 2 minutes 28 seconds
+  queue drain/provider lookup phase: about 59 minutes 50 seconds
+  rows processed: 80,041 movies returned by TMDB Discover with US flatrate filters
+  provider rows staged: 173,582
+  errors: 0
 
-1,000 selected rows:
-  about 1 minute 4 seconds
-
-Large catch-up run:
-  movies selected for enrichment: 255,106
-  meaning: the job checked about 255,000 movies that were never enriched or were stale at that time
-  duration: about 3 hours 50 minutes 15 seconds
-  updated: 255,062
-  errors: 44
-  provider rows inserted: 13,064
-
-Important:
-  255,106 is not the full TMDB staging table.
-  Current TMDB staging is about 1.01M movies.
-  A full 1M-movie enrichment pass would take longer, roughly 15 hours if it scaled the same way.
+Future timing source:
+  import_job_runs where job_name = 'tmdb-provider-refresh'
 ```
 
 Manual run and schedule:
 
 ```text
-Manual enqueue endpoint:
-  /admin/import/tmdb/enrich-manual?limit=300000&refreshOlderThanDays=7
-
-Progress endpoint:
-  /admin/import/tmdb/enrich-progress
+Manual endpoint:
+  /admin/import/tmdb/provider-refresh-manual
 
 Production URL shape:
-  https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-manual?limit=300000&refreshOlderThanDays=7
+  https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/provider-refresh-manual
 
 Schedule:
   0 10 * * 2
   Monday 6:00 AM Eastern while on EDT
 
 Status and timing:
-  /admin/import/job-runs?jobName=tmdb-enrich&limit=1
+  /admin/import/job-runs?jobName=tmdb-provider-refresh&limit=1
 ```
 
 Schedule details: [Step 18-1: Current `wrangler.jsonc` Schedule](#step-18-1-current-wranglerjsonc-schedule).
 
-### Step 17-4: Movie List Build Job
+### Step 17-5: Movie List Build Job
 
 What this job does:
 
 ```text
-Checks that staging data is ready.
-Skips if a TMDB enrichment run is still active.
+Checks that required upstream jobs finished cleanly.
+Skips if IMDb ratings, TMDB primary, TMDB new movie details, or TMDB provider refresh is not complete and error-free.
+Skips if a manual full TMDB enrichment run is still active.
 Runs the movie-list potential-load safety check.
 Skips if the potential-load counts dropped too much versus the fresh live counts taken during that safety check.
 Promotes approved genre staging rows into movie_genres.
@@ -5709,7 +6080,8 @@ History:
 ```text
 The data model settled on three source areas before the final search table:
 TMDB staging rows store the movie catalog fields.
-TMDB enrichment adds IMDb id, US certification, and staged watch-provider links.
+TMDB new movie details adds IMDb id and US certification for newly loaded movies.
+TMDB provider refresh stages dynamic US flatrate watch-provider links.
 IMDb staging rows store IMDb rating and vote-count fields.
 Relationship staging rows protect genre and provider filters before promotion.
 
@@ -5718,7 +6090,7 @@ It combines the staged TMDB rows with the staged IMDb rating rows.
 It writes the final app-facing search rows into movie_list_items.
 
 US certification is separate from IMDb rating data.
-US certification comes from TMDB enrichment.
+US certification comes from TMDB new movie details.
 IMDb rating data means imdb_rating and imdb_vote_count.
 
 The build uses chunks so the Worker logs progress during long runs.
@@ -5825,7 +6197,7 @@ Status and timing:
 
 Schedule details: [Step 18-1: Current `wrangler.jsonc` Schedule](#step-18-1-current-wranglerjsonc-schedule).
 
-### Step 17-5: Movie List Potential-Load Safety Check
+### Step 17-6: Movie List Potential-Load Safety Check
 
 What this job does:
 
@@ -5880,7 +6252,7 @@ Status and timing:
 
 Schedule flow details: [Step 18-3: What `scheduled(...)` Does](#step-18-3-what-scheduled-does).
 
-### Step 17-6: Movie List Current-Count Snapshot
+### Step 17-7: Movie List Current-Count Snapshot
 
 What this tracked step does:
 
@@ -5916,25 +6288,28 @@ Status and timing:
 
 Schedule flow details: [Step 18-3: What `scheduled(...)` Does](#step-18-3-what-scheduled-does).
 
-### Step 17-7: Production Order
+### Step 17-8: Production Order
 
 The production order is:
 
 ```text
 1. IMDb ratings job
 2. TMDB primary job
-3. TMDB enrichment job
-4. Movie list potential-load safety check
-5. Movie list build job
-6. Movie list current-count snapshot step
+3. TMDB new movie details job
+4. TMDB provider refresh job
+5. Movie list potential-load safety check
+6. Movie list build job
+7. Movie list current-count snapshot step
 ```
 
 The order matters because:
 
 ```text
 IMDb ratings must exist before the final movie list can copy rating and vote-count fields.
-TMDB primary rows must exist before enrichment can find TMDB ids.
-TMDB enrichment must finish before the movie list build can trust IMDb id, US certification, and provider links.
+TMDB primary rows must exist before new movie details can enrich IMDb id and US certification.
+TMDB new movie details must finish before provider refresh so the weekly pipeline knows static details for new movies are complete.
+TMDB provider refresh must finish before the movie list build can trust provider links.
+Manual-only TMDB enrichment exists for rare repair/backfill when IMDb id or US certification needs to be rechecked.
 The potential-load safety check runs before the movie list build so a bad source load can stop the final-table replacement.
 The movie list build writes the app-facing output.
 The current-count snapshot runs after a successful build so the finished counts are recorded for review and history.
@@ -5949,7 +6324,10 @@ IMDb ratings:
 TMDB primary:
   Monday 4:00 AM UTC
 
-TMDB enrichment:
+TMDB new movie details:
+  Monday 6:00 AM UTC
+
+TMDB provider refresh:
   Monday 10:00 AM UTC
 
 Movie list build:
@@ -5958,7 +6336,7 @@ Movie list build:
   internally records current-count snapshot after success
 ```
 
-### Step 17-8: Historical Job Info
+### Step 17-9: Historical Job Info
 
 This subsection records timing evidence from earlier full and backfill runs.
 
@@ -6138,6 +6516,78 @@ Those rows are old partial, failed, or cancelled attempts from before the curren
 Do not use those rows as the expected timing for the current movie-list build.
 ```
 
+### Step 17-10: Manual-Only Jobs
+
+These endpoints are intentionally not part of the normal cron schedule.
+Use them only when you intentionally want a repair, backfill, or smaller controlled test.
+
+**TMDB full enrichment manual job**
+
+Purpose:
+
+```text
+Rare repair/backfill.
+Checks TMDB movie details for each selected movie id.
+Refreshes IMDb id, US certification, enrichment status, and US flatrate provider staging.
+Can take many hours on a large run.
+Not used by the normal weekly cron schedule.
+```
+
+Manual kickoff:
+
+```text
+Endpoint:
+  /admin/import/tmdb/enrich-all-manual?limit=300000&refreshOlderThanDays=7
+
+Command:
+  curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-all-manual?limit=300000&refreshOlderThanDays=7" | jq
+
+Expected success JSON:
+  jobRunId, selected, rowsQueued, queueMessageCount, messagesQueued, startedAt, endedAt, durationMs
+
+Type:
+  Asynchronous after enqueue response. Wait for the JSON response, then the queue drains remotely.
+
+Progress:
+  curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-enrich&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+```
+
+Use this if you suspect TMDB changed static-ish detail fields such as IMDb id or US certification.
+The scheduled job does not normally re-check those fields.
+
+**TMDB limited primary manual job**
+
+Purpose:
+
+```text
+Explicit date-window test or backfill.
+Loads TMDB primary Discover rows for the exact beginDate/endDate/limit you pass.
+Not used by the normal weekly cron schedule.
+```
+
+Manual kickoff:
+
+```text
+Endpoint:
+  /admin/import/tmdb/limited-primary-manual?beginDate=YYYY-MM-DD&endDate=YYYY-MM-DD&limit=1000
+
+Command:
+  curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/limited-primary-manual?beginDate=2000-01-01&endDate=2000-12-31&limit=1000" | jq
+
+Expected success JSON:
+  jobRunId, beginDate, endDate, pagesRead, rowsSeen, rowsUpserted, rowsInserted, windowsLoaded, windowsSplit, stopReason, durationMs
+
+Meaning:
+  rowsUpserted = rows refreshed or inserted in tmdb_movies_staging
+  rowsInserted = true new movie IDs inserted into the new-movie-details handoff table
+
+Type:
+  Synchronous. Keep the command running until the JSON response returns.
+
+Progress:
+  curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-primary&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+```
+
 <a id="phase-18-scheduled-refresh-cron-jobs"></a>
 ## Step 18: Scheduled Refresh Cron Jobs
 
@@ -6150,6 +6600,7 @@ The schedule below maps your requested Eastern-time schedule to UTC while the ac
 ```text
 Sunday 6:00 PM Eastern  -> Sunday 22:00 UTC
 Monday 12:00 AM Eastern -> Monday 04:00 UTC
+Monday 2:00 AM Eastern  -> Monday 06:00 UTC
 Monday 6:00 AM Eastern  -> Monday 10:00 UTC
 Monday 9:00 PM Eastern  -> Tuesday 01:00 UTC
 ```
@@ -6175,7 +6626,9 @@ The current cron list is:
     "0 22 * * 1",
     // TMDB primary refresh: Monday 12:00 AM ET while on EDT; Monday 04:00 UTC.
     "0 4 * * 2",
-    // TMDB enrichment refresh: Monday 6:00 AM ET while on EDT; Monday 10:00 UTC.
+    // TMDB new movie details refresh: Monday 2:00 AM ET while on EDT; Monday 06:00 UTC.
+    "0 6 * * 2",
+    // TMDB provider refresh: Monday 6:00 AM ET while on EDT; Monday 10:00 UTC.
     "0 10 * * 2",
     // Final movie_list_items rebuild: Monday 9:00 PM ET while on EDT; Tuesday 01:00 UTC.
     "0 1 * * 3"
@@ -6194,8 +6647,12 @@ Meaning:
   TMDB primary staging refresh
   Monday 12:00 AM Eastern while on EDT
 
+0 6 * * 2
+  TMDB new movie details refresh
+  Monday 2:00 AM Eastern while on EDT
+
 0 10 * * 2
-  TMDB enrichment refresh
+  TMDB provider refresh
   Monday 6:00 AM Eastern while on EDT
 
 0 1 * * 3
@@ -6215,16 +6672,20 @@ Cloudflare's cron day-of-week values here are:
 
 That is why the Monday jobs use `2`, and the Tuesday UTC final-table job uses `3`.
 
-### Step 18-2: Why Enrichment And Final Build Use Fixed Times
+### Step 18-2: Why Scheduled Jobs Use Fixed Times
 
 Preferred ideal:
 
 ```text
 TMDB primary completes
 -> wait 30 minutes
--> TMDB enrichment starts
+-> TMDB new movie details starts
 
-TMDB enrichment completes
+TMDB new movie details completes
+-> wait 30 minutes
+-> TMDB provider refresh starts
+
+TMDB provider refresh completes
 -> wait 30 minutes
 -> movie_list_items rebuild starts
 ```
@@ -6239,7 +6700,10 @@ They do not directly express "run 30 minutes after another cron job completes".
 So we use the fixed fallback times:
 
 ```text
-TMDB enrichment:
+TMDB new movie details:
+  Monday 2:00 AM Eastern
+
+TMDB provider refresh:
   Monday 6:00 AM Eastern
 
 Final movie_list_items rebuild:
@@ -6250,8 +6714,9 @@ That gives the upstream work a wide buffer:
 
 ```text
 TMDB primary starts at midnight Eastern.
-TMDB enrichment starts 6 hours later.
-Final movie_list_items rebuild starts 15 hours after enrichment starts.
+TMDB new movie details starts 2 hours later.
+TMDB provider refresh starts 4 hours after new movie details starts.
+Final movie_list_items rebuild starts 15 hours after provider refresh starts.
 ```
 
 Later, if we want true completion-based chaining, use an orchestrator pattern:
@@ -6259,7 +6724,7 @@ Later, if we want true completion-based chaining, use an orchestrator pattern:
 ```text
 job progress table says prior job completed
 -> enqueue next job
--> final build runs after enrichment progress is complete
+-> final build runs after provider-refresh progress is complete
 ```
 
 Cloudflare Workflows could also be evaluated later if we want a first-class workflow engine.
@@ -6281,10 +6746,15 @@ controller.cron === "0 4 * * 2"
   -> reads MAX(release_date) from tmdb_movies_staging
   -> loads TMDB discover/movie rows through today
 
+controller.cron === "0 6 * * 2"
+  -> enqueueTmdbNewMovieDetailsJob(env, ...)
+  -> selects movies from the latest successful TMDB primary run
+  -> enriches new movies with IMDb id and US certification
+
 controller.cron === "0 10 * * 2"
-  -> enqueueTmdbEnrichmentJob(env, ...)
-  -> selects rows where tmdb_enriched_at is null or stale
-  -> enqueues TMDB enrichment messages into TMDB_ENRICHMENT_QUEUE
+  -> enqueueTmdbProviderRefreshJob(env, ...)
+  -> refreshes the current US flatrate provider staging set
+  -> enqueues TMDB provider messages into TMDB_ENRICHMENT_QUEUE
 
 controller.cron === "0 1 * * 3"
   -> rebuildMovieListItems(env, "cron")
@@ -6322,7 +6792,8 @@ Use this map:
 ```text
 0 22 * * 1 -> IMDb ratings
 0 4 * * 2  -> TMDB primary
-0 10 * * 2 -> TMDB enrichment
+0 6 * * 2  -> TMDB new movie details
+0 10 * * 2 -> TMDB provider refresh
 0 1 * * 3  -> Potential-load safety check, final movie_list_items build, current-count snapshot
 ```
 
@@ -6402,7 +6873,8 @@ If the dashboard only shows the UTC expression, use the same map:
 ```text
 0 22 * * 1 -> IMDb ratings
 0 4 * * 2  -> TMDB primary
-0 10 * * 2 -> TMDB enrichment
+0 6 * * 2  -> TMDB new movie details
+0 10 * * 2 -> TMDB provider refresh
 0 1 * * 3  -> Final movie_list_items build
 ```
 
@@ -6413,11 +6885,19 @@ curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-r
 ```
 
 ```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-primary-manual"
+```
+
+```bash
 curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/limited-primary-manual?limit=100000&beginDate=YYYY-MM-DD&endDate=YYYY-MM-DD"
 ```
 
 ```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-manual?limit=300000&refreshOlderThanDays=7"
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-movie-details-manual"
+```
+
+```bash
+curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/provider-refresh-manual"
 ```
 
 ```bash
@@ -6439,10 +6919,11 @@ Use this order after the weekly refresh begins:
 ```text
 1. Check IMDb queue / IMDb staging counts.
 2. Check TMDB primary staging counts.
-3. Check TMDB enrichment progress.
-4. Check movie_list_load_counts potential-load safety result.
-5. Check final movie_list_items counts.
-6. Check movie_list_load_counts current-count snapshot.
+3. Check TMDB new-movie-details progress.
+4. Check TMDB provider-refresh progress.
+5. Check movie_list_load_counts potential-load safety result.
+6. Check final movie_list_items counts.
+7. Check movie_list_load_counts current-count snapshot.
 ```
 
 Useful VS Code tasks:
@@ -6475,10 +6956,10 @@ imdb-ratings-cron-start
 imdb-ratings-cron-end
 tmdb-primary-cron-start
 tmdb-primary-cron-end
-tmdb-enrich-enqueue-start
-tmdb-enrich-enqueue-end
-tmdb-enrich-queue-message-start
-tmdb-enrich-queue-message-end
+tmdb-provider-refresh-enqueue-start
+tmdb-provider-refresh-enqueue-end
+tmdb-provider-refresh-queue-message-start
+tmdb-provider-refresh-queue-message-end
 movie-list-build-start
 movie-list-build-end
 ```
@@ -6533,7 +7014,7 @@ job_run_id
 
 job_name
   which job this is
-  examples: imdb-ratings, tmdb-primary, tmdb-enrich, movie-list-build
+  examples: imdb-ratings, tmdb-primary, tmdb-provider-refresh, tmdb-enrich, movie-list-build
 
 status
   queued, running, complete, complete_with_errors, skipped, or failed
@@ -6616,12 +7097,20 @@ After migration 0012 is applied and the Worker is deployed, this endpoint return
 https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?limit=20
 ```
 
+Use this command shape when reading job runs from the terminal:
+
+```bash
+curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=imdb-ratings&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+```
+
+That `jq` expression keeps the normal response formatted and also turns `result_json` from an escaped JSON string into a readable JSON object.
+
 Filter by job:
 
 ```text
 https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=imdb-ratings&limit=1
 https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-primary&limit=1
-https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-enrich&limit=1
+https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-provider-refresh&limit=1
 https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=movie-list-build&limit=1
 ```
 
@@ -6650,6 +7139,7 @@ Queue jobs:
 
 ```text
 imdb-ratings
+tmdb-provider-refresh
 tmdb-enrich
 ```
 
@@ -6766,6 +7256,7 @@ Change the last query's `job_name` value to:
 
 ```text
 tmdb-primary
+tmdb-provider-refresh
 tmdb-enrich
 movie-list-build
 ```

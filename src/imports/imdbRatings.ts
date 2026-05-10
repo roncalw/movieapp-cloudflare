@@ -12,6 +12,7 @@ import {
 	type ImportJobTrigger,
 	setImportJobRunQueueTotals,
 } from "../jobs/importJobRuns";
+import { logEvent } from "../shared/logging";
 
 const IMDB_RATINGS_URL = "https://datasets.imdbws.com/title.ratings.tsv.gz";
 const IMDB_SAMPLE_SIZE = 33;
@@ -110,6 +111,12 @@ export async function enqueueImdbRatingRows(
 	});
 
 	try {
+		logEvent("imdb-ratings-enqueue-start", {
+			jobRunId,
+			trigger,
+			limit: limit ?? "full",
+		});
+
 		const response = await fetch(IMDB_RATINGS_URL);
 
 		if (!response.ok || !response.body) {
@@ -169,6 +176,7 @@ export async function enqueueImdbRatingRows(
 			const endedAtMs = Date.now();
 			const result = {
 				jobRunId,
+				trigger,
 				rowsSeen,
 				rowsQueued,
 				queueMessageCount,
@@ -183,6 +191,8 @@ export async function enqueueImdbRatingRows(
 				queued: rowsQueued,
 				result,
 			});
+
+			logEvent("imdb-ratings-enqueue-end", result);
 
 			return result;
 		}
@@ -238,14 +248,25 @@ export async function enqueueImdbRatingRows(
 
 		return await finishEnqueue();
 	} catch (error) {
+		const lastError = error instanceof Error ? error.message : String(error);
+		const result = {
+			jobRunId,
+			trigger,
+			status: "cancelled",
+			reason: "imdb_ratings_enqueue_error",
+			error: lastError,
+			enqueueDurationMs: Date.now() - startedAtMs,
+		};
+
 		await finishImportJobRun(env, jobRunId, {
-			status: "failed",
-			result: {
-				jobRunId,
-				enqueueDurationMs: Date.now() - startedAtMs,
-			},
-			lastError: error instanceof Error ? error.message : String(error),
+			status: "cancelled",
+			errors: 1,
+			result,
+			lastError,
 		});
+
+		logEvent("imdb-ratings-cancelled", result);
+
 		throw error;
 	}
 }

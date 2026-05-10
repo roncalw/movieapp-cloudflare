@@ -7,6 +7,7 @@ import {
 	type ImportJobTrigger,
 } from "../jobs/importJobRuns";
 import type { Env } from "../shared/types";
+import { logEvent } from "../shared/logging";
 
 const MOVIE_LIST_LOAD_DEFAULT_THRESHOLD = 1.0;
 const MOVIE_LIST_LOAD_DEFAULT_WATCH_PROVIDER_THRESHOLD = 10.0;
@@ -316,15 +317,23 @@ export async function recordMovieListCurrentCountSnapshot(
 				? error.message
 				: "Movie list current-count snapshot failed.";
 
+		const result = {
+			jobRunId,
+			loadDate,
+			status: "cancelled",
+			reason: "movie_list_current_count_snapshot_error",
+			error: lastError,
+			durationMs: Date.now() - startedAtMs,
+		};
+
 		await finishImportJobRun(env, jobRunId, {
-			status: "failed",
-			result: {
-				jobRunId,
-				loadDate,
-				durationMs: Date.now() - startedAtMs,
-			},
+			status: "cancelled",
+			errors: 1,
+			result,
 			lastError,
 		});
+
+		logEvent("movie-list-current-count-snapshot-cancelled", result);
 
 		throw error;
 	}
@@ -482,15 +491,23 @@ export async function checkMovieListPotentialLoadCounts(
 				? error.message
 				: "Movie list potential-load check failed.";
 
+		const result = {
+			jobRunId,
+			loadDate,
+			status: "cancelled",
+			reason: "movie_list_potential_load_check_error",
+			error: lastError,
+			durationMs: Date.now() - startedAtMs,
+		};
+
 		await finishImportJobRun(env, jobRunId, {
-			status: "failed",
-			result: {
-				jobRunId,
-				loadDate,
-				durationMs: Date.now() - startedAtMs,
-			},
+			status: "cancelled",
+			errors: 1,
+			result,
 			lastError,
 		});
+
+		logEvent("movie-list-potential-load-check-cancelled", result);
 
 		throw error;
 	}

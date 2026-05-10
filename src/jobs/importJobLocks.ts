@@ -1,4 +1,5 @@
 import type { Env } from "../shared/types";
+import { logEvent } from "../shared/logging";
 
 type ImportJobLockRow = {
 	owner: string;
@@ -32,14 +33,11 @@ export async function acquireImportJobLock(
 	).bind(jobName, lockMinutes, owner).run();
 
 	if (insertResult.meta.changes > 0) {
-		console.log(
-			JSON.stringify({
-				event: "import-job-lock-acquired",
-				jobName,
-				owner,
-				lockMinutes,
-			}),
-		);
+		logEvent("import-job-lock-acquired", {
+			jobName,
+			owner,
+			lockMinutes,
+		});
 		return true;
 	}
 
@@ -49,15 +47,12 @@ export async function acquireImportJobLock(
 		 WHERE job_name = ?`,
 	).bind(jobName).first<ImportJobLockRow>();
 
-	console.log(
-		JSON.stringify({
-			event: "import-job-lock-skipped",
-			jobName,
-			owner,
-			existingOwner: existingLock?.owner ?? null,
-			existingLockExpiresAt: existingLock?.lock_expires_at ?? null,
-		}),
-	);
+	logEvent("import-job-lock-skipped", {
+		jobName,
+		owner,
+		existingOwner: existingLock?.owner ?? null,
+		existingLockExpiresAt: existingLock?.lock_expires_at ?? null,
+	});
 
 	return false;
 }
@@ -73,11 +68,8 @@ export async function releaseImportJobLock(
 		   AND owner = ?`,
 	).bind(jobName, owner).run();
 
-	console.log(
-		JSON.stringify({
-			event: "import-job-lock-released",
-			jobName,
-			owner,
-		}),
-	);
+	logEvent("import-job-lock-released", {
+		jobName,
+		owner,
+	});
 }

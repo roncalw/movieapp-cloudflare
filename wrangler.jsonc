@@ -15,6 +15,7 @@
 		"IMDB_JOB_PAUSED": "false",
 		"MOVIE_LIST_JOB_PAUSED": "false",
 		"TMDB_ENRICH_JOB_PAUSED": "false",
+		"TMDB_NEW_MOVIE_DETAILS_JOB_PAUSED": "false",
 		"TMDB_PRIMARY_JOB_PAUSED": "false"
 	},
 	"upload_source_maps": true,
@@ -97,7 +98,9 @@
 			"0 22 * * 1",
 			// TMDB primary refresh: Monday 12:00 AM ET while on EDT; Monday 04:00 UTC.
 			"0 4 * * 2",
-			// TMDB enrichment refresh: Monday 6:00 AM ET while on EDT; Monday 10:00 UTC.
+			// TMDB new movie details refresh: Monday 2:00 AM ET while on EDT; Monday 06:00 UTC.
+			"0 6 * * 2",
+			// TMDB provider refresh: Monday 6:00 AM ET while on EDT; Monday 10:00 UTC.
 			"0 10 * * 2",
 			// Final movie_list_items rebuild: Monday 9:00 PM ET while on EDT; Tuesday 01:00 UTC.
 			"0 1 * * 3"

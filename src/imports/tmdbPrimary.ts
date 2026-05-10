@@ -10,6 +10,7 @@ import {
 	TMDB_PRIMARY_JOB_NAME,
 	type ImportJobTrigger,
 } from "../jobs/importJobRuns";
+import { logEvent } from "../shared/logging";
 import type { Env } from "../shared/types";
 
 type TmdbDateWindow = {
@@ -144,17 +145,14 @@ export async function loadNewTmdbPrimaryRows(
 		});
 	}
 
-	console.log(
-		JSON.stringify({
-			event: "tmdb-primary-refresh-start",
-			trigger,
-			startedAt,
-			beginDate,
-			endDate,
-			limit,
-			oldestAllowedBeginDate,
-		}),
-	);
+	logEvent("tmdb-primary-refresh-start", {
+		trigger,
+		startedAt,
+		beginDate,
+		endDate,
+		limit,
+		oldestAllowedBeginDate,
+	});
 
 	const result = await loadTmdbPrimaryRowsManual(
 		env,
@@ -173,13 +171,10 @@ export async function loadNewTmdbPrimaryRows(
 		oldestAllowedBeginDate,
 	};
 
-	console.log(
-		JSON.stringify({
-			event: "tmdb-primary-refresh-end",
-			trigger,
-			...responseBody,
-		}),
-	);
+	logEvent("tmdb-primary-refresh-end", {
+		trigger,
+		...responseBody,
+	});
 
 	return responseBody;
 }
@@ -219,7 +214,20 @@ function buildTmdbPrimaryStatements(
 		: [];
 	const statements = [
 		env.DB.prepare(
-			`INSERT OR REPLACE INTO tmdb_movies_staging (
+			`INSERT OR IGNORE INTO tmdb_primary_new_movie_ids_for_new_movie_details_staging (
+				job_run_id,
+				tmdb_id,
+				loaded_at
+			)
+			SELECT ?, ?, CURRENT_TIMESTAMP
+			WHERE NOT EXISTS (
+				SELECT 1
+				FROM tmdb_movies_staging
+				WHERE tmdb_id = ?
+			)`,
+		).bind(loadRunId, tmdbId, tmdbId),
+		env.DB.prepare(
+			`INSERT INTO tmdb_movies_staging (
 				tmdb_id,
 				imdb_id,
 				title,
@@ -229,7 +237,13 @@ function buildTmdbPrimaryStatements(
 				popularity,
 				imported_at
 			)
-			VALUES (?, NULL, ?, ?, ?, NULL, ?, CURRENT_TIMESTAMP)`,
+			VALUES (?, NULL, ?, ?, ?, NULL, ?, CURRENT_TIMESTAMP)
+			ON CONFLICT(tmdb_id) DO UPDATE SET
+				title = excluded.title,
+				poster_path = excluded.poster_path,
+				release_date = excluded.release_date,
+				popularity = excluded.popularity,
+				imported_at = CURRENT_TIMESTAMP`,
 		).bind(
 			tmdbId,
 			discoverResult.title ?? "",
@@ -271,6 +285,7 @@ export async function loadTmdbPrimaryRowsManual(
 	let pagesRead = 0;
 	let rowsSeen = 0;
 	let rowsInserted = 0;
+	let rowsUpserted = 0;
 	let totalPagesSeen: number | null = null;
 	let windowsLoaded = 0;
 	let windowsSplit = 0;
@@ -288,7 +303,11 @@ export async function loadTmdbPrimaryRowsManual(
 	});
 
 	try {
-		while (pendingWindows.length > 0 && rowsInserted < limit) {
+		await env.DB.prepare(
+			"DELETE FROM tmdb_primary_new_movie_ids_for_new_movie_details_staging",
+		).run();
+
+		while (pendingWindows.length > 0 && rowsUpserted < limit) {
 			const currentWindow = pendingWindows.shift();
 
 			if (!currentWindow) {
@@ -311,30 +330,24 @@ export async function loadTmdbPrimaryRowsManual(
 				if (!splitWindow) {
 					stopReason = "single_day_page_cap_reached";
 					stoppedWindow = currentWindow;
-					console.log(
-						JSON.stringify({
-							event: "tmdb-window-single-day-cap",
-							beginDate: currentWindow.beginDate,
-							endDate: currentWindow.endDate,
-							totalPagesSeen: firstPage.total_pages,
-							tmdbDiscoverMaxPage: TMDB_DISCOVER_MAX_PAGE,
-						}),
-					);
-					break;
-				}
-
-				windowsSplit += 1;
-				console.log(
-					JSON.stringify({
-						event: "tmdb-window-split",
+					logEvent("tmdb-window-single-day-cap", {
 						beginDate: currentWindow.beginDate,
 						endDate: currentWindow.endDate,
 						totalPagesSeen: firstPage.total_pages,
 						tmdbDiscoverMaxPage: TMDB_DISCOVER_MAX_PAGE,
-						leftWindow: splitWindow.left,
-						rightWindow: splitWindow.right,
-					}),
-				);
+					});
+					break;
+				}
+
+				windowsSplit += 1;
+				logEvent("tmdb-window-split", {
+					beginDate: currentWindow.beginDate,
+					endDate: currentWindow.endDate,
+					totalPagesSeen: firstPage.total_pages,
+					tmdbDiscoverMaxPage: TMDB_DISCOVER_MAX_PAGE,
+					leftWindow: JSON.stringify(splitWindow.left),
+					rightWindow: JSON.stringify(splitWindow.right),
+				});
 
 				pendingWindows.unshift(splitWindow.right);
 				pendingWindows.unshift(splitWindow.left);
@@ -370,9 +383,9 @@ export async function loadTmdbPrimaryRowsManual(
 					pageStatements.push(
 						...buildTmdbPrimaryStatements(discoverResult, env, jobRunId),
 					);
-					rowsInserted += 1;
+					rowsUpserted += 1;
 
-					if (rowsInserted >= limit) {
+					if (rowsUpserted >= limit) {
 						break;
 					}
 				}
@@ -381,12 +394,21 @@ export async function loadTmdbPrimaryRowsManual(
 					await env.DB.batch(pageStatements);
 				}
 
-				if (rowsInserted >= limit) {
+				if (rowsUpserted >= limit) {
 					stopReason = "limit_reached";
 					break;
 				}
 			}
 		}
+
+		const insertedResult = await env.DB.prepare(
+			`SELECT COUNT(*) AS count
+			 FROM tmdb_primary_new_movie_ids_for_new_movie_details_staging
+			 WHERE job_run_id = ?`,
+		)
+			.bind(jobRunId)
+			.first<{ count: number }>();
+		rowsInserted = insertedResult?.count ?? 0;
 
 		const result = {
 			jobRunId,
@@ -394,6 +416,7 @@ export async function loadTmdbPrimaryRowsManual(
 			endDate: endDate ?? null,
 			pagesRead,
 			rowsSeen,
+			rowsUpserted,
 			rowsInserted,
 			totalPagesSeen,
 			tmdbDiscoverMaxPage: TMDB_DISCOVER_MAX_PAGE,
@@ -408,7 +431,7 @@ export async function loadTmdbPrimaryRowsManual(
 			status: "complete",
 			selected: rowsSeen,
 			processed: rowsSeen,
-			updated: rowsInserted,
+			updated: rowsUpserted,
 			result,
 		});
 
@@ -417,27 +440,36 @@ export async function loadTmdbPrimaryRowsManual(
 		const lastError =
 			error instanceof Error ? error.message : "TMDB primary load failed.";
 
+		const result = {
+			jobRunId,
+			beginDate,
+			endDate,
+			pagesRead,
+			rowsSeen,
+			rowsUpserted,
+			rowsInserted,
+			totalPagesSeen,
+			windowsLoaded,
+			windowsSplit,
+			pendingWindows: pendingWindows.length,
+			stoppedWindow,
+			stopReason,
+			status: "cancelled",
+			reason: "tmdb_primary_load_error",
+			error: lastError,
+		};
+
 		await finishImportJobRun(env, jobRunId, {
-			status: "failed",
+			status: "cancelled",
 			selected: rowsSeen,
 			processed: rowsSeen,
-			updated: rowsInserted,
-			result: {
-				jobRunId,
-				beginDate,
-				endDate,
-				pagesRead,
-				rowsSeen,
-				rowsInserted,
-				totalPagesSeen,
-				windowsLoaded,
-				windowsSplit,
-				pendingWindows: pendingWindows.length,
-				stoppedWindow,
-				stopReason,
-			},
+			updated: rowsUpserted,
+			errors: 1,
+			result,
 			lastError,
 		});
+
+		logEvent("tmdb-primary-cancelled", result);
 
 		throw error;
 	}

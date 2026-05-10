@@ -3,6 +3,15 @@ import {
 	isTmdbEnrichmentQueueMessage,
 	processTmdbEnrichmentRows,
 } from "../imports/tmdbEnrichment";
+import {
+	isTmdbNewMovieDetailsQueueMessage,
+	processTmdbNewMovieDetailsRows,
+} from "../imports/tmdbNewMovieDetails";
+import {
+	isTmdbProviderRefreshQueueMessage,
+	processTmdbProviderRefreshRows,
+} from "../imports/tmdbProviderRefresh";
+import { logEvent } from "../shared/logging";
 import type { Env, WorkerQueueMessage } from "../shared/types";
 
 export async function handleQueue(
@@ -10,25 +19,63 @@ export async function handleQueue(
 	env: Env,
 ) {
 	for (const message of batch.messages) {
-		if (isTmdbEnrichmentQueueMessage(message.body)) {
-			const rows = message.body.tmdbIds.map((tmdbId) => ({ tmdb_id: tmdbId }));
+		try {
+			if (isTmdbEnrichmentQueueMessage(message.body)) {
+				const rows = message.body.tmdbIds.map((tmdbId) => ({ tmdb_id: tmdbId }));
 
-			await processTmdbEnrichmentRows(
+				await processTmdbEnrichmentRows(
+					env,
+					message.body.jobRunId,
+					rows,
+					"queue",
+				);
+
+				message.ack();
+				continue;
+			}
+
+			if (isTmdbNewMovieDetailsQueueMessage(message.body)) {
+				const rows = message.body.tmdbIds.map((tmdbId) => ({ tmdb_id: tmdbId }));
+
+				await processTmdbNewMovieDetailsRows(
+					env,
+					message.body.jobRunId,
+					rows,
+					"queue",
+				);
+
+				message.ack();
+				continue;
+			}
+
+			if (isTmdbProviderRefreshQueueMessage(message.body)) {
+				const rows = message.body.tmdbIds.map((tmdbId) => ({ tmdb_id: tmdbId }));
+
+				await processTmdbProviderRefreshRows(
+					env,
+					message.body.jobRunId,
+					rows,
+					"queue",
+				);
+
+				message.ack();
+				continue;
+			}
+
+			await insertImdbRatingQueueRows(
 				env,
+				message.body.rows,
 				message.body.jobRunId,
-				rows,
-				"queue",
 			);
-
 			message.ack();
-			continue;
-		}
+		} catch (error) {
+			logEvent("queue-message-failed", {
+				kind: message.body.kind ?? "imdb-ratings",
+				jobRunId: message.body.jobRunId ?? "missing",
+				error: error instanceof Error ? error.message : String(error),
+			});
 
-		await insertImdbRatingQueueRows(
-			env,
-			message.body.rows,
-			message.body.jobRunId,
-		);
-		message.ack();
+			throw error;
+		}
 	}
 }

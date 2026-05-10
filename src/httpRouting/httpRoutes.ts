@@ -9,6 +9,14 @@ import {
 import {
 	getRecentImportJobRuns,
 	getRecentTmdbEnrichmentImportJobRuns,
+	IMDB_RATINGS_JOB_NAME,
+	MOVIE_LIST_BUILD_JOB_NAME,
+	MOVIE_LIST_CURRENT_COUNT_SNAPSHOT_JOB_NAME,
+	MOVIE_LIST_POTENTIAL_LOAD_CHECK_JOB_NAME,
+	TMDB_ENRICH_JOB_NAME,
+	TMDB_NEW_MOVIE_DETAILS_JOB_NAME,
+	TMDB_PRIMARY_JOB_NAME,
+	TMDB_PROVIDER_REFRESH_JOB_NAME,
 } from "../jobs/importJobRuns";
 import {
 	getCachedMovieSearchResponse,
@@ -19,12 +27,15 @@ import {
 	enqueueTmdbEnrichmentJob,
 	TMDB_ENRICH_TMDB_CONCURRENCY,
 } from "../imports/tmdbEnrichment";
+import { enqueueTmdbNewMovieDetailsJob } from "../imports/tmdbNewMovieDetails";
+import { enqueueTmdbProviderRefreshJob } from "../imports/tmdbProviderRefresh";
 import {
 	isIsoDate,
 	loadNewTmdbPrimaryRows,
 	loadTmdbPrimaryRowsManual,
 	TMDB_PRIMARY_STANDARD_LIMIT,
 } from "../imports/tmdbPrimary";
+import { logEvent } from "../shared/logging";
 import type { Env } from "../shared/types";
 
 type MovieRow = {
@@ -42,6 +53,29 @@ function jsonResponse(body: unknown, init?: ResponseInit) {
 			...init?.headers,
 		},
 	});
+}
+
+function jobErrorResponse(
+	error: unknown,
+	jobName: string,
+	monitorEndpoint: string,
+) {
+	const message = error instanceof Error ? error.message : String(error);
+
+	logEvent("manual-endpoint-cancelled", {
+		jobName,
+		monitorEndpoint,
+		error: message,
+	});
+
+	return jsonResponse(
+		{
+			error: message,
+			jobName,
+			monitorEndpoint,
+		},
+		{ status: 500 },
+	);
 }
 
 export async function handleFetch(
@@ -85,8 +119,16 @@ export async function handleFetch(
 				{ status: 400 },
 			);
 		}
-		const result = await enqueueImdbRatingRows(env, limit);
-		return Response.json(result);
+		try {
+			const result = await enqueueImdbRatingRows(env, limit);
+			return Response.json(result);
+		} catch (error) {
+			return jobErrorResponse(
+				error,
+				IMDB_RATINGS_JOB_NAME,
+				"/admin/import/job-runs?jobName=imdb-ratings&limit=1",
+			);
+		}
 	}
 
 	if (url.pathname === "/admin/import/tmdb/new-primary-manual") {
@@ -100,17 +142,25 @@ export async function handleFetch(
 			);
 		}
 
-		const result = await loadNewTmdbPrimaryRows(env, "manual");
-		const status =
-			"skipped" in result &&
-			result.skipped &&
-			result.skipReason === "begin_date_older_than_28_days"
-				? 409
-				: 200;
+		try {
+			const result = await loadNewTmdbPrimaryRows(env, "manual");
+			const status =
+				"skipped" in result &&
+				result.skipped &&
+				result.skipReason === "begin_date_older_than_28_days"
+					? 409
+					: 200;
 
-		return Response.json(result, {
-			status,
-		});
+			return Response.json(result, {
+				status,
+			});
+		} catch (error) {
+			return jobErrorResponse(
+				error,
+				TMDB_PRIMARY_JOB_NAME,
+				"/admin/import/job-runs?jobName=tmdb-primary&limit=1",
+			);
+		}
 	}
 
 	if (url.pathname === "/admin/import/tmdb/limited-primary-manual") {
@@ -176,36 +226,32 @@ export async function handleFetch(
 			);
 		}
 
-		console.log(
-			JSON.stringify({
-				event: "tmdb-limited-primary-manual-start",
-				startedAt,
-				limit,
-				beginDate,
-				endDate,
-			}),
-		);
-
-		const result = await loadTmdbPrimaryRowsManual(
-			env,
+		logEvent("tmdb-limited-primary-manual-start", {
+			startedAt,
+			limit,
 			beginDate,
 			endDate,
-			limit,
-		);
+		});
 
-		const endedAtMs = Date.now();
-		const endedAt = new Date(endedAtMs).toISOString();
-		const durationMs = endedAtMs - startedAtMs;
-		const responseBody = {
-			...result,
-			startedAt,
-			endedAt,
-			durationMs,
-		};
+		try {
+			const result = await loadTmdbPrimaryRowsManual(
+				env,
+				beginDate,
+				endDate,
+				limit,
+			);
 
-		console.log(
-			JSON.stringify({
-				event: "tmdb-limited-primary-manual-end",
+			const endedAtMs = Date.now();
+			const endedAt = new Date(endedAtMs).toISOString();
+			const durationMs = endedAtMs - startedAtMs;
+			const responseBody = {
+				...result,
+				startedAt,
+				endedAt,
+				durationMs,
+			};
+
+			logEvent("tmdb-limited-primary-manual-end", {
 				startedAt,
 				endedAt,
 				durationMs,
@@ -222,10 +268,16 @@ export async function handleFetch(
 				pendingWindows: result.pendingWindows,
 				stoppedWindow: result.stoppedWindow,
 				stopReason: result.stopReason,
-			}),
-		);
+			});
 
-		return Response.json(responseBody);
+			return Response.json(responseBody);
+		} catch (error) {
+			return jobErrorResponse(
+				error,
+				TMDB_PRIMARY_JOB_NAME,
+				"/admin/import/job-runs?jobName=tmdb-primary&limit=1",
+			);
+		}
 	}
 
 	if (url.pathname === "/admin/import/tmdb/enrich-progress") {
@@ -248,7 +300,7 @@ export async function handleFetch(
 		return Response.json({ runs });
 	}
 
-	if (url.pathname === "/admin/import/tmdb/enrich-manual") {
+	if (url.pathname === "/admin/import/tmdb/enrich-all-manual") {
 		const limit = Number(url.searchParams.get("limit") ?? 1000);
 		const refreshOlderThanDays = Number(
 			url.searchParams.get("refreshOlderThanDays") ?? 7,
@@ -268,31 +320,117 @@ export async function handleFetch(
 			);
 		}
 
-		const result = await enqueueTmdbEnrichmentJob(env, {
-			limit,
-			refreshOlderThanDays,
-			progressEvery: 5000,
-			tmdbConcurrency: TMDB_ENRICH_TMDB_CONCURRENCY,
-			useLock: true,
-			trigger: "manual",
-		});
+		try {
+			const result = await enqueueTmdbEnrichmentJob(env, {
+				limit,
+				refreshOlderThanDays,
+				progressEvery: 5000,
+				tmdbConcurrency: TMDB_ENRICH_TMDB_CONCURRENCY,
+				useLock: true,
+				trigger: "manual",
+			});
 
-		return Response.json(result);
+			return Response.json(result);
+		} catch (error) {
+			return jobErrorResponse(
+				error,
+				TMDB_ENRICH_JOB_NAME,
+				"/admin/import/job-runs?jobName=tmdb-enrich&limit=1",
+			);
+		}
+	}
+
+	if (url.pathname === "/admin/import/tmdb/new-movie-details-manual") {
+		if (url.search !== "") {
+			return Response.json(
+				{
+					error:
+						"new-movie-details-manual does not accept query parameters. It enriches the movies from the latest successful TMDB primary run that still need details.",
+				},
+				{ status: 400 },
+			);
+		}
+
+		try {
+			const result = await enqueueTmdbNewMovieDetailsJob(env, {
+				useLock: true,
+				trigger: "manual",
+			});
+
+			return Response.json(result);
+		} catch (error) {
+			return jobErrorResponse(
+				error,
+				TMDB_NEW_MOVIE_DETAILS_JOB_NAME,
+				"/admin/import/job-runs?jobName=tmdb-new-movie-details&limit=1",
+			);
+		}
+	}
+
+	if (url.pathname === "/admin/import/tmdb/provider-refresh-manual") {
+		if (url.search !== "") {
+			return Response.json(
+				{
+					error:
+						"provider-refresh-manual does not accept query parameters. It always refreshes the current US flatrate provider set.",
+				},
+				{ status: 400 },
+			);
+		}
+
+		try {
+			const result = await enqueueTmdbProviderRefreshJob(env, {
+				useLock: true,
+				trigger: "manual",
+			});
+
+			return Response.json(result);
+		} catch (error) {
+			return jobErrorResponse(
+				error,
+				TMDB_PROVIDER_REFRESH_JOB_NAME,
+				"/admin/import/job-runs?jobName=tmdb-provider-refresh&limit=1",
+			);
+		}
 	}
 
 	if (url.pathname === "/admin/import/movie-list/rebuild-manual") {
-		const result = await rebuildMovieListItems(env, "manual");
-		return Response.json(result);
+		try {
+			const result = await rebuildMovieListItems(env, "manual");
+			return Response.json(result);
+		} catch (error) {
+			return jobErrorResponse(
+				error,
+				MOVIE_LIST_BUILD_JOB_NAME,
+				"/admin/import/job-runs?jobName=movie-list-build&limit=1",
+			);
+		}
 	}
 
 	if (url.pathname === "/admin/import/movie-list/potential-load-check") {
-		const result = await checkMovieListPotentialLoadCounts(env, "manual");
-		return Response.json(result);
+		try {
+			const result = await checkMovieListPotentialLoadCounts(env, "manual");
+			return Response.json(result);
+		} catch (error) {
+			return jobErrorResponse(
+				error,
+				MOVIE_LIST_POTENTIAL_LOAD_CHECK_JOB_NAME,
+				"/admin/import/job-runs?jobName=movie-list-potential-load-check&limit=1",
+			);
+		}
 	}
 
 	if (url.pathname === "/admin/import/movie-list/current-count-snapshot") {
-		const result = await recordMovieListCurrentCountSnapshot(env, "manual");
-		return Response.json(result);
+		try {
+			const result = await recordMovieListCurrentCountSnapshot(env, "manual");
+			return Response.json(result);
+		} catch (error) {
+			return jobErrorResponse(
+				error,
+				MOVIE_LIST_CURRENT_COUNT_SNAPSHOT_JOB_NAME,
+				"/admin/import/job-runs?jobName=movie-list-current-count-snapshot&limit=1",
+			);
+		}
 	}
 
 	if (url.pathname === "/movies") {

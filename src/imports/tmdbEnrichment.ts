@@ -4,9 +4,11 @@ import {
 	releaseImportJobLock,
 } from "../jobs/importJobLocks";
 import {
+	cancelImportJobRun,
 	createTmdbEnrichmentImportJobRun,
 	createTmdbEnrichmentJobRunId,
 	getActiveTmdbEnrichmentImportJobRun,
+	getImportJobRunById,
 	TMDB_ENRICH_JOB_NAME,
 	updateTmdbEnrichmentImportJobRunProgress,
 } from "../jobs/importJobRuns";
@@ -17,6 +19,7 @@ import {
 	isTerminalTmdbEnrichmentError,
 	type TmdbMovieDetails,
 } from "../externalApis/tmdbClient";
+import { logEvent } from "../shared/logging";
 import type {
 	Env,
 	TmdbEnrichmentQueueMessage,
@@ -183,17 +186,37 @@ export async function processTmdbEnrichmentRows(
 	let lastError: string | null = null;
 	let pendingStatements: D1PreparedStatement[] = [];
 	let pendingStatementMovies = 0;
+	const activeJobRun = await getImportJobRunById(env, jobRunId);
 
-	console.log(
-		JSON.stringify({
-			event: "tmdb-enrich-queue-message-start",
+	if (
+		!activeJobRun ||
+		!["running", "queued"].includes(activeJobRun.status)
+	) {
+		logEvent("tmdb-enrich-queue-message-skipped", {
 			trigger,
 			jobRunId,
+			status: activeJobRun?.status ?? "missing",
 			selected: rows.length,
-			tmdbConcurrency: TMDB_ENRICH_TMDB_CONCURRENCY,
-			startedAt,
-		}),
-	);
+		});
+
+		return {
+			processed: 0,
+			updated: 0,
+			errors: 0,
+			imdbIdsFound: 0,
+			certificationsFound: 0,
+			providerMoviesFound: 0,
+			providerRowsInserted: 0,
+		};
+	}
+
+	logEvent("tmdb-enrich-queue-message-start", {
+		trigger,
+		jobRunId,
+		selected: rows.length,
+		tmdbConcurrency: TMDB_ENRICH_TMDB_CONCURRENCY,
+		startedAt,
+	});
 
 	async function flushStatements() {
 		if (pendingStatements.length === 0) {
@@ -234,6 +257,61 @@ export async function processTmdbEnrichmentRows(
 				}
 			}),
 		);
+		const retryableErrorResult = enrichmentResults.find(
+			(result) =>
+				result.error && !isTerminalTmdbEnrichmentError(result.error),
+		);
+
+		if (retryableErrorResult?.error) {
+			await flushStatements();
+
+			lastError =
+				retryableErrorResult.error instanceof Error
+					? retryableErrorResult.error.message
+					: String(retryableErrorResult.error);
+
+			const cancelledAtMs = Date.now();
+			const cancelledAt = new Date(cancelledAtMs).toISOString();
+			const result = {
+				jobRunId,
+				trigger,
+				status: "cancelled",
+				reason: "retryable_tmdb_failure_after_retries",
+				tmdbId: retryableErrorResult.row.tmdb_id,
+				error: lastError,
+				processedInMessage: processed,
+				updatedInMessage: updated,
+				errorsInMessage: errors + 1,
+				imdbIdsFoundInMessage: imdbIdsFound,
+				certificationsFoundInMessage: certificationsFound,
+				providerMoviesFoundInMessage: providerMoviesFound,
+				providerRowsInsertedInMessage: providerRowsInserted,
+				startedAt,
+				cancelledAt,
+				durationMs: cancelledAtMs - startedAtMs,
+			};
+
+			await cancelImportJobRun(env, jobRunId, {
+				processed,
+				updated,
+				errors: errors + 1,
+				providerRowsInserted,
+				result,
+				lastError,
+			});
+
+			logEvent("tmdb-enrich-cancelled", result);
+
+			return {
+				processed,
+				updated,
+				errors: errors + 1,
+				imdbIdsFound,
+				certificationsFound,
+				providerMoviesFound,
+				providerRowsInserted,
+			};
+		}
 
 		for (const result of enrichmentResults) {
 			if (result.enrichment) {
@@ -270,15 +348,12 @@ export async function processTmdbEnrichmentRows(
 					}
 				}
 
-				console.log(
-					JSON.stringify({
-						event: "tmdb-enrich-row-error",
-						trigger,
-						jobRunId,
-						tmdbId: result.row.tmdb_id,
-						error: lastError,
-					}),
-				);
+				logEvent("tmdb-enrich-row-error", {
+					trigger,
+					jobRunId,
+					tmdbId: result.row.tmdb_id,
+					error: lastError,
+				});
 			}
 
 			processed += 1;
@@ -302,18 +377,15 @@ export async function processTmdbEnrichmentRows(
 	const endedAtMs = Date.now();
 	const endedAt = new Date(endedAtMs).toISOString();
 
-	console.log(
-		JSON.stringify({
-			event: "tmdb-enrich-queue-message-end",
-			trigger,
-			jobRunId,
-			selected: rows.length,
-			...stats,
-			startedAt,
-			endedAt,
-			durationMs: endedAtMs - startedAtMs,
-		}),
-	);
+	logEvent("tmdb-enrich-queue-message-end", {
+		trigger,
+		jobRunId,
+		selected: rows.length,
+		...stats,
+		startedAt,
+		endedAt,
+		durationMs: endedAtMs - startedAtMs,
+	});
 
 	return stats;
 }
@@ -327,6 +399,7 @@ export async function enqueueTmdbEnrichmentJob(
 	const lockOwner = createJobOwner(options.trigger);
 	const jobRunId = createTmdbEnrichmentJobRunId(options.trigger);
 	let lockAcquired = false;
+	let jobRunCreated = false;
 
 	if (options.useLock) {
 		lockAcquired = await acquireImportJobLock(
@@ -398,19 +471,17 @@ export async function enqueueTmdbEnrichmentJob(
 			rows.length,
 			rows.length,
 		);
+		jobRunCreated = true;
 
-		console.log(
-			JSON.stringify({
-				event: "tmdb-enrich-enqueue-start",
-				trigger: options.trigger,
-				jobRunId,
-				limit: options.limit,
-				refreshOlderThanDays: options.refreshOlderThanDays,
-				selected: rows.length,
-				idsPerMessage: TMDB_ENRICH_IDS_PER_QUEUE_MESSAGE,
-				startedAt,
-			}),
-		);
+		logEvent("tmdb-enrich-enqueue-start", {
+			trigger: options.trigger,
+			jobRunId,
+			limit: options.limit,
+			refreshOlderThanDays: options.refreshOlderThanDays,
+			selected: rows.length,
+			idsPerMessage: TMDB_ENRICH_IDS_PER_QUEUE_MESSAGE,
+			startedAt,
+		});
 
 		async function flushQueueMessages() {
 			if (queueMessages.length === 0) {
@@ -466,14 +537,38 @@ export async function enqueueTmdbEnrichmentJob(
 			durationMs: endedAtMs - startedAtMs,
 		};
 
-		console.log(
-			JSON.stringify({
-				event: "tmdb-enrich-enqueue-end",
-				...result,
-			}),
-		);
+		logEvent("tmdb-enrich-enqueue-end", result);
 
 		return result;
+	} catch (error) {
+		const endedAtMs = Date.now();
+		const endedAt = new Date(endedAtMs).toISOString();
+		const lastError =
+			error instanceof Error ? error.message : "TMDB enrichment enqueue failed.";
+		const result = {
+			jobRunId,
+			trigger: options.trigger,
+			status: "cancelled",
+			reason: "tmdb_enrichment_enqueue_error",
+			error: lastError,
+			limit: options.limit,
+			refreshOlderThanDays: options.refreshOlderThanDays,
+			startedAt,
+			endedAt,
+			durationMs: endedAtMs - startedAtMs,
+		};
+
+		if (jobRunCreated) {
+			await cancelImportJobRun(env, jobRunId, {
+				errors: 1,
+				result,
+				lastError,
+			});
+		}
+
+		logEvent("tmdb-enrich-cancelled", result);
+
+		throw error;
 	} finally {
 		if (options.useLock && lockAcquired) {
 			await releaseImportJobLock(env, TMDB_ENRICH_JOB_NAME, lockOwner);

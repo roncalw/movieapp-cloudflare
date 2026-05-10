@@ -1,21 +1,21 @@
 import { enqueueImdbRatingRows } from "../imports/imdbRatings";
 import { rebuildMovieListItems } from "../imports/movieListBuild";
-import {
-	enqueueTmdbEnrichmentJob,
-	TMDB_ENRICH_TMDB_CONCURRENCY,
-} from "../imports/tmdbEnrichment";
+import { enqueueTmdbNewMovieDetailsJob } from "../imports/tmdbNewMovieDetails";
+import { enqueueTmdbProviderRefreshJob } from "../imports/tmdbProviderRefresh";
 import { loadNewTmdbPrimaryRows } from "../imports/tmdbPrimary";
+import { logEvent } from "../shared/logging";
 import type { Env } from "../shared/types";
 
-const TMDB_ENRICHMENT_CRON_LIMIT = 300000;
 const SCHEDULED_IMDB_CRON = "0 22 * * 1";
 const SCHEDULED_TMDB_PRIMARY_CRON = "0 4 * * 2";
+const SCHEDULED_TMDB_NEW_MOVIE_DETAILS_CRON = "0 6 * * 2";
 const SCHEDULED_TMDB_ENRICHMENT_CRON = "0 10 * * 2";
 const SCHEDULED_MOVIE_LIST_BUILD_CRON = "0 1 * * 3";
 
 type JobPauseFlagName =
 	| "IMDB_JOB_PAUSED"
 	| "TMDB_PRIMARY_JOB_PAUSED"
+	| "TMDB_NEW_MOVIE_DETAILS_JOB_PAUSED"
 	| "TMDB_ENRICH_JOB_PAUSED"
 	| "MOVIE_LIST_JOB_PAUSED";
 
@@ -47,14 +47,11 @@ function skipPausedScheduledJob(
 		return false;
 	}
 
-	console.log(
-		JSON.stringify({
-			event: "scheduled-cron-paused",
-			jobName,
-			cron: controller.cron,
-			pausedBy,
-		}),
-	);
+	logEvent("scheduled-cron-paused", {
+		jobName,
+		cron: controller.cron,
+		pausedBy,
+	});
 
 	return true;
 }
@@ -63,26 +60,20 @@ async function runScheduledImdbRatingsRefresh(env: Env) {
 	const startedAtMs = Date.now();
 	const startedAt = new Date(startedAtMs).toISOString();
 
-	console.log(
-		JSON.stringify({
-			event: "imdb-ratings-cron-start",
-			startedAt,
-		}),
-	);
+	logEvent("imdb-ratings-cron-start", {
+		startedAt,
+	});
 
 	const result = await enqueueImdbRatingRows(env, undefined, "cron");
 	const endedAtMs = Date.now();
 	const endedAt = new Date(endedAtMs).toISOString();
 
-	console.log(
-		JSON.stringify({
-			event: "imdb-ratings-cron-end",
-			...result,
-			startedAt,
-			endedAt,
-			durationMs: endedAtMs - startedAtMs,
-		}),
-	);
+	logEvent("imdb-ratings-cron-end", {
+		...result,
+		startedAt,
+		endedAt,
+		durationMs: endedAtMs - startedAtMs,
+	});
 
 	return {
 		...result,
@@ -94,6 +85,27 @@ async function runScheduledImdbRatingsRefresh(env: Env) {
 
 async function runScheduledTmdbPrimaryRefresh(env: Env) {
 	return loadNewTmdbPrimaryRows(env, "cron");
+}
+
+function waitUntilLogged(
+	ctx: ExecutionContext,
+	jobName: string,
+	cron: string,
+	promise: Promise<unknown>,
+) {
+	ctx.waitUntil(
+		promise.catch((error) => {
+			const message = error instanceof Error ? error.message : String(error);
+
+			logEvent("scheduled-job-cancelled", {
+				jobName,
+				cron,
+				error: message,
+			});
+
+			throw error;
+		}),
+	);
 }
 
 export function handleScheduled(
@@ -113,7 +125,12 @@ export function handleScheduled(
 			return;
 		}
 
-		ctx.waitUntil(runScheduledImdbRatingsRefresh(env));
+		waitUntilLogged(
+			ctx,
+			"imdb-ratings",
+			controller.cron,
+			runScheduledImdbRatingsRefresh(env),
+		);
 		return;
 	}
 
@@ -129,7 +146,36 @@ export function handleScheduled(
 			return;
 		}
 
-		ctx.waitUntil(runScheduledTmdbPrimaryRefresh(env));
+		waitUntilLogged(
+			ctx,
+			"tmdb-primary",
+			controller.cron,
+			runScheduledTmdbPrimaryRefresh(env),
+		);
+		return;
+	}
+
+	if (controller.cron === SCHEDULED_TMDB_NEW_MOVIE_DETAILS_CRON) {
+		if (
+			skipPausedScheduledJob(
+				env,
+				controller,
+				"tmdb-new-movie-details",
+				"TMDB_NEW_MOVIE_DETAILS_JOB_PAUSED",
+			)
+		) {
+			return;
+		}
+
+		waitUntilLogged(
+			ctx,
+			"tmdb-new-movie-details",
+			controller.cron,
+			enqueueTmdbNewMovieDetailsJob(env, {
+				useLock: true,
+				trigger: "cron",
+			}),
+		);
 		return;
 	}
 
@@ -138,19 +184,18 @@ export function handleScheduled(
 			skipPausedScheduledJob(
 				env,
 				controller,
-				"tmdb-enrichment",
+				"tmdb-provider-refresh",
 				"TMDB_ENRICH_JOB_PAUSED",
 			)
 		) {
 			return;
 		}
 
-		ctx.waitUntil(
-			enqueueTmdbEnrichmentJob(env, {
-				limit: TMDB_ENRICHMENT_CRON_LIMIT,
-				refreshOlderThanDays: 7,
-				progressEvery: 5000,
-				tmdbConcurrency: TMDB_ENRICH_TMDB_CONCURRENCY,
+		waitUntilLogged(
+			ctx,
+			"tmdb-provider-refresh",
+			controller.cron,
+			enqueueTmdbProviderRefreshJob(env, {
 				useLock: true,
 				trigger: "cron",
 			}),
@@ -170,14 +215,16 @@ export function handleScheduled(
 			return;
 		}
 
-		ctx.waitUntil(rebuildMovieListItems(env, "cron"));
+		waitUntilLogged(
+			ctx,
+			"movie-list-build",
+			controller.cron,
+			rebuildMovieListItems(env, "cron"),
+		);
 		return;
 	}
 
-	console.log(
-		JSON.stringify({
-			event: "scheduled-cron-unhandled",
-			cron: controller.cron,
-		}),
-	);
+	logEvent("scheduled-cron-unhandled", {
+		cron: controller.cron,
+	});
 }
