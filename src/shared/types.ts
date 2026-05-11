@@ -7,6 +7,7 @@ export interface Env extends Cloudflare.Env {
 		| TmdbProviderRefreshQueueMessage
 	>;
 	TMDB_API_KEY: string;
+	ADMIN_IMPORT_TOKEN?: string;
 	ALL_JOBS_PAUSED?: string;
 	IMDB_JOB_PAUSED?: string;
 	TMDB_PRIMARY_JOB_PAUSED?: string;

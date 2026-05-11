@@ -11,6 +11,8 @@ import type { Env } from "../shared/types";
 export type ImportJobDependencyRequirement = {
 	jobName: string;
 	afterJobName?: string;
+	endedAfter?: string | null;
+	endedAfterLabel?: string;
 };
 
 export type ImportJobDependencyBlocker = {
@@ -22,6 +24,8 @@ export type ImportJobDependencyBlocker = {
 	endedAt?: string | null;
 	afterJobName?: string;
 	afterEndedAt?: string | null;
+	requiredEndedAfter?: string | null;
+	requiredEndedAfterLabel?: string;
 };
 
 export type ImportJobDependencyCheck = {
@@ -73,6 +77,46 @@ export async function getLatestImportJobRun(env: Env, jobName: string) {
 		.first<ImportJobRunRow>();
 }
 
+export async function getLatestCleanImportJobRunWithResultJsonNumberGreaterThan(
+	env: Env,
+	options: {
+		jobName: string;
+		resultJsonPath: string;
+		greaterThan: number;
+	},
+) {
+	return env.DB.prepare(
+		`SELECT job_run_id,
+		        job_name,
+		        status,
+		        trigger,
+		        selected_count,
+		        queued_count,
+		        processed_count,
+		        updated_count,
+		        error_count,
+		        provider_rows_inserted,
+		        started_at,
+		        last_progress_at,
+		        ended_at,
+		        last_error,
+		        result_json
+		 FROM import_job_runs
+		 WHERE job_name = ?
+		   AND status = 'complete'
+		   AND error_count = 0
+		   AND ended_at IS NOT NULL
+		   AND COALESCE(
+		     CAST(json_extract(COALESCE(result_json, '{}'), ?) AS INTEGER),
+		     0
+		   ) > ?
+		 ORDER BY ended_at DESC
+		 LIMIT 1`,
+	)
+		.bind(options.jobName, options.resultJsonPath, options.greaterThan)
+		.first<ImportJobRunRow>();
+}
+
 export async function checkImportJobDependencies(
 	env: Env,
 	requirements: ImportJobDependencyRequirement[],
@@ -118,6 +162,27 @@ export async function checkImportJobDependencies(
 
 	for (const requirement of requirements) {
 		if (!requirement.afterJobName) {
+			const run = runs[requirement.jobName];
+			const requiredEndedAfter = toUtcTime(requirement.endedAfter);
+			const runEndedAt = toUtcTime(run?.ended_at);
+
+			if (
+				run &&
+				requiredEndedAfter !== null &&
+				(runEndedAt === null || runEndedAt <= requiredEndedAfter)
+			) {
+				blockers.push({
+					jobName: requirement.jobName,
+					reason: "dependency_job_ended_before_required_time",
+					jobRunId: run.job_run_id,
+					status: run.status,
+					errorCount: run.error_count,
+					endedAt: run.ended_at,
+					requiredEndedAfter: requirement.endedAfter,
+					requiredEndedAfterLabel: requirement.endedAfterLabel,
+				});
+			}
+
 			continue;
 		}
 
@@ -145,6 +210,25 @@ export async function checkImportJobDependencies(
 				endedAt: run.ended_at,
 				afterJobName: requirement.afterJobName,
 				afterEndedAt: afterRun.ended_at,
+			});
+		}
+
+		const requiredEndedAfter = toUtcTime(requirement.endedAfter);
+
+		if (requiredEndedAfter === null) {
+			continue;
+		}
+
+		if (runEndedAt === null || runEndedAt <= requiredEndedAfter) {
+			blockers.push({
+				jobName: requirement.jobName,
+				reason: "dependency_job_ended_before_required_time",
+				jobRunId: run.job_run_id,
+				status: run.status,
+				errorCount: run.error_count,
+				endedAt: run.ended_at,
+				requiredEndedAfter: requirement.endedAfter,
+				requiredEndedAfterLabel: requirement.endedAfterLabel,
 			});
 		}
 	}

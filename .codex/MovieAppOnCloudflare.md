@@ -42,7 +42,7 @@
       - [ ] [Step 17-5: Movie List Build Job](#step-17-5-movie-list-build-job)
       - [ ] [Step 17-6: Movie List Potential-Load Safety Check](#step-17-6-movie-list-potential-load-safety-check)
       - [ ] [Step 17-7: Movie List Current-Count Snapshot](#step-17-7-movie-list-current-count-snapshot)
-      - [ ] [Step 17-8: Production Order](#step-17-8-production-order)
+      - [ ] [Step 17-8: Job Dependencies and Order](#step-17-8-job-dependencies-and-order)
       - [ ] [Step 17-9: Historical Job Info](#step-17-9-historical-job-info)
       - [ ] [Step 17-10: Manual-Only Jobs](#step-17-10-manual-only-jobs)
     - [ ] [Step 18: Scheduled Refresh Cron Jobs](#step-18-scheduled-refresh-cron-jobs)
@@ -2422,7 +2422,7 @@ cd /Users/croncallo/repo/MovieApp-Cloudflare
 <div><span class="ooo">[</span> X  <span class="ooo">]</span> Call the local manual enqueue endpoint:
 
 ```bash
-curl "http://localhost:8787/admin/import/imdb-ratings/enqueue-manual?limit=330"
+curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "http://localhost:8787/admin/import/imdb-ratings/enqueue-manual?limit=330"
 ```
 
 Expected response shape:
@@ -2455,7 +2455,7 @@ npx wrangler d1 execute movieapp-db --local --command "SELECT imdb_id, average_r
 <div><span class="ooo">[</span> X  <span class="ooo">]</span> Then try the next local size:
 
 ```bash
-curl "http://localhost:8787/admin/import/imdb-ratings/enqueue-manual?limit=3300"
+curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "http://localhost:8787/admin/import/imdb-ratings/enqueue-manual?limit=3300"
 ```
 
 <div><span class="ooo">[</span> X  <span class="ooo">]</span> Confirm local D1 count again:
@@ -2496,7 +2496,7 @@ Call the deployed manual enqueue endpoint.
 <div><span class="ooo">[</span> X <span class="ooo">]</span> Use your deployed Worker URL:
 
 ```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual?limit=330"
+curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual?limit=330"
 ```
 
 Expected response shape:
@@ -2529,7 +2529,7 @@ npx wrangler d1 execute movieapp-db --remote --command "SELECT imdb_id, average_
 <div><span class="ooo">[</span> X <span class="ooo">]</span> Then try the next remote size:
 
 ```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual?limit=3300"
+curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual?limit=3300"
 ```
 
 <div><span class="ooo">[</span> X <span class="ooo">]</span> Confirm remote D1 count again:
@@ -2571,7 +2571,7 @@ Important Queue timing note:
 <div><span class="ooo">[</span> X <span class="ooo">]</span> Only after the small remote tests pass, consider:
 
 ```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual?limit=33000"
+curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual?limit=33000"
 ```
 
 <div><span class="ooo">[</span> X <span class="ooo">]</span> Then check:
@@ -2705,9 +2705,9 @@ Use the same TMDB authentication style the current MovieApp and legacy MovieApp 
 api_key=your_key_goes_here
 ```
 
-Do not use `Authorization: Bearer ...` for this Worker code.
+Do not use `Authorization: Bearer ...` for calls from the Worker to TMDB.
 
-That is a different TMDB credential style. This guide is using the existing MovieApp API-key style so the Cloudflare importer matches the app we already have.
+That is a different TMDB credential style. This guide is using the existing MovieApp API-key style so the Cloudflare importer matches the app we already have. The separate `Authorization: Bearer $ADMIN_IMPORT_TOKEN` header is only for protecting our own manual admin import endpoints.
 
 There are two places to store the same TMDB API key:
 
@@ -3559,7 +3559,7 @@ cd /Users/croncallo/repo/MovieApp-Cloudflare
 <div><span class="ooo">[</span>X<span class="ooo">]</span> Call the local TMDB primary-load endpoint with a small limit:</div>
 
 ```bash
-curl "http://localhost:8787/admin/import/tmdb/limited-primary-manual?limit=100&beginDate=2000-01-01&endDate=2000-12-31"
+curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "http://localhost:8787/admin/import/tmdb/limited-primary-manual?limit=100&beginDate=2000-01-01&endDate=2000-12-31"
 ```
 
 Expected response shape:
@@ -3660,7 +3660,7 @@ Step 9A-8: Test The Primary TMDB Load Remotely
 <div><span class="ooo">[</span>X<span class="ooo">]</span> Call the deployed TMDB primary-load endpoint with the same small limit:</div>
 
 ```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/limited-primary-manual?limit=100&beginDate=2000-01-01&endDate=2000-12-31"
+curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/limited-primary-manual?limit=100&beginDate=2000-01-01&endDate=2000-12-31"
 ```
 
 Expected response shape:
@@ -3743,7 +3743,7 @@ npx wrangler d1 execute movieapp-db --remote --command "SELECT tmdb_id, title, r
 <div><span class="ooo">[</span>X<span class="ooo">]</span> If the remote test works, try a slightly larger same-window run:
 
 ```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/limited-primary-manual?limit=1000&beginDate=2000-01-01&endDate=2000-12-31"
+curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/limited-primary-manual?limit=1000&beginDate=2000-01-01&endDate=2000-12-31"
 ```
 
 Important:
@@ -4322,7 +4322,7 @@ Route:
 Remote example:
 
 ```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-all-manual?limit=300000&refreshOlderThanDays=7"
+curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-all-manual?limit=300000&refreshOlderThanDays=7"
 ```
 
 Parameters:
@@ -4420,7 +4420,7 @@ npm run deploy
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Enqueue a small remote test first.</div>
 
 ```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-all-manual?limit=1000&refreshOlderThanDays=7"
+curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-all-manual?limit=1000&refreshOlderThanDays=7"
 ```
 
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Check D1-backed progress.</div>
@@ -5253,37 +5253,49 @@ prove the response fields match the app search screen needs
 
 This section is the plain-English map of the production data jobs.
 
-**Job Dependency**
+**Job Dependencies**
 
-Manual endpoints and cron jobs follow the same dependency chain. A job is allowed to start only when the required previous job has a latest `import_job_runs` row with `status = complete`, `error_count = 0`, and `ended_at` filled in. If the previous job is missing, queued, running, cancelled, skipped, complete-with-errors, or older than the job it depends on, the next job records `skipped: true` with `skipReason: job_dependency_not_ready`.
+Manual endpoints and cron jobs use the same dependency checks where a job has a real upstream requirement. A required upstream job must have a latest `import_job_runs` row with `status = complete`, `error_count = 0`, and `ended_at` filled in. If the required job is missing, queued, running, cancelled, skipped, complete-with-errors, or older than the job it depends on, the next job records `skipped: true` with `skipReason: job_dependency_not_ready`.
 
-The production dependency chain is:
+The normal production run order is:
 
 ```text
 IMDb ratings -> TMDB primary -> TMDB new movie details -> TMDB provider refresh -> Movie list build
 ```
 
+That order is not the same as saying every job depends on the previous job. TMDB primary does not depend on IMDb. The final movie-list build is where IMDb freshness is enforced: the latest clean IMDb job must be newer than the latest successful movie-list build.
+
 That means if you manually run TMDB primary and it fails, `/admin/import/tmdb/new-movie-details-manual` will not continue. It will look at the latest `tmdb-primary` row in `import_job_runs`, see that it is not a clean completed run, and return a dependency skip instead of enriching against bad or incomplete source data.
+
+Manual job kickoff endpoints are protected because they write data or start queue work. They require `POST` and `Authorization: Bearer $ADMIN_IMPORT_TOKEN`. Read-only monitor endpoints, such as `/admin/import/job-runs`, stay `GET`.
 
 The short version:
 
 ```text
-curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual" | jq
+IMDB
+curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual" | jq
   For enques, monitor progress with this: (response comes back in under a minute that enqueing has started takes about 8 minutes to complete)
     curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=imdb-ratings&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
 
-curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-primary-manual" | jq
+PRIMARY NEW MOVIES
+curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-primary-manual" | jq
   Straight up sql, so response takes from 10 seconds to a minute
     curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-primary&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
 
-curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-movie-details-manual" | jq
-  For enques, monitor progress with this: (response comes back in just a few seconds that enqueing has started takes about another few seconds to complete)
+PRIMARY NEW MOVIE DETAILS
+curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-movie-details-manual" | jq
+  For enqueues, monitor progress with this: (response comes back in just a few seconds that enqueing has started takes about another few seconds to complete)
     curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-new-movie-details&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
 
+WATCH PROVIDERS REFRESH
+curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/provider-refresh-manual" | jq
+  For enqueues, monitor progress with this: (response comes back in about 6 minutes that enqueing has started takes about another hour to complete)
+    curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-provider-refresh&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
 
-
-curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/provider-refresh-manual" | jq
-curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual" | jq
+FINAL MOVIES LIST
+curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual" | jq
+  Straight up sql, so response takes a couple of minutes --- 1. dependency check, 2. potential-load safety check, 3. relationship promotion, 4. movie_list_items upsert, 5. current-count snapshot
+    curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=movie-list-build&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
 
 ```
 
@@ -5304,8 +5316,8 @@ curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/mov
 * Manual Kickoff:
   * Endpoint: `/admin/import/imdb-ratings/enqueue-manual` or `/admin/import/imdb-ratings/enqueue-manual?limit=33000`.
   * Command:
-    * Full Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual" | jq</code> - expect the JSON to return in under a minute with `jobRunId`, `rowsSeen`, `rowsQueued`, and queue counts showing the full enqueue shape, currently about 1.6M rows.
-    * Partial Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual?limit=33000" | jq</code> - expect the same JSON shape with `rowsSeen` and `rowsQueued` capped at the requested limit.
+    * Full Job: <code class="green">curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual" | jq</code> - expect the JSON to return in under a minute with `jobRunId`, `rowsSeen`, `rowsQueued`, and queue counts showing the full enqueue shape, currently about 1.6M rows.
+    * Partial Job: <code class="green">curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual?limit=33000" | jq</code> - expect the same JSON shape with `rowsSeen` and `rowsQueued` capped at the requested limit.
   * Type:
     * Asynchronous after enqueue response - wait for the JSON response, then you can walk away or close the computer because the Cloudflare Queue drains remotely.
     * Queue enqueue means the Worker reads the IMDb file and puts small work messages on a queue.
@@ -5353,8 +5365,8 @@ curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/mov
 * Manual Kickoff:
   * Endpoint: `/admin/import/tmdb/new-primary-manual` for the normal full refresh, or `/admin/import/tmdb/limited-primary-manual?beginDate=YYYY-MM-DD&endDate=YYYY-MM-DD&limit=1000` for an explicit limited run.
   * Command:
-    * Full- Only New Movies Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-primary-manual" | jq</code> - uses the latest staged TMDB release date as `beginDate`, today as `endDate`, and the standard 2M cap; on success expect `jobRunId`, `beginDate`, `endDate`, `pagesRead`, `rowsSeen`, `rowsUpserted`, `rowsInserted`, `windowsLoaded`, `windowsSplit`, `stopReason`, and `durationMs`; `rowsUpserted` means rows refreshed or inserted in `tmdb_movies_staging`; `rowsInserted` means true new movie IDs inserted into the new-movie-details handoff table; if the begin date is older than 28 days, expect `skipped: true` with `skipReason`, `beginDate`, `endDate`, and `oldestAllowedBeginDate`.
-    * Partial- Only New Movies Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/limited-primary-manual?beginDate=2000-01-01&amp;endDate=2000-12-31&amp;limit=1000" | jq</code> - use this when you intentionally want an explicit date range and row cap; on success expect `jobRunId`, `beginDate`, `endDate`, `pagesRead`, `rowsSeen`, `rowsUpserted`, `rowsInserted`, `windowsLoaded`, `windowsSplit`, `stopReason`, and `durationMs`.
+    * Full- Only New Movies Job: <code class="green">curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-primary-manual" | jq</code> - uses the latest staged TMDB release date as `beginDate`, today as `endDate`, and the standard 2M cap; on success expect `jobRunId`, `beginDate`, `endDate`, `pagesRead`, `rowsSeen`, `rowsUpserted`, `rowsInserted`, `windowsLoaded`, `windowsSplit`, `stopReason`, and `durationMs`; `rowsUpserted` means rows refreshed or inserted in `tmdb_movies_staging`; `rowsInserted` means true new movie IDs inserted into the new-movie-details handoff table; if the begin date is older than 28 days, expect `skipped: true` with `skipReason`, `beginDate`, `endDate`, and `oldestAllowedBeginDate`.
+    * Partial- Only New Movies Job: <code class="green">curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/limited-primary-manual?beginDate=2000-01-01&amp;endDate=2000-12-31&amp;limit=1000" | jq</code> - use this when you intentionally want an explicit date range and row cap; on success expect `jobRunId`, `beginDate`, `endDate`, `pagesRead`, `rowsSeen`, `rowsUpserted`, `rowsInserted`, `windowsLoaded`, `windowsSplit`, `stopReason`, and `durationMs`.
   * Type:
     * Synchronous - keep the command running until the JSON response returns because this endpoint does the TMDB page reads and D1 writes directly.
     * TMDB Discover API pages mean the Worker calls TMDB one page at a time.
@@ -5386,7 +5398,7 @@ curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/mov
 * Manual Kickoff:
   * Endpoint: `/admin/import/tmdb/new-movie-details-manual`.
   * Command:
-    * Full Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-movie-details-manual" | jq</code> - on success expect `jobRunId`, `primaryJobRunId`, `selected`, `rowsQueued`, `messagesQueued`, and `durationMs`; if the latest primary job failed or is still running, expect `skipped: true` with `skipReason: job_dependency_not_ready`.
+    * Full Job: <code class="green">curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-movie-details-manual" | jq</code> - on success expect `jobRunId`, `primaryJobRunId`, `selected`, `rowsQueued`, `messagesQueued`, and `durationMs`; if the latest primary job failed or is still running, expect `skipped: true` with `skipReason: job_dependency_not_ready`.
   * Type:
     * Asynchronous after enqueue response - wait for the JSON response, then you can walk away or close the computer because the TMDB details queue drains remotely.
     * Dependency check means this will only run after a clean completed TMDB primary run.
@@ -5440,7 +5452,7 @@ curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/mov
 * Manual Kickoff:
   * Endpoint: `/admin/import/tmdb/provider-refresh-manual`.
   * Command:
-    * Full Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/provider-refresh-manual" | jq</code> - on success expect `jobRunId`, `beginDate`, `endDate`, Discover window counts, `candidateCount`, `selected`, `rowsQueued`, `messagesQueued`, `stopReason`, and `durationMs`; the endpoint returns after enqueue, then provider queue drain continues remotely.
+    * Full Job: <code class="green">curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/provider-refresh-manual" | jq</code> - on success expect `jobRunId`, `beginDate`, `endDate`, Discover window counts, `candidateCount`, `selected`, `rowsQueued`, `messagesQueued`, `stopReason`, and `durationMs`; the endpoint returns after enqueue, then provider queue drain continues remotely.
   * Type:
     * Asynchronous after enqueue response - wait for the JSON response, then you can walk away or close the computer because the TMDB provider queue drains remotely.
     * Discover staging means the Worker first records the current US flatrate movie-id set in D1.
@@ -5471,7 +5483,7 @@ curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/mov
     * Uses one endpoint that runs the whole movie-list build job. You do not have to manually run the three child-step endpoints for a normal full build.
       * Endpoint: `/admin/import/movie-list/rebuild-manual`.
       * Command:
-        * Full Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual" | jq</code> - this runs Step 1, then Step 2, then Step 3 in order.
+        * Full Job: <code class="green">curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual" | jq</code> - this runs Step 1, then Step 2, then Step 3 in order.
     * What it runs:
       * Step 1: movie list potential-load safety check.
       * Step 2: movie list insert/upsert and relationship promotion.
@@ -5528,7 +5540,7 @@ curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/mov
   * Manual Kickoff:
     * Endpoint: `/admin/import/movie-list/potential-load-check`.
     * Command:
-      * Full Check: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/potential-load-check" | jq</code> - on success expect `jobRunId`, `loadDate`, current counts, potential-load counts, `drops`, `shouldStopMovieListBuild`, and `durationMs`; recent full check was about 12.4 seconds.
+      * Full Check: <code class="green">curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/potential-load-check" | jq</code> - on success expect `jobRunId`, `loadDate`, current counts, potential-load counts, `drops`, `shouldStopMovieListBuild`, and `durationMs`; recent full check was about 12.4 seconds.
     * Type:
       * Synchronous - keep the command running until the JSON response returns because this endpoint does the count check directly.
       * D1 SQL count query means the Worker counts the current live tables and the candidate data before loading.
@@ -5580,7 +5592,7 @@ curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/mov
   * Manual Kickoff:
     * Endpoint: `/admin/import/movie-list/rebuild-manual`; this is the parent full-job endpoint listed above.
     * Command:
-      * Full Job: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual" | jq</code> - on success expect `jobRunId`, safety-check result, relationship promotion summaries, `upsertedRows`, `movieListCount`, current-count snapshot result, and `durationMs`; timing depends on how many changed staging rows qualify.
+      * Full Job: <code class="green">curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual" | jq</code> - on success expect `jobRunId`, safety-check result, relationship promotion summaries, `upsertedRows`, `movieListCount`, current-count snapshot result, and `durationMs`; timing depends on how many changed staging rows qualify.
     * Type:
       * Synchronous - keep the command running until the JSON response returns because this endpoint runs the safety check, relationship promotion, movie-list upsert, and snapshot in one request.
       * Relationship promotion means staged genres and providers become live after the safety check passes.
@@ -5617,7 +5629,7 @@ curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/mov
   * Manual Kickoff:
     * Endpoint: `/admin/import/movie-list/current-count-snapshot`.
     * Command:
-      * Full Snapshot: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/current-count-snapshot" | jq</code> - on success expect `jobRunId`, `loadDate`, current counts, and `durationMs`; recent snapshot counted about 810,000 searchable movies in 341 ms.
+      * Full Snapshot: <code class="green">curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/current-count-snapshot" | jq</code> - on success expect `jobRunId`, `loadDate`, current counts, and `durationMs`; recent snapshot counted about 810,000 searchable movies in 341 ms.
     * Type:
       * Synchronous - keep the command running until the JSON response returns because this endpoint writes the current-count snapshot directly.
       * D1 SQL count snapshot means the Worker counts the finished live tables and stores those numbers for review and history.
@@ -6288,7 +6300,7 @@ Status and timing:
 
 Schedule flow details: [Step 18-3: What `scheduled(...)` Does](#step-18-3-what-scheduled-does).
 
-### Step 17-8: Production Order
+### Step 17-8: Job Dependencies and Order
 
 The production order is:
 
@@ -6302,18 +6314,85 @@ The production order is:
 7. Movie list current-count snapshot step
 ```
 
-The order matters because:
+**IMDb ratings job**
 
-```text
-IMDb ratings must exist before the final movie list can copy rating and vote-count fields.
-TMDB primary rows must exist before new movie details can enrich IMDb id and US certification.
-TMDB new movie details must finish before provider refresh so the weekly pipeline knows static details for new movies are complete.
-TMDB provider refresh must finish before the movie list build can trust provider links.
-Manual-only TMDB enrichment exists for rare repair/backfill when IMDb id or US certification needs to be rechecked.
-The potential-load safety check runs before the movie list build so a bad source load can stop the final-table replacement.
-The movie list build writes the app-facing output.
-The current-count snapshot runs after a successful build so the finished counts are recorded for review and history.
-```
+* Dependencies:
+  * No earlier production job is required before the IMDb ratings job starts.
+  * The final movie-list build now requires the latest clean IMDb ratings job to be newer than the latest successful movie-list build.
+  * If there has never been a successful movie-list build, that freshness rule has no prior build timestamp to compare against.
+* How:
+  * The job writes `imdb_ratings_staging`.
+  * The durable job row is written to `import_job_runs` with `job_name = 'imdb-ratings'`.
+  * A clean dependency row means `status = 'complete'`, `error_count = 0`, and `ended_at` is filled in.
+  * For the final movie-list build, `import_job_runs.ended_at` for `imdb-ratings` must be later than the latest successful `movie-list-build.ended_at`.
+  * This prevents an old clean IMDb job from satisfying new weekly movie-list builds forever.
+
+**TMDB primary job**
+
+* Dependencies:
+  * Does not depend on IMDb.
+  * Does not require any previous production job to be complete.
+* How:
+  * Reads TMDB Discover API pages for the release-date window.
+  * Uses `MAX(release_date)` from `tmdb_movies_staging` as the normal begin date.
+  * Writes/refreshed rows in `tmdb_movies_staging`.
+  * Writes staged genre links in `movie_genres_staging`.
+  * Clears and rewrites `tmdb_primary_new_movie_ids_for_new_movie_details_staging`.
+  * That handoff table contains only movie IDs that did not already exist in `tmdb_movies_staging` before the primary upsert.
+  * The durable job row is written to `import_job_runs` with `job_name = 'tmdb-primary'`.
+
+**TMDB new movie details job**
+
+* Dependencies:
+  * Requires the latest `tmdb-primary` job to be clean and complete.
+  * If the latest primary job is missing, running, skipped, cancelled, failed, or complete with errors, this job skips itself.
+* How:
+  * Checks `import_job_runs` for the latest `tmdb-primary` row.
+  * Reads `tmdb_primary_new_movie_ids_for_new_movie_details_staging` for that primary job's `job_run_id`.
+  * Enriches only those handoff movie IDs.
+  * Writes static detail fields back to `tmdb_movies_staging`: `imdb_id`, `us_certification`, `tmdb_enriched_at`, and `tmdb_enrichment_error`.
+  * The durable job row is written to `import_job_runs` with `job_name = 'tmdb-new-movie-details'`.
+
+**TMDB provider refresh job**
+
+* Dependencies:
+  * Requires the latest `tmdb-primary` job to be clean and complete.
+  * Requires the latest `tmdb-new-movie-details` job to be clean, complete, and newer than the latest `tmdb-primary` job that inserted true-new movie IDs into `tmdb_primary_new_movie_ids_for_new_movie_details_staging`.
+  * A later `tmdb-primary` run with `rowsInserted = 0` does not force a new details run, because it refreshed existing primary rows but created no new handoff IDs.
+* How:
+  * Checks `import_job_runs` for the latest clean `tmdb-primary` row.
+  * Finds the latest clean `tmdb-primary` row where `result_json.rowsInserted > 0`.
+  * If that row exists, the latest clean `tmdb-new-movie-details` row must have `ended_at` later than that primary row's `ended_at`.
+  * Uses TMDB Discover with US flatrate filters to find current US streaming-provider candidate movies.
+  * Refreshes provider rows through the TMDB enrichment queue.
+  * Writes staged provider links in `movie_watch_providers_staging`.
+  * The durable job row is written to `import_job_runs` with `job_name = 'tmdb-provider-refresh'`.
+
+**Movie list build job**
+
+* Dependencies:
+  * Requires the latest `imdb-ratings` job to be clean, complete, and newer than the latest successful `movie-list-build` job.
+  * Requires the latest `tmdb-primary` job to be clean and complete.
+  * Requires the latest `tmdb-new-movie-details` job to be clean, complete, and newer than the latest `tmdb-primary` job that inserted true-new movie IDs into `tmdb_primary_new_movie_ids_for_new_movie_details_staging`.
+  * A later `tmdb-primary` run with `rowsInserted = 0` does not force the details/provider chain to run again.
+  * Requires the latest `tmdb-provider-refresh` job to be clean, complete, and newer than the latest `tmdb-new-movie-details` job.
+* How:
+  * Checks `import_job_runs` before doing the potential-load safety check.
+  * Uses `result_json.rowsInserted > 0` to decide which primary run actually required the new movie details handoff.
+  * If any dependency fails, the movie-list job writes `skipped: true` with `skipReason = job_dependency_not_ready`.
+  * Runs the potential-load safety check before changing the app-facing tables.
+  * Promotes staged relationship rows from `movie_genres_staging` and `movie_watch_providers_staging`.
+  * Upserts the app-facing `movie_list_items` table from `tmdb_movies_staging` joined to `imdb_ratings_staging`.
+  * Records a current-count snapshot only after the build succeeds.
+
+**Manual-only TMDB full enrichment job**
+
+* Dependencies:
+  * Not part of the weekly production chain.
+  * Use only for rare repair/backfill when IMDb ID or US certification needs to be rechecked broadly.
+* How:
+  * Writes static detail fields on `tmdb_movies_staging`.
+  * Movie-list build refuses to run while this full enrichment job is active.
 
 The current weekly schedule intentionally leaves wide gaps between jobs:
 
@@ -6540,7 +6619,7 @@ Endpoint:
   /admin/import/tmdb/enrich-all-manual?limit=300000&refreshOlderThanDays=7
 
 Command:
-  curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-all-manual?limit=300000&refreshOlderThanDays=7" | jq
+  curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/enrich-all-manual?limit=300000&refreshOlderThanDays=7" | jq
 
 Expected success JSON:
   jobRunId, selected, rowsQueued, queueMessageCount, messagesQueued, startedAt, endedAt, durationMs
@@ -6572,7 +6651,7 @@ Endpoint:
   /admin/import/tmdb/limited-primary-manual?beginDate=YYYY-MM-DD&endDate=YYYY-MM-DD&limit=1000
 
 Command:
-  curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/limited-primary-manual?beginDate=2000-01-01&endDate=2000-12-31&limit=1000" | jq
+  curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/limited-primary-manual?beginDate=2000-01-01&endDate=2000-12-31&limit=1000" | jq
 
 Expected success JSON:
   jobRunId, beginDate, endDate, pagesRead, rowsSeen, rowsUpserted, rowsInserted, windowsLoaded, windowsSplit, stopReason, durationMs
@@ -6881,35 +6960,35 @@ If the dashboard only shows the UTC expression, use the same map:
 Manual HTTP fallbacks also exist for testing:
 
 ```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual"
+curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual"
 ```
 
 ```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-primary-manual"
+curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-primary-manual"
 ```
 
 ```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/limited-primary-manual?limit=100000&beginDate=YYYY-MM-DD&endDate=YYYY-MM-DD"
+curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/limited-primary-manual?limit=100000&beginDate=YYYY-MM-DD&endDate=YYYY-MM-DD"
 ```
 
 ```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-movie-details-manual"
+curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-movie-details-manual"
 ```
 
 ```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/provider-refresh-manual"
+curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/provider-refresh-manual"
 ```
 
 ```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual"
+curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual"
 ```
 
 ```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/potential-load-check"
+curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/potential-load-check"
 ```
 
 ```bash
-curl "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/current-count-snapshot"
+curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/current-count-snapshot"
 ```
 
 ### Step 18-5: Monitoring Order

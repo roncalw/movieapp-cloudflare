@@ -23,7 +23,11 @@ import {
 	TMDB_PROVIDER_REFRESH_JOB_NAME,
 	updateImportJobRunProgress,
 } from "../jobs/importJobRuns";
-import { checkImportJobDependencies } from "../jobs/importJobDependencies";
+import {
+	checkImportJobDependencies,
+	getLatestCleanImportJobRunWithResultJsonNumberGreaterThan,
+	type ImportJobDependencyRequirement,
+} from "../jobs/importJobDependencies";
 import type { Env } from "../shared/types";
 import { logEvent } from "../shared/logging";
 
@@ -248,18 +252,41 @@ export async function rebuildMovieListItems(
 			startedAt,
 		});
 
-		const dependencies = await checkImportJobDependencies(env, [
-			{ jobName: IMDB_RATINGS_JOB_NAME },
+		const lastSuccessfulBuildEndedAt =
+			await getLastSuccessfulMovieListBuildEndedAt(env);
+		const latestPrimaryWithNewMovieIds =
+			await getLatestCleanImportJobRunWithResultJsonNumberGreaterThan(env, {
+				jobName: TMDB_PRIMARY_JOB_NAME,
+				resultJsonPath: "$.rowsInserted",
+				greaterThan: 0,
+			});
+		const dependencyRequirements: ImportJobDependencyRequirement[] = [
+			{
+				jobName: IMDB_RATINGS_JOB_NAME,
+				endedAfter: lastSuccessfulBuildEndedAt,
+				endedAfterLabel: "latest successful movie-list build",
+			},
 			{ jobName: TMDB_PRIMARY_JOB_NAME },
-			{
+		];
+
+		if (latestPrimaryWithNewMovieIds) {
+			dependencyRequirements.push({
 				jobName: TMDB_NEW_MOVIE_DETAILS_JOB_NAME,
-				afterJobName: TMDB_PRIMARY_JOB_NAME,
-			},
-			{
-				jobName: TMDB_PROVIDER_REFRESH_JOB_NAME,
-				afterJobName: TMDB_NEW_MOVIE_DETAILS_JOB_NAME,
-			},
-		]);
+				endedAfter: latestPrimaryWithNewMovieIds.ended_at,
+				endedAfterLabel:
+					"latest TMDB primary run that inserted new movie IDs",
+			});
+		}
+
+		dependencyRequirements.push({
+			jobName: TMDB_PROVIDER_REFRESH_JOB_NAME,
+			afterJobName: TMDB_NEW_MOVIE_DETAILS_JOB_NAME,
+		});
+
+		const dependencies = await checkImportJobDependencies(
+			env,
+			dependencyRequirements,
+		);
 
 		if (!dependencies.ok) {
 			const endedAtMs = Date.now();
@@ -318,8 +345,6 @@ export async function rebuildMovieListItems(
 			return result;
 		}
 
-		const lastSuccessfulBuildEndedAt =
-			await getLastSuccessfulMovieListBuildEndedAt(env);
 		const readiness = await getMovieListBuildReadiness(
 			env,
 			lastSuccessfulBuildEndedAt,

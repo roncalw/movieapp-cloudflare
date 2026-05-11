@@ -334,12 +334,22 @@ function createMockEnv(rows: unknown[]) {
 				};
 			},
 		},
+		ADMIN_IMPORT_TOKEN: "test-admin-token",
 	} as unknown as Env;
 
 	return {
 		env,
 		getPreparedSql: () => preparedSql,
 	};
+}
+
+function createManualAdminRequest(url: string) {
+	return new IncomingRequest(url, {
+		method: "POST",
+		headers: {
+			authorization: "Bearer test-admin-token",
+		},
+	});
 }
 
 /*
@@ -489,9 +499,27 @@ describe("MovieApp Worker", () => {
 		expect(mock.getPreparedSql()).not.toContain("provider.provider_id IN");
 	});
 
-	it("rejects query strings on the normal TMDB primary manual endpoint", async () => {
+	it("requires POST for manual admin import endpoints", async () => {
 		const mock = createMockEnv([]);
 		const request = new IncomingRequest(
+			"http://example.com/admin/import/tmdb/new-primary-manual",
+		);
+		const response = await worker.fetch(request, mock.env);
+
+		expect(response.status).toBe(405);
+		expect(response.headers.get("allow")).toBe("POST");
+		expect(await response.json()).toEqual({
+			error:
+				"Manual import endpoints require POST. This prevents accidental browser GET requests from starting jobs.",
+			path: "/admin/import/tmdb/new-primary-manual",
+			method: "GET",
+			requiredMethod: "POST",
+		});
+	});
+
+	it("rejects query strings on the normal TMDB primary manual endpoint", async () => {
+		const mock = createMockEnv([]);
+		const request = createManualAdminRequest(
 			"http://example.com/admin/import/tmdb/new-primary-manual?limit=100",
 		);
 		const response = await worker.fetch(request, mock.env);
@@ -505,7 +533,7 @@ describe("MovieApp Worker", () => {
 
 	it("requires an explicit limit on the limited TMDB primary manual endpoint", async () => {
 		const mock = createMockEnv([]);
-		const request = new IncomingRequest(
+		const request = createManualAdminRequest(
 			"http://example.com/admin/import/tmdb/limited-primary-manual?beginDate=2000-01-01&endDate=2000-12-31",
 		);
 		const response = await worker.fetch(request, mock.env);

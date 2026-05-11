@@ -28,6 +28,8 @@ import {
 import {
 	checkImportJobDependencies,
 	finishSkippedDependencyRun,
+	getLatestCleanImportJobRunWithResultJsonNumberGreaterThan,
+	type ImportJobDependencyRequirement,
 } from "../jobs/importJobDependencies";
 import { logEvent } from "../shared/logging";
 import type {
@@ -323,13 +325,29 @@ export async function enqueueTmdbProviderRefreshJob(
 	}
 
 	try {
-		const dependencies = await checkImportJobDependencies(env, [
+		const latestPrimaryWithNewMovieIds =
+			await getLatestCleanImportJobRunWithResultJsonNumberGreaterThan(env, {
+				jobName: TMDB_PRIMARY_JOB_NAME,
+				resultJsonPath: "$.rowsInserted",
+				greaterThan: 0,
+			});
+		const dependencyRequirements: ImportJobDependencyRequirement[] = [
 			{ jobName: TMDB_PRIMARY_JOB_NAME },
-			{
+		];
+
+		if (latestPrimaryWithNewMovieIds) {
+			dependencyRequirements.push({
 				jobName: TMDB_NEW_MOVIE_DETAILS_JOB_NAME,
-				afterJobName: TMDB_PRIMARY_JOB_NAME,
-			},
-		]);
+				endedAfter: latestPrimaryWithNewMovieIds.ended_at,
+				endedAfterLabel:
+					"latest TMDB primary run that inserted new movie IDs",
+			});
+		}
+
+		const dependencies = await checkImportJobDependencies(
+			env,
+			dependencyRequirements,
+		);
 
 		if (!dependencies.ok) {
 			return finishSkippedDependencyRun(env, {

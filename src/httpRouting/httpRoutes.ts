@@ -55,6 +55,86 @@ function jsonResponse(body: unknown, init?: ResponseInit) {
 	});
 }
 
+const MANUAL_MUTATION_PATHS = new Set([
+	"/admin/import/imdb-ratings/enqueue-manual",
+	"/admin/import/tmdb/new-primary-manual",
+	"/admin/import/tmdb/limited-primary-manual",
+	"/admin/import/tmdb/enrich-all-manual",
+	"/admin/import/tmdb/new-movie-details-manual",
+	"/admin/import/tmdb/provider-refresh-manual",
+	"/admin/import/movie-list/rebuild-manual",
+	"/admin/import/movie-list/potential-load-check",
+	"/admin/import/movie-list/current-count-snapshot",
+]);
+
+function validateManualMutationAccess(
+	request: Request,
+	env: Env,
+	url: URL,
+) {
+	if (!MANUAL_MUTATION_PATHS.has(url.pathname)) {
+		return null;
+	}
+
+	if (request.method !== "POST") {
+		logEvent("admin-manual-endpoint-method-rejected", {
+			path: url.pathname,
+			method: request.method,
+			requiredMethod: "POST",
+			userAgent: request.headers.get("user-agent"),
+			cfConnectingIp: request.headers.get("cf-connecting-ip"),
+		});
+
+		return jsonResponse(
+			{
+				error:
+					"Manual import endpoints require POST. This prevents accidental browser GET requests from starting jobs.",
+				path: url.pathname,
+				method: request.method,
+				requiredMethod: "POST",
+			},
+			{ status: 405, headers: { allow: "POST" } },
+		);
+	}
+
+	if (!env.ADMIN_IMPORT_TOKEN) {
+		logEvent("admin-manual-endpoint-token-missing", {
+			path: url.pathname,
+		});
+
+		return jsonResponse(
+			{
+				error:
+					"ADMIN_IMPORT_TOKEN is not configured for this Worker environment.",
+			},
+			{ status: 500 },
+		);
+	}
+
+	const authorization = request.headers.get("authorization") ?? "";
+	const expectedAuthorization = `Bearer ${env.ADMIN_IMPORT_TOKEN}`;
+
+	if (authorization !== expectedAuthorization) {
+		logEvent("admin-manual-endpoint-unauthorized", {
+			path: url.pathname,
+			method: request.method,
+			hasAuthorization: authorization.length > 0,
+			userAgent: request.headers.get("user-agent"),
+			cfConnectingIp: request.headers.get("cf-connecting-ip"),
+		});
+
+		return jsonResponse(
+			{
+				error:
+					"Unauthorized. Manual import endpoints require Authorization: Bearer <ADMIN_IMPORT_TOKEN>.",
+			},
+			{ status: 401, headers: { "www-authenticate": "Bearer" } },
+		);
+	}
+
+	return null;
+}
+
 function jobErrorResponse(
 	error: unknown,
 	jobName: string,
@@ -84,8 +164,17 @@ export async function handleFetch(
 	ctx?: ExecutionContext,
 ) {
 	const url = new URL(request.url);
+	const manualMutationAccessError = validateManualMutationAccess(
+		request,
+		env,
+		url,
+	);
 
-	if (request.method !== "GET") {
+	if (manualMutationAccessError) {
+		return manualMutationAccessError;
+	}
+
+	if (!MANUAL_MUTATION_PATHS.has(url.pathname) && request.method !== "GET") {
 		return jsonResponse(
 			{ error: "Only GET requests are supported." },
 			{ status: 405, headers: { allow: "GET" } },
