@@ -5271,33 +5271,40 @@ Manual job kickoff endpoints are protected because they write data or start queu
 
 The short version:
 
-```text
+Admin token reminder:
+
+* `$ADMIN_IMPORT_TOKEN` is this app's private manual-job token, not the TMDB key.
+* The same random token value is used two places: Cloudflare Worker secret `ADMIN_IMPORT_TOKEN`, and your Mac's local token storage for the `dbcurl` helper.
+* Run `dbcurl` in a terminal before the manual kickoff commands below. That function lives in `~/.zshrc`, reads the token from the login Keychain, and exports it only for the current shell session.
+  * NOTE: If `dbcurl` cannot find the token yet (it will display: "Could not find MovieApp ADMIN_IMPORT_TOKEN in the login Keychain."), it asks you to paste the token just one time, hides the input, saves it as a login Keychain item `MovieApp ADMIN_IMPORT_TOKEN`, then exports it for the current shell.
+* We do not run the command, dbcurl, on every launch of the shell, intentionally, because the token can start production import jobs and should not be available to unrelated terminal commands.
+* The token was generated with the OpenSSL random command `openssl rand -hex 32`; that asks OpenSSL for cryptographically strong random bytes and to then print them as a copyable token string.
+
+
 IMDB
-curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual" | jq
-  For enques, monitor progress with this: (response comes back in under a minute that enqueing has started takes about 8 minutes to complete)
-    curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=imdb-ratings&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+* curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual" | jq
+  * For enques, monitor progress with this: (response comes back in under a minute that enqueing has started takes about 8 minutes to complete)
+    * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=imdb-ratings&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
 
 PRIMARY NEW MOVIES
-curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-primary-manual" | jq
-  Straight up sql, so response takes from 10 seconds to a minute
-    curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-primary&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+* curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-primary-manual" | jq
+  * Straight up sql, so response takes from 10 seconds to a minute
+    * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-primary&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
 
 PRIMARY NEW MOVIE DETAILS
-curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-movie-details-manual" | jq
-  For enqueues, monitor progress with this: (response comes back in just a few seconds that enqueing has started takes about another few seconds to complete)
-    curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-new-movie-details&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+* curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-movie-details-manual" | jq
+  * For enqueues, monitor progress with this: (response comes back in just a few seconds that enqueing has started takes about another few seconds to complete)
+    * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-new-movie-details&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
 
 WATCH PROVIDERS REFRESH
-curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/provider-refresh-manual" | jq
-  For enqueues, monitor progress with this: (response comes back in about 6 minutes that enqueing has started takes about another hour to complete)
-    curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-provider-refresh&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+* curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/provider-refresh-manual" | jq
+  * For <span class="green">enqueues</span>, monitor progress with this: (response comes back in about 6 minutes that enqueing has started takes about another hour to complete)
+    * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-provider-refresh&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
 
 FINAL MOVIES LIST
-curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual" | jq
-  Straight up sql, so response takes a couple of minutes --- 1. dependency check, 2. potential-load safety check, 3. relationship promotion, 4. movie_list_items upsert, 5. current-count snapshot
-    curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=movie-list-build&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
-
-```
+* curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual" | jq
+  * Straight up sql, so response takes about 8 minutes minutes --- 1. dependency check, 2. potential-load safety check, 3. copy staged genres and staged watch providers into the live search tables, 4. insert/update ovie_list_items current-count snapshot
+    * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=movie-list-build&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
 
 
 **IMDb ratings job**

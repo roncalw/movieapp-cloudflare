@@ -18,6 +18,14 @@
 			"problemMatcher": []
 		},
 		{
+			"label": "remote-job-summary",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "support/sql/job-summary.sql"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
 			"label": "remote-tmdb-errors",
 			"type": "shell",
 			"command": "zsh",

@@ -509,11 +509,48 @@ describe("MovieApp Worker", () => {
 		expect(response.status).toBe(405);
 		expect(response.headers.get("allow")).toBe("POST");
 		expect(await response.json()).toEqual({
-			error:
-				"Manual import endpoints require POST. This prevents accidental browser GET requests from starting jobs.",
-			path: "/admin/import/tmdb/new-primary-manual",
-			method: "GET",
-			requiredMethod: "POST",
+			error: "Access not permitted",
+		});
+	});
+
+	it("uses the same public response for missing or wrong manual admin tokens", async () => {
+		const missingTokenMock = createMockEnv([]);
+		delete (missingTokenMock.env as { ADMIN_IMPORT_TOKEN?: string })
+			.ADMIN_IMPORT_TOKEN;
+
+		const missingTokenResponse = await worker.fetch(
+			createManualAdminRequest(
+				"http://example.com/admin/import/tmdb/new-primary-manual",
+			),
+			missingTokenMock.env,
+		);
+
+		expect(missingTokenResponse.status).toBe(500);
+		expect(await missingTokenResponse.json()).toEqual({
+			error: "Access not permitted",
+		});
+
+		const wrongTokenMock = createMockEnv([]);
+		const wrongTokenRequest = new IncomingRequest(
+			"http://example.com/admin/import/tmdb/new-primary-manual",
+			{
+				method: "POST",
+				headers: {
+					authorization: "Bearer wrong-token",
+				},
+			},
+		);
+		const wrongTokenResponse = await worker.fetch(
+			wrongTokenRequest,
+			wrongTokenMock.env,
+		);
+
+		expect(wrongTokenResponse.status).toBe(401);
+		expect(wrongTokenResponse.headers.get("www-authenticate")).toBe(
+			"Bearer",
+		);
+		expect(await wrongTokenResponse.json()).toEqual({
+			error: "Access not permitted",
 		});
 	});
 

@@ -67,6 +67,10 @@ const MANUAL_MUTATION_PATHS = new Set([
 	"/admin/import/movie-list/current-count-snapshot",
 ]);
 
+const ACCESS_NOT_PERMITTED_BODY = {
+	error: "Access not permitted",
+};
+
 function validateManualMutationAccess(
 	request: Request,
 	env: Env,
@@ -86,13 +90,7 @@ function validateManualMutationAccess(
 		});
 
 		return jsonResponse(
-			{
-				error:
-					"Manual import endpoints require POST. This prevents accidental browser GET requests from starting jobs.",
-				path: url.pathname,
-				method: request.method,
-				requiredMethod: "POST",
-			},
+			ACCESS_NOT_PERMITTED_BODY,
 			{ status: 405, headers: { allow: "POST" } },
 		);
 	}
@@ -103,10 +101,7 @@ function validateManualMutationAccess(
 		});
 
 		return jsonResponse(
-			{
-				error:
-					"ADMIN_IMPORT_TOKEN is not configured for this Worker environment.",
-			},
+			ACCESS_NOT_PERMITTED_BODY,
 			{ status: 500 },
 		);
 	}
@@ -124,10 +119,7 @@ function validateManualMutationAccess(
 		});
 
 		return jsonResponse(
-			{
-				error:
-					"Unauthorized. Manual import endpoints require Authorization: Bearer <ADMIN_IMPORT_TOKEN>.",
-			},
+			ACCESS_NOT_PERMITTED_BODY,
 			{ status: 401, headers: { "www-authenticate": "Bearer" } },
 		);
 	}
