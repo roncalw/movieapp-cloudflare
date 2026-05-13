@@ -2,6 +2,22 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "remote-run-active-sql-file",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-remote.sh", "${file}"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
+			"label": "local-run-active-sql-file",
+			"type": "shell",
+			"command": "zsh",
+			"args": ["support/run-sql-local.sh", "${file}"],
+			"options": { "cwd": "/Users/croncallo/repo/MovieApp-Cloudflare" },
+			"problemMatcher": []
+		},
+		{
 			"label": "remote-tmdb-progress",
 			"type": "shell",
 			"command": "zsh",

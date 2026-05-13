@@ -49,6 +49,7 @@
 -- dataset.
 SELECT
   movie.tmdb_id,
+  movie.title,
   movie.poster_path,
   movie.imdb_rating
 FROM movie_list_items AS movie INDEXED BY idx_movie_list_items_search_imdb_cover

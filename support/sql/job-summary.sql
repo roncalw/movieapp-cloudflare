@@ -119,11 +119,11 @@ checks AS (
   CROSS JOIN fields
 )
 SELECT
-  field_name AS field,
-  current_count,
-  cc_counted_at AS "CC date/time",
-  potential_count,
-  pc_counted_at AS "PC date/time",
+  field_name AS Field,
+  current_count AS CC,
+  cc_counted_at AS "CC D/T",
+  potential_count AS PC,
+  pc_counted_at AS "PC DT",
   printf('%.2f%%', threshold_pct) AS threshold,
   CASE
     WHEN current_count = 0 THEN 'n/a'
