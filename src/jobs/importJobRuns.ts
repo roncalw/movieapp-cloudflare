@@ -31,6 +31,10 @@ export type ImportJobTrigger = "manual" | "cron";
 export const TMDB_ENRICH_JOB_NAME = "tmdb-enrich";
 export const TMDB_NEW_MOVIE_DETAILS_JOB_NAME = "tmdb-new-movie-details";
 export const TMDB_PROVIDER_REFRESH_JOB_NAME = "tmdb-provider-refresh";
+export const TMDB_GENRE_LOOKUP_REFRESH_JOB_NAME =
+	"tmdb-genre-lookup-refresh";
+export const TMDB_WATCH_PROVIDER_LOOKUP_REFRESH_JOB_NAME =
+	"tmdb-watch-provider-lookup-refresh";
 export const TMDB_PRIMARY_JOB_NAME = "tmdb-primary";
 export const MOVIE_LIST_BUILD_JOB_NAME = "movie-list-build";
 export const IMDB_RATINGS_JOB_NAME = "imdb-ratings";

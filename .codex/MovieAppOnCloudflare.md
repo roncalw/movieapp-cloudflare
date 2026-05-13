@@ -5283,7 +5283,7 @@ Admin token reminder:
 
 IMDB
 * curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual" | jq
-  * For enques, monitor progress with this: (response comes back in under a minute that enqueing has started takes about 8 minutes to complete)
+  * For enqueues, monitor progress with this: (response comes back in under a minute that enqueueing has started takes about 8 minutes to complete)
     * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=imdb-ratings&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
 
 PRIMARY NEW MOVIES
@@ -5303,8 +5303,16 @@ WATCH PROVIDERS REFRESH
 
 FINAL MOVIES LIST
 * curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual" | jq
-  * Straight up sql, so response takes about 8 minutes minutes --- 1. dependency check, 2. potential-load safety check, 3. copy staged genres and staged watch providers into the live search tables, 4. insert/update ovie_list_items current-count snapshot
+  * Straight up SQL, so response takes about 8 minutes --- 1. dependency check, 2. potential-load safety check, 3. copy staged genres and staged watch providers into the live search tables, 4. insert/update movie_list_items, 5. current-count snapshot
     * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=movie-list-build&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+
+MANUAL-ONLY LOOKUP TABLES
+* curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/genre-lookup-refresh-manual" | jq
+  * Straight up sql after one TMDB lookup API call; monitor with:
+    * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-genre-lookup-refresh&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+* curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/watch-provider-lookup-refresh-manual" | jq
+  * Straight up sql after one TMDB lookup API call; monitor with:
+    * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-watch-provider-lookup-refresh&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
 
 
 **IMDb ratings job**
@@ -6606,6 +6614,94 @@ Do not use those rows as the expected timing for the current movie-list build.
 
 These endpoints are intentionally not part of the normal cron schedule.
 Use them only when you intentionally want a repair, backfill, or smaller controlled test.
+
+**TMDB genre lookup manual job**
+
+Purpose:
+
+```text
+Refreshes the small TMDB genre lookup table used by manual SQL scripts.
+This is not used by the app runtime search path.
+It upserts TMDB movie genres for language en-US.
+It does not delete missing genres.
+Run rarely, for example when you want SQL joins to show current genre names.
+```
+
+DB table and fields:
+
+```text
+tmdb_genre_lookup
+  language
+  genre_id
+  genre_name
+  last_refreshed_at
+  created_at
+  updated_at
+```
+
+Manual kickoff:
+
+```text
+Endpoint:
+  /admin/import/tmdb/genre-lookup-refresh-manual
+
+Command:
+  curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/genre-lookup-refresh-manual" | jq
+
+Expected success JSON:
+  jobRunId, trigger, language, selected, upsertedRows, startedAt, endedAt, durationMs
+
+Type:
+  Synchronous. It calls one TMDB lookup endpoint and upserts the returned rows.
+
+Progress:
+  curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-genre-lookup-refresh&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+```
+
+**TMDB watch-provider lookup manual job**
+
+Purpose:
+
+```text
+Refreshes the small TMDB watch-provider lookup table used by manual SQL scripts.
+This is not used by the app runtime search path.
+It upserts TMDB movie watch providers for region US and language en-US.
+It does not delete missing providers.
+Run rarely, for example when you want SQL joins to show current provider names.
+```
+
+DB table and fields:
+
+```text
+tmdb_watch_provider_lookup
+  region
+  provider_id
+  provider_name
+  logo_path
+  display_priority
+  last_refreshed_at
+  created_at
+  updated_at
+```
+
+Manual kickoff:
+
+```text
+Endpoint:
+  /admin/import/tmdb/watch-provider-lookup-refresh-manual
+
+Command:
+  curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/watch-provider-lookup-refresh-manual" | jq
+
+Expected success JSON:
+  jobRunId, trigger, region, language, selected, upsertedRows, startedAt, endedAt, durationMs
+
+Type:
+  Synchronous. It calls one TMDB lookup endpoint and upserts the returned rows.
+
+Progress:
+  curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-watch-provider-lookup-refresh&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+```
 
 **TMDB full enrichment manual job**
 

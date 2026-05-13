@@ -55,6 +55,26 @@ type TmdbWatchProvider = {
 	provider_id?: unknown;
 };
 
+export type TmdbGenreLookupResponse = {
+	genres?: TmdbGenreLookupItem[];
+};
+
+export type TmdbGenreLookupItem = {
+	id?: unknown;
+	name?: unknown;
+};
+
+export type TmdbWatchProviderLookupResponse = {
+	results?: TmdbWatchProviderLookupItem[];
+};
+
+export type TmdbWatchProviderLookupItem = {
+	provider_id?: unknown;
+	provider_name?: unknown;
+	logo_path?: unknown;
+	display_priority?: unknown;
+};
+
 const TMDB_MAX_REQUESTS_PER_SECOND = 35;
 const TMDB_MAX_RETRIES = 5;
 const TMDB_RETRY_DELAY_MS = 3000;
@@ -195,6 +215,25 @@ export async function getTmdbMovieWatchProviders(tmdbId: number, env: Env) {
 	);
 
 	return fetchTmdbJson<TmdbWatchProviderResponse>(url, env);
+}
+
+export async function getTmdbMovieGenreLookup(language: string, env: Env) {
+	const url = new URL("https://api.themoviedb.org/3/genre/movie/list");
+	url.searchParams.set("language", language);
+
+	return fetchTmdbJson<TmdbGenreLookupResponse>(url, env);
+}
+
+export async function getTmdbMovieWatchProviderLookup(
+	region: string,
+	language: string,
+	env: Env,
+) {
+	const url = new URL("https://api.themoviedb.org/3/watch/providers/movie");
+	url.searchParams.set("language", language);
+	url.searchParams.set("watch_region", region);
+
+	return fetchTmdbJson<TmdbWatchProviderLookupResponse>(url, env);
 }
 
 export function getUsCertification(details: TmdbMovieDetails) {

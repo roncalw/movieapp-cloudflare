@@ -1,0 +1,1 @@
+SELECT * FROM tmdb_watch_provider_lookup wp order by wp.provider_name asc

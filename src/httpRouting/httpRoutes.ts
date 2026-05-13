@@ -14,9 +14,11 @@ import {
 	MOVIE_LIST_CURRENT_COUNT_SNAPSHOT_JOB_NAME,
 	MOVIE_LIST_POTENTIAL_LOAD_CHECK_JOB_NAME,
 	TMDB_ENRICH_JOB_NAME,
+	TMDB_GENRE_LOOKUP_REFRESH_JOB_NAME,
 	TMDB_NEW_MOVIE_DETAILS_JOB_NAME,
 	TMDB_PRIMARY_JOB_NAME,
 	TMDB_PROVIDER_REFRESH_JOB_NAME,
+	TMDB_WATCH_PROVIDER_LOOKUP_REFRESH_JOB_NAME,
 } from "../jobs/importJobRuns";
 import {
 	getCachedMovieSearchResponse,
@@ -35,6 +37,10 @@ import {
 	loadTmdbPrimaryRowsManual,
 	TMDB_PRIMARY_STANDARD_LIMIT,
 } from "../imports/tmdbPrimary";
+import {
+	refreshTmdbGenreLookup,
+	refreshTmdbWatchProviderLookup,
+} from "../imports/tmdbLookupRefresh";
 import { logEvent } from "../shared/logging";
 import type { Env } from "../shared/types";
 
@@ -62,6 +68,8 @@ const MANUAL_MUTATION_PATHS = new Set([
 	"/admin/import/tmdb/enrich-all-manual",
 	"/admin/import/tmdb/new-movie-details-manual",
 	"/admin/import/tmdb/provider-refresh-manual",
+	"/admin/import/tmdb/genre-lookup-refresh-manual",
+	"/admin/import/tmdb/watch-provider-lookup-refresh-manual",
 	"/admin/import/movie-list/rebuild-manual",
 	"/admin/import/movie-list/potential-load-check",
 	"/admin/import/movie-list/current-count-snapshot",
@@ -471,6 +479,54 @@ export async function handleFetch(
 				error,
 				TMDB_PROVIDER_REFRESH_JOB_NAME,
 				"/admin/import/job-runs?jobName=tmdb-provider-refresh&limit=1",
+			);
+		}
+	}
+
+	if (url.pathname === "/admin/import/tmdb/genre-lookup-refresh-manual") {
+		if (url.search !== "") {
+			return Response.json(
+				{
+					error:
+						"genre-lookup-refresh-manual does not accept query parameters. It refreshes the en-US TMDB movie genre lookup table.",
+				},
+				{ status: 400 },
+			);
+		}
+
+		try {
+			const result = await refreshTmdbGenreLookup(env, "manual");
+
+			return Response.json(result);
+		} catch (error) {
+			return jobErrorResponse(
+				error,
+				TMDB_GENRE_LOOKUP_REFRESH_JOB_NAME,
+				"/admin/import/job-runs?jobName=tmdb-genre-lookup-refresh&limit=1",
+			);
+		}
+	}
+
+	if (url.pathname === "/admin/import/tmdb/watch-provider-lookup-refresh-manual") {
+		if (url.search !== "") {
+			return Response.json(
+				{
+					error:
+						"watch-provider-lookup-refresh-manual does not accept query parameters. It refreshes the US TMDB watch-provider lookup table.",
+				},
+				{ status: 400 },
+			);
+		}
+
+		try {
+			const result = await refreshTmdbWatchProviderLookup(env, "manual");
+
+			return Response.json(result);
+		} catch (error) {
+			return jobErrorResponse(
+				error,
+				TMDB_WATCH_PROVIDER_LOOKUP_REFRESH_JOB_NAME,
+				"/admin/import/job-runs?jobName=tmdb-watch-provider-lookup-refresh&limit=1",
 			);
 		}
 	}

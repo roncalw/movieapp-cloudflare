@@ -568,6 +568,34 @@ describe("MovieApp Worker", () => {
 		});
 	});
 
+	it("rejects query strings on TMDB lookup refresh manual endpoints", async () => {
+		const mock = createMockEnv([]);
+
+		const genreResponse = await worker.fetch(
+			createManualAdminRequest(
+				"http://example.com/admin/import/tmdb/genre-lookup-refresh-manual?language=en-US",
+			),
+			mock.env,
+		);
+		const providerResponse = await worker.fetch(
+			createManualAdminRequest(
+				"http://example.com/admin/import/tmdb/watch-provider-lookup-refresh-manual?region=US",
+			),
+			mock.env,
+		);
+
+		expect(genreResponse.status).toBe(400);
+		expect(await genreResponse.json()).toEqual({
+			error:
+				"genre-lookup-refresh-manual does not accept query parameters. It refreshes the en-US TMDB movie genre lookup table.",
+		});
+		expect(providerResponse.status).toBe(400);
+		expect(await providerResponse.json()).toEqual({
+			error:
+				"watch-provider-lookup-refresh-manual does not accept query parameters. It refreshes the US TMDB watch-provider lookup table.",
+		});
+	});
+
 	it("requires an explicit limit on the limited TMDB primary manual endpoint", async () => {
 		const mock = createMockEnv([]);
 		const request = createManualAdminRequest(

@@ -1,0 +1,1 @@
+SELECT * FROM tmdb_genre_lookup order by genre_name asc
