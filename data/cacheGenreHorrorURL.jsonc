@@ -1,0 +1,1817 @@
+// Horror-only cache search URLs used by utils/warmCacheSearchUrls.mjs.
+//
+// This file intentionally contains 168 base URLs:
+// - 10 single-streamer combinations
+// - 45 two-streamer combinations
+// - 1 all-streamers/flatrate combination
+// - each repeated for IMDb vote thresholds 5,000, 15,000, and 25,000
+//
+// warmCacheSearchUrls.mjs warms up to 10 pages per base URL, so this file can
+// warm up to 1,680 Cloudflare cache entries when every URL has 10 pages.
+//
+// Every URL uses datePreset=last5years, genreIds=27, and sort=imdb.
+[
+  // ===========================================================================
+  // Group: Horror + Single Streamer + IMDb Votes
+  // ===========================================================================
+
+  // Horror + Netflix
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch provider: Netflix
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-netflix",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch provider: Netflix
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-netflix",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch provider: Netflix
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-netflix",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Hulu
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch provider: Hulu
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-hulu",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch provider: Hulu
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-hulu",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch provider: Hulu
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-hulu",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Prime
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch provider: Prime
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-prime",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch provider: Prime
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-prime",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch provider: Prime
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-prime",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Max
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch provider: Max
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-max",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch provider: Max
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-max",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch provider: Max
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-max",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + YouTube
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch provider: YouTube
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-youtube",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=192&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch provider: YouTube
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-youtube",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=192&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch provider: YouTube
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-youtube",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=192&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Disney Plus
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch provider: Disney Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-disney-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=337&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch provider: Disney Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-disney-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=337&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch provider: Disney Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-disney-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=337&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Apple TV Plus
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch provider: Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=350&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch provider: Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=350&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch provider: Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=350&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Peacock
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch provider: Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=387&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch provider: Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=387&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch provider: Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=387&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + AMC+
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch provider: AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=526&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch provider: AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=526&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch provider: AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=526&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Paramount+
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch provider: Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=531&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch provider: Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=531&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch provider: Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=531&minImdbVotes=25000&sort=imdb"
+  },
+
+  // ===========================================================================
+  // Group: Horror + Two Streamers + IMDb Votes
+  // ===========================================================================
+
+  // Horror + Netflix + Hulu
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Netflix, Hulu
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-netflix-hulu",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,15&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Netflix, Hulu
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-netflix-hulu",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,15&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Netflix, Hulu
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-netflix-hulu",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,15&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Netflix + Prime
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Netflix, Prime
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-netflix-prime",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,9&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Netflix, Prime
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-netflix-prime",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,9&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Netflix, Prime
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-netflix-prime",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,9&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Netflix + Max
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Netflix, Max
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-netflix-max",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,1899&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Netflix, Max
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-netflix-max",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,1899&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Netflix, Max
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-netflix-max",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,1899&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Netflix + YouTube
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Netflix, YouTube
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-netflix-youtube",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,192&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Netflix, YouTube
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-netflix-youtube",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,192&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Netflix, YouTube
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-netflix-youtube",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,192&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Netflix + Disney Plus
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Netflix, Disney Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-netflix-disney-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,337&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Netflix, Disney Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-netflix-disney-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,337&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Netflix, Disney Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-netflix-disney-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,337&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Netflix + Apple TV Plus
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Netflix, Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-netflix-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,350&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Netflix, Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-netflix-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,350&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Netflix, Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-netflix-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,350&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Netflix + Peacock
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Netflix, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-netflix-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,387&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Netflix, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-netflix-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,387&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Netflix, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-netflix-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,387&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Netflix + AMC+
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Netflix, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-netflix-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,526&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Netflix, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-netflix-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,526&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Netflix, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-netflix-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,526&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Netflix + Paramount+
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Netflix, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-netflix-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,531&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Netflix, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-netflix-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,531&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Netflix, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-netflix-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=8,531&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Hulu + Prime
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Hulu, Prime
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-hulu-prime",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,9&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Hulu, Prime
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-hulu-prime",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,9&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Hulu, Prime
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-hulu-prime",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,9&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Hulu + Max
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Hulu, Max
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-hulu-max",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,1899&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Hulu, Max
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-hulu-max",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,1899&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Hulu, Max
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-hulu-max",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,1899&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Hulu + YouTube
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Hulu, YouTube
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-hulu-youtube",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,192&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Hulu, YouTube
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-hulu-youtube",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,192&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Hulu, YouTube
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-hulu-youtube",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,192&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Hulu + Disney Plus
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Hulu, Disney Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-hulu-disney-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,337&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Hulu, Disney Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-hulu-disney-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,337&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Hulu, Disney Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-hulu-disney-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,337&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Hulu + Apple TV Plus
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Hulu, Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-hulu-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,350&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Hulu, Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-hulu-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,350&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Hulu, Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-hulu-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,350&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Hulu + Peacock
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Hulu, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-hulu-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,387&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Hulu, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-hulu-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,387&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Hulu, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-hulu-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,387&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Hulu + AMC+
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Hulu, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-hulu-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,526&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Hulu, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-hulu-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,526&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Hulu, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-hulu-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,526&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Hulu + Paramount+
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Hulu, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-hulu-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,531&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Hulu, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-hulu-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,531&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Hulu, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-hulu-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=15,531&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Prime + Max
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Prime, Max
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-prime-max",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,1899&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Prime, Max
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-prime-max",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,1899&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Prime, Max
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-prime-max",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,1899&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Prime + YouTube
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Prime, YouTube
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-prime-youtube",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,192&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Prime, YouTube
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-prime-youtube",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,192&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Prime, YouTube
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-prime-youtube",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,192&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Prime + Disney Plus
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Prime, Disney Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-prime-disney-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,337&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Prime, Disney Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-prime-disney-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,337&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Prime, Disney Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-prime-disney-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,337&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Prime + Apple TV Plus
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Prime, Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-prime-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,350&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Prime, Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-prime-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,350&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Prime, Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-prime-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,350&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Prime + Peacock
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Prime, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-prime-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,387&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Prime, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-prime-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,387&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Prime, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-prime-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,387&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Prime + AMC+
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Prime, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-prime-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,526&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Prime, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-prime-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,526&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Prime, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-prime-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,526&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Prime + Paramount+
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Prime, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-prime-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,531&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Prime, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-prime-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,531&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Prime, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-prime-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=9,531&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Max + YouTube
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Max, YouTube
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-max-youtube",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899,192&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Max, YouTube
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-max-youtube",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899,192&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Max, YouTube
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-max-youtube",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899,192&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Max + Disney Plus
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Max, Disney Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-max-disney-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899,337&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Max, Disney Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-max-disney-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899,337&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Max, Disney Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-max-disney-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899,337&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Max + Apple TV Plus
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Max, Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-max-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899,350&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Max, Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-max-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899,350&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Max, Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-max-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899,350&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Max + Peacock
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Max, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-max-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899,387&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Max, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-max-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899,387&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Max, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-max-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899,387&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Max + AMC+
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Max, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-max-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899,526&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Max, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-max-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899,526&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Max, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-max-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899,526&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Max + Paramount+
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Max, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-max-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899,531&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Max, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-max-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899,531&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Max, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-max-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=1899,531&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + YouTube + Disney Plus
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: YouTube, Disney Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-youtube-disney-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=192,337&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: YouTube, Disney Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-youtube-disney-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=192,337&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: YouTube, Disney Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-youtube-disney-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=192,337&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + YouTube + Apple TV Plus
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: YouTube, Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-youtube-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=192,350&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: YouTube, Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-youtube-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=192,350&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: YouTube, Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-youtube-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=192,350&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + YouTube + Peacock
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: YouTube, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-youtube-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=192,387&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: YouTube, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-youtube-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=192,387&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: YouTube, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-youtube-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=192,387&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + YouTube + AMC+
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: YouTube, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-youtube-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=192,526&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: YouTube, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-youtube-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=192,526&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: YouTube, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-youtube-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=192,526&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + YouTube + Paramount+
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: YouTube, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-youtube-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=192,531&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: YouTube, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-youtube-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=192,531&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: YouTube, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-youtube-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=192,531&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Disney Plus + Apple TV Plus
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Disney Plus, Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-disney-plus-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=337,350&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Disney Plus, Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-disney-plus-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=337,350&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Disney Plus, Apple TV Plus
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-disney-plus-apple-tv-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=337,350&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Disney Plus + Peacock
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Disney Plus, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-disney-plus-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=337,387&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Disney Plus, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-disney-plus-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=337,387&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Disney Plus, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-disney-plus-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=337,387&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Disney Plus + AMC+
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Disney Plus, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-disney-plus-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=337,526&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Disney Plus, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-disney-plus-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=337,526&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Disney Plus, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-disney-plus-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=337,526&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Disney Plus + Paramount+
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Disney Plus, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-disney-plus-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=337,531&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Disney Plus, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-disney-plus-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=337,531&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Disney Plus, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-disney-plus-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=337,531&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Apple TV Plus + Peacock
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Apple TV Plus, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-apple-tv-plus-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=350,387&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Apple TV Plus, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-apple-tv-plus-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=350,387&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Apple TV Plus, Peacock
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-apple-tv-plus-peacock",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=350,387&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Apple TV Plus + AMC+
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Apple TV Plus, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-apple-tv-plus-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=350,526&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Apple TV Plus, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-apple-tv-plus-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=350,526&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Apple TV Plus, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-apple-tv-plus-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=350,526&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Apple TV Plus + Paramount+
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Apple TV Plus, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-apple-tv-plus-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=350,531&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Apple TV Plus, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-apple-tv-plus-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=350,531&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Apple TV Plus, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-apple-tv-plus-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=350,531&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Peacock + AMC+
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Peacock, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-peacock-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=387,526&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Peacock, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-peacock-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=387,526&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Peacock, AMC+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-peacock-amc-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=387,526&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + Peacock + Paramount+
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: Peacock, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-peacock-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=387,531&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: Peacock, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-peacock-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=387,531&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: Peacock, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-peacock-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=387,531&minImdbVotes=25000&sort=imdb"
+  },
+
+  // Horror + AMC+ + Paramount+
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: AMC+, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-amc-plus-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=526,531&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: AMC+, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-amc-plus-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=526,531&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: AMC+, Paramount+
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-amc-plus-paramount-plus",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&providerIds=526,531&minImdbVotes=25000&sort=imdb"
+  },
+
+  // ===========================================================================
+  // Group: Horror + All Streamers + IMDb Votes
+  // ===========================================================================
+
+  // All streamers uses watchMonetizationTypes=flatrate because that is the URL shape sent by the app.
+
+  // Genre: Horror
+  // IMDb votes: 5,000+
+  // Watch providers: All streamers / US flatrate
+  // Sort: IMDb rating
+
+  {
+    "name": "vote5000-horror-all-streamers-flatrate",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&watchMonetizationTypes=flatrate&minImdbVotes=5000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 15,000+
+  // Watch providers: All streamers / US flatrate
+  // Sort: IMDb rating
+
+  {
+    "name": "vote15000-horror-all-streamers-flatrate",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&watchMonetizationTypes=flatrate&minImdbVotes=15000&sort=imdb"
+  },
+
+  // Genre: Horror
+  // IMDb votes: 25,000+
+  // Watch providers: All streamers / US flatrate
+  // Sort: IMDb rating
+
+  {
+    "name": "vote25000-horror-all-streamers-flatrate",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&watchMonetizationTypes=flatrate&minImdbVotes=25000&sort=imdb"
+  }
+]

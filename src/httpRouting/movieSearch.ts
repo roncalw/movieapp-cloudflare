@@ -298,9 +298,7 @@ async function searchMovieListItems(env: Env, url: URL) {
 	const movieIndexHint =
 		sort === "popularity"
 			? " INDEXED BY idx_movie_list_items_search_popularity_date_cover"
-			: certifications.length === 0
-				? " INDEXED BY idx_movie_list_items_search_imdb_date_cover"
-				: "";
+			: " INDEXED BY idx_movie_list_items_search_imdb_date_cover";
 	const sqlParts = [
 		`SELECT
 		    movie.tmdb_id,
