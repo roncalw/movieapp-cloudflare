@@ -1,5 +1,6 @@
-export interface Env extends Cloudflare.Env {
+export interface Env {
 	DB: D1Database;
+	CACHE_WARM_QUEUE: Queue<CacheWarmSearchQueueMessage>;
 	IMDB_RATING_QUEUE: Queue<ImdbRatingQueueMessage>;
 	TMDB_ENRICHMENT_QUEUE: Queue<
 		| TmdbEnrichmentQueueMessage
@@ -46,7 +47,18 @@ export type TmdbProviderRefreshQueueMessage = {
 	tmdbIds: number[];
 };
 
+export type CacheWarmSearchQueueMessage = {
+	kind: "cache-warm-search";
+	jobRunId: string;
+	genreKey: string;
+	genreLabel: string;
+	entryName: string;
+	url: string;
+	maxPages: number;
+};
+
 export type WorkerQueueMessage =
+	| CacheWarmSearchQueueMessage
 	| ImdbRatingQueueMessage
 	| TmdbEnrichmentQueueMessage
 	| TmdbNewMovieDetailsQueueMessage

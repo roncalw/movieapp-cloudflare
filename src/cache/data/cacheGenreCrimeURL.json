@@ -1,0 +1,674 @@
+[
+  {
+    "name": "crime-netflix-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-hulu-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C15&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-hulu-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C15&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-hulu-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C15&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-prime-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C9&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-prime-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C9&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-prime-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C9&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-netflix-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=8%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-prime-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C9&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-prime-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C9&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-prime-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C9&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-hulu-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=15%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-prime-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=9%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-max-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-max-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-max-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-max-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-max-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-max-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-max-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-max-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-max-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-max-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-max-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-max-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-max-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-max-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-max-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-max-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-max-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-max-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=1899%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-youtube-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=192%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-youtube-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=192%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-youtube-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=192%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-youtube-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=192%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-youtube-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=192%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-youtube-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=192%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-youtube-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=192%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-youtube-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=192%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-youtube-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=192%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-youtube-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=192%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-youtube-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=192%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-youtube-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=192%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-youtube-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=192%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-youtube-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=192%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-youtube-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=192%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-disney-plus-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=337%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-disney-plus-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=337%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-disney-plus-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=337%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-disney-plus-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=337%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-disney-plus-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=337%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-disney-plus-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=337%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-disney-plus-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=337%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-disney-plus-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=337%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-disney-plus-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=337%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-disney-plus-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=337%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-disney-plus-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=337%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-disney-plus-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=337%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-apple-tv-plus-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=350%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-apple-tv-plus-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=350%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-apple-tv-plus-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=350%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-apple-tv-plus-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=350%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-apple-tv-plus-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=350%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-apple-tv-plus-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=350%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-apple-tv-plus-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=350%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-apple-tv-plus-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=350%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-apple-tv-plus-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=350%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-peacock-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=387%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-peacock-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=387%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-peacock-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=387%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-peacock-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=387%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-peacock-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=387%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-peacock-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=387%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-amc-plus-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=526%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-amc-plus-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=526%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-amc-plus-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&providerIds=526%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "crime-all-streamers-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&watchMonetizationTypes=flatrate&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "crime-all-streamers-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&watchMonetizationTypes=flatrate&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "crime-all-streamers-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=80&watchMonetizationTypes=flatrate&minImdbVotes=25000&sort=imdb"
+  }
+]

@@ -1,0 +1,674 @@
+[
+  {
+    "name": "animation-netflix-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-hulu-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C15&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-hulu-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C15&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-hulu-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C15&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-prime-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C9&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-prime-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C9&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-prime-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C9&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-netflix-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=8%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-prime-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C9&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-prime-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C9&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-prime-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C9&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-hulu-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=15%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-prime-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=9%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-max-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-max-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-max-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-max-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-max-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-max-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-max-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-max-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-max-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-max-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-max-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-max-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-max-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-max-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-max-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-max-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-max-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-max-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=1899%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-youtube-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=192%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-youtube-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=192%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-youtube-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=192%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-youtube-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=192%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-youtube-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=192%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-youtube-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=192%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-youtube-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=192%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-youtube-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=192%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-youtube-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=192%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-youtube-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=192%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-youtube-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=192%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-youtube-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=192%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-youtube-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=192%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-youtube-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=192%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-youtube-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=192%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-disney-plus-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=337%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-disney-plus-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=337%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-disney-plus-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=337%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-disney-plus-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=337%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-disney-plus-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=337%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-disney-plus-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=337%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-disney-plus-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=337%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-disney-plus-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=337%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-disney-plus-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=337%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-disney-plus-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=337%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-disney-plus-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=337%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-disney-plus-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=337%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-apple-tv-plus-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=350%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-apple-tv-plus-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=350%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-apple-tv-plus-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=350%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-apple-tv-plus-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=350%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-apple-tv-plus-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=350%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-apple-tv-plus-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=350%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-apple-tv-plus-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=350%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-apple-tv-plus-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=350%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-apple-tv-plus-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=350%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-peacock-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=387%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-peacock-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=387%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-peacock-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=387%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-peacock-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=387%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-peacock-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=387%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-peacock-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=387%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-amc-plus-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=526%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-amc-plus-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=526%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-amc-plus-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&providerIds=526%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "animation-all-streamers-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&watchMonetizationTypes=flatrate&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "animation-all-streamers-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&watchMonetizationTypes=flatrate&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "animation-all-streamers-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=16&watchMonetizationTypes=flatrate&minImdbVotes=25000&sort=imdb"
+  }
+]

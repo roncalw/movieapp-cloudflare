@@ -1,0 +1,674 @@
+[
+  {
+    "name": "adventure-netflix-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-hulu-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C15&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-hulu-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C15&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-hulu-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C15&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-prime-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C9&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-prime-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C9&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-prime-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C9&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-netflix-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=8%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-prime-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C9&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-prime-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C9&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-prime-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C9&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-hulu-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=15%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-prime-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=9%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-max-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=1899%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-youtube-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=192%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-youtube-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=192%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-youtube-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=192%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-youtube-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=192%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-youtube-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=192%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-youtube-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=192%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-youtube-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=192%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-youtube-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=192%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-youtube-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=192%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-youtube-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=192%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-youtube-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=192%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-youtube-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=192%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-youtube-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=192%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-youtube-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=192%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-youtube-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=192%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-disney-plus-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=337%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-disney-plus-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=337%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-disney-plus-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=337%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-disney-plus-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=337%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-disney-plus-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=337%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-disney-plus-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=337%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-disney-plus-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=337%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-disney-plus-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=337%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-disney-plus-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=337%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-disney-plus-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=337%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-disney-plus-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=337%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-disney-plus-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=337%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-apple-tv-plus-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=350%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-apple-tv-plus-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=350%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-apple-tv-plus-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=350%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-apple-tv-plus-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=350%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-apple-tv-plus-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=350%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-apple-tv-plus-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=350%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-apple-tv-plus-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=350%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-apple-tv-plus-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=350%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-apple-tv-plus-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=350%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-peacock-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=387%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-peacock-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=387%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-peacock-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=387%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-peacock-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=387%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-peacock-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=387%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-peacock-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=387%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-amc-plus-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=526%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-amc-plus-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=526%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-amc-plus-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&providerIds=526%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "adventure-all-streamers-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&watchMonetizationTypes=flatrate&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "adventure-all-streamers-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&watchMonetizationTypes=flatrate&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "adventure-all-streamers-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=12&watchMonetizationTypes=flatrate&minImdbVotes=25000&sort=imdb"
+  }
+]

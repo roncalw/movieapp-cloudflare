@@ -1,0 +1,674 @@
+[
+  {
+    "name": "scifi-netflix-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-hulu-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C15&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-hulu-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C15&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-hulu-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C15&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-prime-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C9&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-prime-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C9&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-prime-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C9&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-netflix-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=8%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-prime-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C9&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-prime-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C9&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-prime-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C9&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-hulu-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=15%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-prime-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=9%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-max-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=1899%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-youtube-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=192%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-youtube-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=192%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-youtube-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=192%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-youtube-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=192%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-youtube-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=192%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-youtube-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=192%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-youtube-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=192%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-youtube-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=192%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-youtube-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=192%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-youtube-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=192%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-youtube-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=192%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-youtube-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=192%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-youtube-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=192%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-youtube-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=192%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-youtube-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=192%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-disney-plus-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=337%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-disney-plus-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=337%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-disney-plus-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=337%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-disney-plus-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=337%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-disney-plus-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=337%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-disney-plus-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=337%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-disney-plus-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=337%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-disney-plus-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=337%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-disney-plus-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=337%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-disney-plus-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=337%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-disney-plus-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=337%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-disney-plus-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=337%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-apple-tv-plus-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=350%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-apple-tv-plus-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=350%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-apple-tv-plus-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=350%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-apple-tv-plus-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=350%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-apple-tv-plus-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=350%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-apple-tv-plus-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=350%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-apple-tv-plus-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=350%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-apple-tv-plus-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=350%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-apple-tv-plus-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=350%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-peacock-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=387%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-peacock-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=387%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-peacock-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=387%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-peacock-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=387%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-peacock-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=387%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-peacock-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=387%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-amc-plus-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=526%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-amc-plus-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=526%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-amc-plus-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&providerIds=526%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "scifi-all-streamers-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&watchMonetizationTypes=flatrate&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "scifi-all-streamers-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&watchMonetizationTypes=flatrate&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "scifi-all-streamers-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=878&watchMonetizationTypes=flatrate&minImdbVotes=25000&sort=imdb"
+  }
+]

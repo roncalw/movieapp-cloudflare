@@ -1,0 +1,674 @@
+[
+  {
+    "name": "music-netflix-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-prime-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-prime-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-prime-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-hulu-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C15&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-hulu-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C15&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-hulu-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C15&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-prime-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C9&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-prime-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C9&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-prime-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C9&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-netflix-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=8%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-prime-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C9&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-prime-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C9&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-prime-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C9&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-hulu-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=15%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-prime-max-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C1899&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-prime-max-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C1899&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-prime-max-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C1899&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-prime-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-prime-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-prime-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-prime-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-prime-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-prime-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-prime-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-prime-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-prime-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-prime-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-prime-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-prime-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-prime-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-prime-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-prime-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-prime-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-prime-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-prime-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=9%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-max-youtube-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899%2C192&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-max-youtube-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899%2C192&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-max-youtube-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899%2C192&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-max-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-max-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-max-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-max-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-max-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-max-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-max-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-max-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-max-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-max-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-max-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-max-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-max-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-max-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-max-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=1899%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-youtube-disney-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=192%2C337&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-youtube-disney-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=192%2C337&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-youtube-disney-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=192%2C337&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-youtube-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=192%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-youtube-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=192%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-youtube-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=192%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-youtube-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=192%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-youtube-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=192%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-youtube-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=192%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-youtube-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=192%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-youtube-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=192%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-youtube-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=192%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-youtube-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=192%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-youtube-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=192%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-youtube-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=192%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-disney-plus-apple-tv-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=337%2C350&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-disney-plus-apple-tv-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=337%2C350&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-disney-plus-apple-tv-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=337%2C350&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-disney-plus-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=337%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-disney-plus-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=337%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-disney-plus-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=337%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-disney-plus-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=337%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-disney-plus-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=337%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-disney-plus-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=337%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-disney-plus-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=337%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-disney-plus-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=337%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-disney-plus-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=337%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-apple-tv-plus-peacock-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=350%2C387&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-apple-tv-plus-peacock-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=350%2C387&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-apple-tv-plus-peacock-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=350%2C387&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-apple-tv-plus-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=350%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-apple-tv-plus-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=350%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-apple-tv-plus-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=350%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-apple-tv-plus-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=350%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-apple-tv-plus-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=350%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-apple-tv-plus-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=350%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-peacock-amc-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=387%2C526&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-peacock-amc-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=387%2C526&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-peacock-amc-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=387%2C526&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-peacock-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=387%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-peacock-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=387%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-peacock-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=387%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-amc-plus-paramount-plus-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=526%2C531&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-amc-plus-paramount-plus-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=526%2C531&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-amc-plus-paramount-plus-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&providerIds=526%2C531&minImdbVotes=25000&sort=imdb"
+  },
+  {
+    "name": "music-all-streamers-vote5000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&watchMonetizationTypes=flatrate&minImdbVotes=5000&sort=imdb"
+  },
+  {
+    "name": "music-all-streamers-vote15000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&watchMonetizationTypes=flatrate&minImdbVotes=15000&sort=imdb"
+  },
+  {
+    "name": "music-all-streamers-vote25000",
+    "url": "https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=10402&watchMonetizationTypes=flatrate&minImdbVotes=25000&sort=imdb"
+  }
+]

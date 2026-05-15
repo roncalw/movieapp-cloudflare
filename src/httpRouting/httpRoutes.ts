@@ -2,6 +2,7 @@ import {
 	dryRunReadImdbRatings,
 	enqueueImdbRatingRows,
 } from "../imports/imdbRatings";
+import { enqueueCacheWarmSearchJob } from "../cache/cacheWarmJob";
 import {
 	checkMovieListPotentialLoadCounts,
 	recordMovieListCurrentCountSnapshot,
@@ -70,6 +71,7 @@ const MANUAL_MUTATION_PATHS = new Set([
 	"/admin/import/tmdb/provider-refresh-manual",
 	"/admin/import/tmdb/genre-lookup-refresh-manual",
 	"/admin/import/tmdb/watch-provider-lookup-refresh-manual",
+	"/admin/cache/search/warm-manual",
 	"/admin/import/movie-list/rebuild-manual",
 	"/admin/import/movie-list/potential-load-check",
 	"/admin/import/movie-list/current-count-snapshot",
@@ -164,6 +166,7 @@ export async function handleFetch(
 	ctx?: ExecutionContext,
 ) {
 	const url = new URL(request.url);
+
 	const manualMutationAccessError = validateManualMutationAccess(
 		request,
 		env,
@@ -387,6 +390,60 @@ export async function handleFetch(
 
 		const runs = await getRecentImportJobRuns(env, { jobName, limit });
 		return Response.json({ runs });
+	}
+
+	if (url.pathname === "/admin/cache/search/warm-manual") {
+		const allowedParams = new Set(["genre", "genreId"]);
+		for (const key of url.searchParams.keys()) {
+			if (!allowedParams.has(key)) {
+				return Response.json(
+					{
+						error:
+							"warm-manual only accepts optional genre or genreId query parameters.",
+					},
+					{ status: 400 },
+				);
+			}
+		}
+
+		const genreKey = url.searchParams.get("genre") ?? undefined;
+		const rawGenreId = url.searchParams.get("genreId");
+
+		if (genreKey && rawGenreId) {
+			return Response.json(
+				{ error: "Use either genre or genreId, not both." },
+				{ status: 400 },
+			);
+		}
+
+		let genreId: number | undefined;
+		if (rawGenreId !== null) {
+			const parsedGenreId = Number(rawGenreId);
+			if (!Number.isInteger(parsedGenreId) || parsedGenreId < 1) {
+				return Response.json(
+					{ error: "genreId must be a positive integer." },
+					{ status: 400 },
+				);
+			}
+
+			genreId = parsedGenreId;
+		}
+
+		try {
+			const result = await enqueueCacheWarmSearchJob(env, {
+				trigger: "manual",
+				genreKey,
+				genreId,
+			});
+
+			return Response.json(result);
+		} catch (error) {
+			return jobErrorResponse(
+				error,
+				"cache-warm-search",
+				"/admin/import/job-runs?jobName=cache-warm-search&limit=1",
+			);
+		}
 	}
 
 	if (url.pathname === "/admin/import/tmdb/enrich-all-manual") {

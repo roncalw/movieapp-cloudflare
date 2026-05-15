@@ -74,6 +74,10 @@
 			{
 				"binding": "TMDB_ENRICHMENT_QUEUE",
 				"queue": "movieapp-tmdb-enrichment-queue"
+			},
+			{
+				"binding": "CACHE_WARM_QUEUE",
+				"queue": "movieapp-cache-warm-queue"
 			}
 		],
 		"consumers": [
@@ -85,6 +89,13 @@
 			},
 			{
 				"queue": "movieapp-tmdb-enrichment-queue",
+				"max_batch_size": 1,
+				"max_batch_timeout": 10,
+				"max_retries": 5,
+				"max_concurrency": 1
+			},
+			{
+				"queue": "movieapp-cache-warm-queue",
 				"max_batch_size": 1,
 				"max_batch_timeout": 10,
 				"max_retries": 5,

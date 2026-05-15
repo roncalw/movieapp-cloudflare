@@ -1,3 +1,7 @@
+import {
+	isCacheWarmSearchQueueMessage,
+	processCacheWarmSearchMessage,
+} from "../cache/cacheWarmQueue";
 import { insertImdbRatingQueueRows } from "../imports/imdbRatings";
 import {
 	isTmdbEnrichmentQueueMessage,
@@ -20,6 +24,12 @@ export async function handleQueue(
 ) {
 	for (const message of batch.messages) {
 		try {
+			if (isCacheWarmSearchQueueMessage(message.body)) {
+				await processCacheWarmSearchMessage(env, message.body);
+				message.ack();
+				continue;
+			}
+
 			if (isTmdbEnrichmentQueueMessage(message.body)) {
 				const rows = message.body.tmdbIds.map((tmdbId) => ({ tmdb_id: tmdbId }));
 
