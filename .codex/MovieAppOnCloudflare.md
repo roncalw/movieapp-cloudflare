@@ -6,6 +6,7 @@
 - [Current Repos](#current-repos)
 - [Important Data Sources](#important-data-sources)
 - [Target Database Design](#target-database-design)
+- [Data Model Table Inventory](#data-model-table-inventory)
 - [Search Page Field Audit](#search-page-field-audit)
 - [Implementation Steps](#implementation-steps)
   - Migration Strategy
@@ -30,27 +31,32 @@
   - Future Worker API
     - [ ] [Step 13: Sketch The Future Movies Search Endpoint](#step-13-sketch-the-future-movies-search-endpoint)
     - [ ] [Step 14: Sketch The Future Movies Search Query](#step-14-sketch-the-future-movies-search-query)
-  - Rollout Back Into MovieApp
-    - [ ] [Step 15: Scale The Cloudflare Jobs Carefully](#step-15-scale-the-cloudflare-jobs-carefully)
-    - [ ] [Step 16: Hook This Back Into MovieApp](#step-16-hook-this-back-into-movieapp)
+  - Production Rollout And App Integration
+    - [ ] [Step 15: Production Backfill And Scale-Up Plan](#step-15-production-backfill-and-scale-up-plan)
+    - [ ] [Step 16: MovieApp Integration Handoff](#step-16-movieapp-integration-handoff)
   - Production Jobs And Safety
-    - [ ] [Step 17: Job Summary](#step-17-job-summary)
-      - [ ] [Step 17-1: IMDb Ratings Job](#step-17-1-imdb-ratings-job)
-      - [ ] [Step 17-2: TMDB Primary Job](#step-17-2-tmdb-primary-job)
-      - [ ] [Step 17-3: TMDB New Movie Details Job](#step-17-3-tmdb-new-movie-details-job)
-      - [ ] [Step 17-4: TMDB Provider Refresh Job](#step-17-4-tmdb-provider-refresh-job)
-      - [ ] [Step 17-5: Movie List Build Job](#step-17-5-movie-list-build-job)
-      - [ ] [Step 17-6: Movie List Potential-Load Safety Check](#step-17-6-movie-list-potential-load-safety-check)
-      - [ ] [Step 17-7: Movie List Current-Count Snapshot](#step-17-7-movie-list-current-count-snapshot)
-      - [ ] [Step 17-8: Job Dependencies and Order](#step-17-8-job-dependencies-and-order)
-      - [ ] [Step 17-9: Historical Job Info](#step-17-9-historical-job-info)
-      - [ ] [Step 17-10: Manual-Only Jobs](#step-17-10-manual-only-jobs)
-    - [ ] [Step 18: Scheduled Refresh Cron Jobs](#step-18-scheduled-refresh-cron-jobs)
-      - [ ] [Step 18-1: Current `wrangler.jsonc` Schedule](#step-18-1-current-wranglerjsonc-schedule)
-      - [ ] [Step 18-2: Why Scheduled Jobs Use Fixed Times](#step-18-2-why-scheduled-jobs-use-fixed-times)
-      - [ ] [Step 18-3: What `scheduled(...)` Does](#step-18-3-what-scheduled-does)
-      - [ ] [Step 18-4: Manual Testing](#step-18-4-manual-testing)
-      - [ ] [Step 18-5: Monitoring Order](#step-18-5-monitoring-order)
+    - [ ] [Step 17: Production Job Summary](#step-17-production-job-summary)
+      - Production Job Run Sequence
+        - [ ] [Step 17-1: IMDb Ratings Job](#step-17-1-imdb-ratings-job)
+        - [ ] [Step 17-2: TMDB Primary Job](#step-17-2-tmdb-primary-job)
+        - [ ] [Step 17-3: TMDB New Movie Details Job](#step-17-3-tmdb-new-movie-details-job)
+        - [ ] [Step 17-4: TMDB Provider Refresh Job](#step-17-4-tmdb-provider-refresh-job)
+        - [ ] [Step 17-5: Movie List Build Job](#step-17-5-movie-list-build-job)
+          - [ ] [Step 17-5-1: Movie List Potential-Load Safety Check](#step-17-5-1-movie-list-potential-load-safety-check)
+          - [ ] [Step 17-5-2: Movie List Insert/Upsert And Live Genre/Provider Tables](#step-17-5-2-movie-list-insertupsert-and-live-genreprovider-tables)
+          - [ ] [Step 17-5-3: Movie List Current-Count Snapshot](#step-17-5-3-movie-list-current-count-snapshot)
+        - [ ] [Step 17-6: Search Cache Warm Job](#step-17-6-search-cache-warm-job)
+      - Supporting Operations And References
+        - [ ] [Step 17-7: Job Dependencies and Order](#step-17-7-job-dependencies-and-order)
+        - [ ] [Step 17-8: Historical Job Info](#step-17-8-historical-job-info)
+        - [ ] [Step 17-9: Manual-Only Jobs](#step-17-9-manual-only-jobs)
+    - [ ] [Step 18: Cron Schedule And Operations](#step-18-cron-schedule-and-operations)
+      - [ ] [Step 18-1: Production Cron Schedule](#step-18-1-production-cron-schedule)
+      - [ ] [Step 18-2: Scheduling Rationale And Buffers](#step-18-2-scheduling-rationale-and-buffers)
+      - [ ] [Step 18-3: Cron Handler Routing](#step-18-3-cron-handler-routing)
+      - [ ] [Step 18-4: Local Scheduled-Event Testing](#step-18-4-local-scheduled-event-testing)
+      - [ ] [Step 18-5: Production Monitoring Checklist](#step-18-5-production-monitoring-checklist)
+      - [ ] [Step 18-6: Pausing And Resuming Scheduled Jobs](#step-18-6-pausing-and-resuming-scheduled-jobs)
     - [ ] [Step 19: Import Job Runs Table](#step-19-import-job-runs-table)
     - [ ] [Step 20: Movie List Load Counts Safety Table](#step-20-movie-list-load-counts-safety-table)
   - Reference
@@ -68,7 +74,8 @@ The data-loading pipeline does this ahead of normal app searches:
 
 ```text
 TMDB primary catalog rows
-+ TMDB enrichment fields
++ TMDB new movie detail fields
++ TMDB US flatrate watch-provider rows
 + IMDb title.ratings.tsv rows
 = prebuilt movie_list_items table in Cloudflare D1
 ```
@@ -79,9 +86,11 @@ Cloudflare owns the recurring data-loading work:
 
 ```text
 IMDb ratings load
-TMDB primary load
-TMDB enrichment load
+TMDB primary new-movies load
+TMDB new movie details load
+TMDB US flatrate provider refresh
 movie_list_items build
+optional search cache warm
 ```
 
 Important architecture rule:
@@ -173,7 +182,7 @@ Main React Native repo:
 Cloudflare Worker repo:
 
 ```text
-/Users/croncallo/repo/MovieApp-Cloudflare
+/Users/croncallo/repo/movieapp-cloudflare
 ```
 
 Current Cloudflare D1 database:
@@ -295,6 +304,40 @@ movie_genres
 movie_watch_providers
 ```
 
+## Data Model Table Inventory
+
+This is the current table map. Start here when you need to understand what each table is for before changing a job or writing a SQL check.
+
+Rule of thumb:
+
+```text
+staging tables  -> jobs can change these before the app sees the data
+live app tables -> the /movies/search endpoint reads these after safety checks pass
+job tables      -> explain what ran, when it ran, and whether it passed
+lookup tables   -> support manual SQL review and debugging
+```
+
+| Table | Purpose | Written By | Read By / Why It Matters |
+| --- | --- | --- | --- |
+| <span class="green">Source and staging tables</span> |  |  |  |
+| `imdb_ratings_staging` | IMDb rating and vote-count staging table keyed by `imdb_id`. | IMDb ratings job from IMDb `title.ratings.tsv.gz`. | Movie-list build joins to it for `imdb_rating` and `imdb_vote_count`. |
+| `tmdb_movies_staging` | Main TMDB movie staging table keyed by `tmdb_id`. Stores list fields plus static detail fields. | TMDB primary job and TMDB new movie details job. | Movie-list build reads it to create or update `movie_list_items`. |
+| `tmdb_primary_new_movie_ids_for_new_movie_details_staging` | Handoff table containing only true-new TMDB IDs from the latest primary run. | TMDB primary job clears and rebuilds it. | TMDB new movie details job reads it so it enriches only newly inserted movies. |
+| `movie_genres_staging` | Staged movie-to-genre links. | TMDB primary job. | Movie-list build copies approved staged genre rows into `movie_genres` after the safety check passes. |
+| `tmdb_us_flatrate_movies_staging` | Staged set of TMDB IDs returned by TMDB Discover for US flatrate availability. | TMDB provider refresh job. | Provider refresh queue uses it to decide which movies need current provider lookups. |
+| `movie_watch_providers_staging` | Staged US flatrate movie-to-provider links. May contain a `NULL` provider sentinel for checked movies with no current provider rows. | TMDB provider refresh job and manual enrichment paths. | Movie-list build copies approved staged provider rows into `movie_watch_providers` after the safety check passes. |
+| <span class="green">Live app search tables</span> |  |  |  |
+| `movie_list_items` | App-facing search/list table. One row per searchable movie. | Movie-list build job. | `/movies/search` reads this table for fast list results. |
+| `movie_genres` | Live movie-to-genre filter table. | Movie-list build copies from `movie_genres_staging`. | `/movies/search` reads it when genre filters are used. |
+| `movie_watch_providers` | Live US flatrate movie-to-provider filter table. | Movie-list build copies from `movie_watch_providers_staging`. | `/movies/search` reads it when streamer filters are used. |
+| <span class="green">Safety and job operation tables</span> |  |  |  |
+| `movie_list_load_counts` | Safety and audit table for current counts and potential-load counts. | Movie-list safety check and current-count snapshot. | Movie-list build uses it to stop if candidate counts drop beyond thresholds. |
+| `import_job_runs` | Durable job status, progress, timing, errors, and JSON result table. | All import, build, lookup, and cache-warm jobs. | Admin monitor endpoint and SQL tasks read it to prove job state. |
+| `import_job_locks` | Runtime lock table that prevents duplicate job execution. | Jobs that need single-run protection. | Manual endpoints and cron handlers use it before starting long-running work. |
+| <span class="green">Manual SQL lookup tables</span> |  |  |  |
+| `tmdb_genre_lookup` | Manual SQL lookup table for TMDB genre IDs and names by language. | Manual-only TMDB genre lookup refresh. | Your SQL scripts can join to it for readable genre names. |
+| `tmdb_watch_provider_lookup` | Manual SQL lookup table for US watch-provider IDs, names, logos, and display priority. | Manual-only TMDB watch-provider lookup refresh. | Your SQL scripts can join to it for readable provider names. |
+
 ## Search Page Field Audit
 
 I checked the current MovieApp search page code before defining the final table:
@@ -357,7 +400,7 @@ credits
 include_video=false
 ```
 
-TMDB's discover/movie API also defaults `include_adult` to false, and the current MovieApp and legacy MovieApp queries rely on that default. For the Cloudflare import, be explicit:
+TMDB's discover/movie API also defaults `include_adult` to false, and the existing MovieApp search code relies on that default. For the Cloudflare import, be explicit:
 
 ```text
 include_adult=false
@@ -388,10 +431,12 @@ Use this quick map before you start:
   - Steps 10-12 build the final movie list table and test the same main filters the app already has.
 - Future Worker API
   - Steps 13-14 sketch the future `/movies/search` endpoint and the SQL behind it.
-- Rollout Back Into MovieApp
-  - Steps 15-16 scale carefully and hook the Cloudflare path back into the MovieApp POC screen.
+- Production Rollout And App Integration
+  - Step 15 explains the production backfill and scale-up path. Step 16 explains how the React Native app hands search over to Cloudflare.
+- Production Jobs And Safety
+  - Steps 17-20 are the first stop for current operations: job order, cron schedule, job history, and load-count safety.
 - Reference
-  - Steps 17-19 are the wrap-up sections for the build order, command list, and usage notes.
+  - Steps 21-25 are supporting reference sections for build order, commands, data usage notes, caching, and MyD1.
 
 <a id="phase-0-migration-strategy"></a>
 ## Step 0: Migration Strategy
@@ -416,17 +461,25 @@ IMDb ratings file
 TMDB discover/movie API
 -> paginated primary TMDB load
 -> tmdb_movies_staging
--> movie_genres
+-> movie_genres_staging
 
-TMDB movie enrichment API
--> follow-up enrichment for accepted tmdb_id values
+TMDB new movie details API
+-> follow-up detail enrichment for true-new tmdb_id values
 -> updates tmdb_movies_staging with imdb_id and us_certification
--> writes movie_watch_providers child rows
+
+TMDB watch-provider API
+-> provider refresh for current US flatrate movie ids
+-> movie_watch_providers_staging
 
 Then:
 tmdb_movies_staging
 LEFT JOIN imdb_ratings_staging on imdb_id / tconst
 -> movie_list_items
+
+And:
+movie_genres_staging
+movie_watch_providers_staging
+-> copied into live genre/provider tables during the movie-list build
 ```
 
 The diagram below shows the full source-to-staging-to-final-table flow:
@@ -2699,7 +2752,7 @@ TMDB starts here.
 
 Do not hard-code the TMDB API key in source code.
 
-Use the same TMDB authentication style the current MovieApp and legacy MovieApp already use:
+Use the same TMDB authentication style the existing MovieApp API code uses:
 
 ```text
 api_key=your_key_goes_here
@@ -3779,6 +3832,20 @@ Cloudflare Worker logs show no TMDB 429 or D1 write errors
 
 ### Step 9B: TMDB Enrichment Pass
 
+Current status of this section:
+
+```text
+This section documents the full TMDB detail-enrichment path that was built
+for historical backfill and manual recovery.
+
+It is not the normal weekly TMDB schedule anymore.
+
+The normal weekly TMDB schedule now uses:
+  1. TMDB primary new-movies job
+  2. TMDB new movie details job for true-new movie ids
+  3. TMDB provider refresh job for dynamic US flatrate providers
+```
+
 Step 9B happens after Step 9A.
 
 Step 9A loaded the base TMDB rows from `discover/movie` into `tmdb_movies_staging`.
@@ -3811,7 +3878,7 @@ Instead:
   refresh the full detail payload for those rows.
 ```
 
-That means initial backfill and recurring refresh use the same selection idea:
+The full manual enrichment path uses this selection idea:
 
 ```sql
 SELECT tmdb_id
@@ -3830,7 +3897,7 @@ Plain meaning:
 
 ```text
 1. first pick movies that have never been enriched
-2. then pick the oldest enriched movies whose enrichment is stale
+2. then, for manual recovery only, pick older enriched movies if the command asks for that
 3. do not pick terminal-error rows again
 4. stop at the limit for this run
 ```
@@ -3842,7 +3909,8 @@ Each test run updates only rows that still qualify.
 
 If you enrich 1000 rows, those rows get tmdb_enriched_at.
 The next run moves on to the next qualifying rows.
-It does not redo fresh rows unless they become older than refreshOlderThanDays.
+It does not redo already-enriched rows unless a manual recovery command is
+intentionally run with an older `refreshOlderThanDays` window.
 ```
 
 ### Step 9B-1: Why TMDB Enrichment Moved To A Queue
@@ -4002,13 +4070,14 @@ max_concurrency: 1:
 
 Current cron config is listed in Step 18.
 
-The current recurring schedule has four cron entries:
+The current recurring schedule has five cron entries:
 
 ```jsonc
 "triggers": {
   "crons": [
     "0 22 * * 1",
     "0 4 * * 2",
+    "0 6 * * 2",
     "0 10 * * 2",
     "0 1 * * 3"
   ]
@@ -4645,7 +4714,8 @@ Do not use the saved SQL file as the preferred production rebuild path.
 It exists for manual support/debugging.
 
 The safer production path is:
-  GET /admin/import/movie-list/rebuild-manual
+  POST /admin/import/movie-list/rebuild-manual
+  Authorization: Bearer $ADMIN_IMPORT_TOKEN
 
 or:
   the scheduled Final Table cron job
@@ -4948,8 +5018,6 @@ posterUrl:
 <a id="phase-14-sketch-the-future-movies-search-query"></a>
 ## Step 14: Sketch The Future Movies Search Query
 
-This is the SQL shape the Worker will eventually grow into.
-
 This is the basic SQL shape the Worker endpoint will eventually use.
 
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Start from this no-filter query shape:</div>
@@ -5104,21 +5172,34 @@ ORDER BY m.imdb_rating DESC, m.imdb_vote_count DESC
 LIMIT ? OFFSET ?;
 ```
 
-<a id="phase-15-scale-the-cloudflare-jobs-carefully"></a>
-## Step 15: Scale The Cloudflare Jobs Carefully
+<a id="phase-15-production-backfill-and-scale-up-plan"></a>
+## Step 15: Production Backfill And Scale-Up Plan
 
-Both recurring import paths should run on Cloudflare, not from a laptop.
+Plain-English purpose:
+
+```text
+This step explains how to safely move from small manual tests to full
+Cloudflare production loads.
+
+It is about capacity and risk control.
+It is not the normal weekly schedule.
+```
+
+All production import work should run on Cloudflare, not from a laptop.
 
 Do not jump from a 100-row test to the full dataset.
 
-TMDB now has two separate operating modes:
+TMDB has two separate operating modes:
 
 ```text
 1. one-time manual historical backfill
-2. later weekly incremental refresh
+   used only when building or repairing the whole catalog
+
+2. normal weekly new-movies refresh
+   starts from the latest release_date already stored in tmdb_movies_staging
 ```
 
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Use this scale-up order:</div>
+<div><span class="ooo">[</span>   <span class="ooo">]</span> Use this scale-up order for one-time or repair work:</div>
 
 ```text
 IMDb staging load:
@@ -5128,49 +5209,42 @@ IMDb staging load:
   330,000 rows
   full file only after timing and limits look safe
 
-TMDB one-time manual backfill:
+TMDB historical backfill:
   100 movies
   1,000 movies
   10,000 movies
-  larger windows only after timing and TMDB API behavior look safe
+  larger date windows only after timing and TMDB API behavior look safe
 
-TMDB weekly recurring refresh:
-  start only after the initial TMDB backfill is complete
-  read MAX(release_date) from tmdb_movies_staging
-  use that as the next discover/movie lower bound
-  weekly job should only process the new tail of the catalog
+TMDB normal weekly refresh:
+  start only after the historical catalog exists
+  use the new-primary job
+  only true-new movie ids are handed to the new-movie-details job
 ```
 
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Do not schedule the historical TMDB backfill on Cron.</div>
 
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Use the recurring production schedule in Step 18 after the historical backfill is finished.</div>
 
-Recurring job scope:
-
-```text
-IMDb recurring job:
-  still re-read the full IMDb file for now
-
-TMDB recurring job:
-  weekly incremental refresh from the latest release_date already stored
-```
-
-<div><span class="ooo">[</span>   <span class="ooo">]</span> Cron scheduling details now live on their own page in Step 18.</div>
-
-Current recurring-job split:
+Current scheduled-job split:
 
 ```text
 IMDb Cron:
-  whole-file refresh path
+  re-reads the full IMDb ratings file
 
 TMDB Primary Cron:
-  weekly discover/movie staging refresh from the latest release_date already stored
+  finds new TMDB movies from the latest stored release_date forward
 
-TMDB Enrichment Cron:
-  queue-based enrichment refresh for rows that are new or stale
+TMDB New Movie Details Cron:
+  enriches only true-new movie ids from the latest primary run
 
-Final Table Cron:
-  rebuilds movie_list_items after the staging refreshes have had time to finish
+TMDB Provider Refresh Cron:
+  refreshes current US flatrate provider rows
+
+Movie List Build Cron:
+  runs dependencies, safety counts, live table writes, and final count snapshot
+
+Search Cache Warm:
+  optional cache-warm job after search data is refreshed
 ```
 
 Verification:
@@ -5209,10 +5283,18 @@ Queue retries
 
 <div><span class="ooo">[</span>   <span class="ooo">]</span> If queue retries or Worker limit errors appear, reduce batch size before continuing.</div>
 
-<a id="phase-16-hook-this-back-into-movieapp"></a>
-## Step 16: Hook This Back Into MovieApp
+<a id="phase-16-movieapp-integration-handoff"></a>
+## Step 16: MovieApp Integration Handoff
 
-This is the handoff back into the app.
+Plain-English purpose:
+
+```text
+This step explains how the React Native app switches search/list results
+from live TMDB calls and app-side joining to the Cloudflare /movies/search
+endpoint.
+
+It is the app integration handoff after the D1 search tables are proven.
+```
 
 Temporary test screen:
 
@@ -5249,9 +5331,16 @@ prove the response fields match the app search screen needs
 <div><span class="ooo">[</span>   <span class="ooo">]</span> Do not change the production `MovieResults` / search architecture until the Cloudflare endpoint is verified.</div>
 
 <a id="phase-17-job-summary"></a>
-## Step 17: Job Summary
+## Step 17: Production Job Summary
 
 This section is the plain-English map of the production data jobs.
+
+The production job run sequence is listed first. The movie-list build owns its
+internal safety check, insert/upsert, and current-count snapshot, so those items
+are nested under the movie-list job instead of listed as separate top-level jobs.
+
+Supporting operations and reference material are separated after the scheduled
+jobs so the run sequence does not look longer than it really is.
 
 **Job Dependencies**
 
@@ -5288,7 +5377,7 @@ IMDB
 
 PRIMARY NEW MOVIES
 * curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-primary-manual" | jq
-  * Straight up sql, so response takes from 10 seconds to a minute
+  * Synchronous API/database load, so the response takes from 10 seconds to a minute
     * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-primary&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
 
 PRIMARY NEW MOVIE DETAILS
@@ -5303,17 +5392,26 @@ WATCH PROVIDERS REFRESH
 
 FINAL MOVIES LIST
 * curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual" | jq
-  * Straight up SQL, so response takes about 8 minutes --- 1. dependency check, 2. potential-load safety check, 3. copy staged genres and staged watch providers into the live search tables, 4. insert/update movie_list_items, 5. current-count snapshot
+  * Synchronous SQL, so the response takes about 8 minutes --- 1. dependency check, 2. potential-load safety check, 3. copy staged genres and staged watch providers into the live search tables, 4. insert/update movie_list_items, 5. current-count snapshot
     * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=movie-list-build&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+
+CACHE WARM SEARCHES
+* curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/cache/search/warm-manual?genre=horror" | jq
+  * For enqueues, monitor progress with this: (response comes back after queueing the selected genre URL set; the cache warm queue continues remotely)
+    * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=cache-warm-search&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
 
 MANUAL-ONLY LOOKUP TABLES
 * curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/genre-lookup-refresh-manual" | jq
-  * Straight up sql after one TMDB lookup API call; monitor with:
+  * Synchronous SQL after one TMDB lookup API call; monitor with:
     * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-genre-lookup-refresh&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
 * curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/watch-provider-lookup-refresh-manual" | jq
-  * Straight up sql after one TMDB lookup API call; monitor with:
+  * Synchronous SQL after one TMDB lookup API call; monitor with:
     * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-watch-provider-lookup-refresh&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
 
+
+**Production Job Run Sequence**
+
+These are the jobs to think about as the normal production refresh path, in run order.
 
 **IMDb ratings job**
 
@@ -5380,15 +5478,15 @@ MANUAL-ONLY LOOKUP TABLES
 * Manual Kickoff:
   * Endpoint: `/admin/import/tmdb/new-primary-manual` for the normal full refresh, or `/admin/import/tmdb/limited-primary-manual?beginDate=YYYY-MM-DD&endDate=YYYY-MM-DD&limit=1000` for an explicit limited run.
   * Command:
-    * Full- Only New Movies Job: <code class="green">curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-primary-manual" | jq</code> - uses the latest staged TMDB release date as `beginDate`, today as `endDate`, and the standard 2M cap; on success expect `jobRunId`, `beginDate`, `endDate`, `pagesRead`, `rowsSeen`, `rowsUpserted`, `rowsInserted`, `windowsLoaded`, `windowsSplit`, `stopReason`, and `durationMs`; `rowsUpserted` means rows refreshed or inserted in `tmdb_movies_staging`; `rowsInserted` means true new movie IDs inserted into the new-movie-details handoff table; if the begin date is older than 28 days, expect `skipped: true` with `skipReason`, `beginDate`, `endDate`, and `oldestAllowedBeginDate`.
-    * Partial- Only New Movies Job: <code class="green">curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/limited-primary-manual?beginDate=2000-01-01&amp;endDate=2000-12-31&amp;limit=1000" | jq</code> - use this when you intentionally want an explicit date range and row cap; on success expect `jobRunId`, `beginDate`, `endDate`, `pagesRead`, `rowsSeen`, `rowsUpserted`, `rowsInserted`, `windowsLoaded`, `windowsSplit`, `stopReason`, and `durationMs`.
+    * Weekly New-Movies Job: <code class="green">curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-primary-manual" | jq</code> - uses the latest staged TMDB release date as `beginDate`, today as `endDate`, and the standard 2M cap; on success expect `jobRunId`, `beginDate`, `endDate`, `pagesRead`, `rowsSeen`, `rowsUpserted`, `rowsInserted`, `windowsLoaded`, `windowsSplit`, `stopReason`, and `durationMs`; `rowsUpserted` means rows refreshed or inserted in `tmdb_movies_staging`; `rowsInserted` means true new movie IDs inserted into the new-movie-details handoff table; if the begin date is older than 28 days, expect `skipped: true` with `skipReason`, `beginDate`, `endDate`, and `oldestAllowedBeginDate`.
+    * Explicit Date-Range Job: <code class="green">curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/limited-primary-manual?beginDate=2000-01-01&amp;endDate=2000-12-31&amp;limit=1000" | jq</code> - use this when you intentionally want a specific date range and row cap; on success expect `jobRunId`, `beginDate`, `endDate`, `pagesRead`, `rowsSeen`, `rowsUpserted`, `rowsInserted`, `windowsLoaded`, `windowsSplit`, `stopReason`, and `durationMs`.
   * Type:
     * Synchronous - keep the command running until the JSON response returns because this endpoint does the TMDB page reads and D1 writes directly.
     * TMDB Discover API pages mean the Worker calls TMDB one page at a time.
     * Release-date windows mean the job splits the search by date ranges so each TMDB request stays manageable.
     * D1 upserts mean existing rows are updated and new rows are inserted.
 * Cron Job: `0 4 * * 2` = <span class="green">Monday 12:00 AM ET while on EDT; Monday 04:00 UTC.</span>
-* Expected Duration for Full Only New Movies Job: <span class="green">From 10 seconds to minutes tops</span> - Normal weekly incremental loads start from the latest staged release date. Historical backfill timing is in [Step 17-9: Historical Job Info](#step-17-9-historical-job-info).
+* Expected Duration for Weekly New-Movies Job: <span class="green">From 10 seconds to a few minutes</span> - Normal weekly incremental loads start from the latest staged release date. Historical backfill timing is in [Step 17-8: Historical Job Info](#step-17-8-historical-job-info).
 * Query to Monitor Progress:
   * Endpoint: `/admin/import/job-runs?jobName=tmdb-primary&limit=1` (`limit=1` shows the latest run; increase the limit to see previous runs).
   * Command: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-primary&amp;limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'</code>
@@ -5501,7 +5599,7 @@ MANUAL-ONLY LOOKUP TABLES
         * Full Job: <code class="green">curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual" | jq</code> - this runs Step 1, then Step 2, then Step 3 in order.
     * What it runs:
       * Step 1: movie list potential-load safety check.
-      * Step 2: movie list insert/upsert and relationship promotion.
+      * Step 2: copy approved staged genre and provider rows into `movie_genres` and `movie_watch_providers`, then insert/update `movie_list_items`.
       * Step 3: movie list current-count snapshot.
   * Use the individual child-step endpoints only when you intentionally want to test or inspect one step by itself.
 * DB Table and Fields:
@@ -5517,7 +5615,7 @@ MANUAL-ONLY LOOKUP TABLES
 
   **Step 1 - Movie list potential-load safety check**
 
-  * Details: [Step 17-6: Movie List Potential-Load Safety Check](#step-17-6-movie-list-potential-load-safety-check).
+  * Details: [Step 17-5-1: Movie List Potential-Load Safety Check](#step-17-5-1-movie-list-potential-load-safety-check).
   * Description: Counts the live tables fresh, counts what would be loaded before the movie-list insert/upsert step, and compares those two sets of counts.
   * DB Table and Fields:
     * `movie_list_load_counts`
@@ -5570,7 +5668,7 @@ MANUAL-ONLY LOOKUP TABLES
   **Step 2 - Movie list insert/upsert**
 
   * Details: [Step 17-5: Movie List Build Job](#step-17-5-movie-list-build-job).
-  * Description: Promotes approved relationship staging rows and upserts ready staging data into the fast app search table.
+  * Description: Copies approved staged genre/provider rows into the live filter tables, then inserts or updates ready rows in the fast app search table.
   * DB Table and Fields:
     * `movie_list_items`
       * Updated by `tmdb_movies_staging`
@@ -5589,7 +5687,7 @@ MANUAL-ONLY LOOKUP TABLES
       * Updated by `movie_genres_staging`
         * `tmdb_id`
         * `genre_id`
-      * Updated by relationship-promotion metadata
+      * Updated by copy-to-live metadata
         * `promotion_run_id`
         * `promoted_at`
     * `movie_watch_providers`
@@ -5597,7 +5695,7 @@ MANUAL-ONLY LOOKUP TABLES
         * `tmdb_id`
         * `provider_id`
         * `region`
-      * Updated by relationship-promotion metadata
+      * Updated by copy-to-live metadata
         * `promotion_run_id`
         * `promoted_at`
   * DB Update Type:
@@ -5607,12 +5705,12 @@ MANUAL-ONLY LOOKUP TABLES
   * Manual Kickoff:
     * Endpoint: `/admin/import/movie-list/rebuild-manual`; this is the parent full-job endpoint listed above.
     * Command:
-      * Full Job: <code class="green">curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual" | jq</code> - on success expect `jobRunId`, safety-check result, relationship promotion summaries, `upsertedRows`, `movieListCount`, current-count snapshot result, and `durationMs`; timing depends on how many changed staging rows qualify.
+      * Full Job: <code class="green">curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual" | jq</code> - on success expect `jobRunId`, safety-check result, genre/provider copy summaries, `upsertedRows`, `movieListCount`, current-count snapshot result, and `durationMs`; timing depends on how many changed staging rows qualify.
     * Type:
-      * Synchronous - keep the command running until the JSON response returns because this endpoint runs the safety check, relationship promotion, movie-list upsert, and snapshot in one request.
-      * Relationship promotion means staged genres and providers become live after the safety check passes.
+      * Synchronous - keep the command running until the JSON response returns because this endpoint runs the safety check, copies staged genre/provider rows into the live tables, upserts movie-list rows, and records the snapshot in one request.
+      * Live genre/provider table copy means staged genres and providers become visible to search only after the safety check passes.
       * Chunked movie-list upserts mean the final `movie_list_items` table is updated in smaller groups instead of one oversized database statement.
-  * Expected Duration for Full Job: About 4 minutes for the core `movie_list_items` write, currently about 810,000 searchable movie rows. The full endpoint can take slightly longer because it also runs the safety check, relationship promotion, and snapshot.
+  * Expected Duration for Full Job: About 4 minutes for the core `movie_list_items` write, currently about 810,000 searchable movie rows. The full endpoint can take slightly longer because it also runs the safety check, copies staged genre/provider rows into the live tables, and records the snapshot.
   * Query to Monitor Progress:
     * Endpoint: `/admin/import/job-runs?jobName=movie-list-build&limit=1` (`limit=1` shows the latest run; increase the limit to see previous runs).
     * Command: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=movie-list-build&amp;limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'</code>
@@ -5621,7 +5719,7 @@ MANUAL-ONLY LOOKUP TABLES
 
   **Step 3 - Movie list current-count snapshot**
 
-  * Details: [Step 17-7: Movie List Current-Count Snapshot](#step-17-7-movie-list-current-count-snapshot).
+  * Details: [Step 17-5-3: Movie List Current-Count Snapshot](#step-17-5-3-movie-list-current-count-snapshot).
   * Description: Records current live counts after a successful movie-list insert/upsert step.
   * DB Table and Fields:
     * `movie_list_load_counts`
@@ -5654,6 +5752,43 @@ MANUAL-ONLY LOOKUP TABLES
     * Command: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=movie-list-current-count-snapshot&amp;limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'</code>
     * SQL: `SELECT * FROM import_job_runs WHERE job_name = 'movie-list-current-count-snapshot' ORDER BY started_at DESC LIMIT 1;`
   * Safety Check Contribution: `cc_count`, `imdb_rating_cc_count`, `imdb_vote_cc_count`, `release_date_cc_count`, `certification_cc_count`, `popularity_cc_count`, `genre_cc_count`, `genre_per_movie_cc_count`, `watch_provider_cc_count`, `watch_provider_per_movie_cc_count` - this step records the finished live-table counts after a successful build.
+
+**Search cache warm job**
+
+* Details: [Step 17-6: Search Cache Warm Job](#step-17-6-search-cache-warm-job).
+* Description: Warms selected movie-search cache URLs after the search data has been refreshed.
+* DB Table and Fields:
+  * `import_job_runs`
+    * Updated by cache-warm job metadata
+      * `job_run_id`
+      * `job_name`
+      * `status`
+      * `trigger`
+      * `selected_count`
+      * `queued_count`
+      * `processed_count`
+      * `updated_count`
+      * `error_count`
+      * `started_at`
+      * `ended_at`
+      * `duration_ms`
+      * `result_json`
+* DB Update Type: Upsert (Creates one job-run row when the warm request is queued, then queue consumers update that same row until complete) - `import_job_runs`.
+* Manual Kickoff:
+  * Endpoint: `/admin/cache/search/warm-manual`, `/admin/cache/search/warm-manual?genre=horror`, or `/admin/cache/search/warm-manual?genreId=27`.
+  * Command:
+    * One Genre: <code class="green">curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/cache/search/warm-manual?genre=horror" | jq</code> - on success expect `jobRunId`, selected genre information, cache-entry counts, queue counts, and a monitor endpoint.
+    * All Genres: <code class="green">curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/cache/search/warm-manual" | jq</code> - queues every configured genre cache-warm set.
+  * Type:
+    * Asynchronous after enqueue response - wait for the JSON response, then the cache-warm queue drains remotely.
+    * Cache-warm queue messages request each configured search URL page by page, up to 10 pages per configured URL, and then retry each page once to confirm the cache hit.
+* Cron Job: Not currently listed in `wrangler.jsonc`; run it manually after the movie-list build, or add a cron after the movie-list build when this should become fully scheduled.
+* Expected Duration for Full Job: One genre usually takes minutes. All genres depend on how many configured cache URLs are queued.
+* Query to Monitor Progress:
+  * Endpoint: `/admin/import/job-runs?jobName=cache-warm-search&limit=1` (`limit=1` shows the latest run; increase the limit to see previous runs).
+  * Command: <code class="green">curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=cache-warm-search&amp;limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'</code>
+  * SQL: `SELECT * FROM import_job_runs WHERE job_name = 'cache-warm-search' ORDER BY started_at DESC LIMIT 1;`
+* Safety Check Contribution: None; this warms HTTP cache after the live search tables are already built.
 
 The jobs are separated because each data source has a different shape, size, and failure mode.
 
@@ -5759,7 +5894,7 @@ Status and timing:
   /admin/import/job-runs?jobName=imdb-ratings&limit=1
 ```
 
-Schedule details: [Step 18-1: Current `wrangler.jsonc` Schedule](#step-18-1-current-wranglerjsonc-schedule).
+Schedule details: [Step 18-1: Production Cron Schedule](#step-18-1-production-cron-schedule).
 
 ### Step 17-2: TMDB Primary Job
 
@@ -5836,7 +5971,7 @@ Status and timing:
   /admin/import/job-runs?jobName=tmdb-primary&limit=1
 ```
 
-Schedule details: [Step 18-1: Current `wrangler.jsonc` Schedule](#step-18-1-current-wranglerjsonc-schedule).
+Schedule details: [Step 18-1: Production Cron Schedule](#step-18-1-production-cron-schedule).
 
 Complete fields in `tmdb_movies_staging` after this job:
 
@@ -5959,7 +6094,7 @@ tmdb_enriched_at
 tmdb_enrichment_error
 ```
 
-Schedule details: [Step 18-1: Current `wrangler.jsonc` Schedule](#step-18-1-current-wranglerjsonc-schedule).
+Schedule details: [Step 18-1: Production Cron Schedule](#step-18-1-production-cron-schedule).
 
 ### Step 17-4: TMDB Provider Refresh Job
 
@@ -6047,7 +6182,7 @@ Status and timing:
   /admin/import/job-runs?jobName=tmdb-provider-refresh&limit=1
 ```
 
-Schedule details: [Step 18-1: Current `wrangler.jsonc` Schedule](#step-18-1-current-wranglerjsonc-schedule).
+Schedule details: [Step 18-1: Production Cron Schedule](#step-18-1-production-cron-schedule).
 
 ### Step 17-5: Movie List Build Job
 
@@ -6059,8 +6194,8 @@ Skips if IMDb ratings, TMDB primary, TMDB new movie details, or TMDB provider re
 Skips if a manual full TMDB enrichment run is still active.
 Runs the movie-list potential-load safety check.
 Skips if the potential-load counts dropped too much versus the fresh live counts taken during that safety check.
-Promotes approved genre staging rows into movie_genres.
-Promotes approved watch-provider staging rows into movie_watch_providers.
+Copies approved genre staging rows into movie_genres.
+Copies approved watch-provider staging rows into movie_watch_providers.
 Builds movie_list_items from tmdb_movies_staging plus imdb_ratings_staging.
 Upserts movie_list_items rows incrementally.
 Does not delete unrelated old movie_list_items rows.
@@ -6110,7 +6245,7 @@ TMDB staging rows store the movie catalog fields.
 TMDB new movie details adds IMDb id and US certification for newly loaded movies.
 TMDB provider refresh stages dynamic US flatrate watch-provider links.
 IMDb staging rows store IMDb rating and vote-count fields.
-Relationship staging rows protect genre and provider filters before promotion.
+Genre/provider staging rows protect filters before the live tables are changed.
 
 The movie_list_items build runs after those source areas are ready.
 It combines the staged TMDB rows with the staged IMDb rating rows.
@@ -6210,7 +6345,7 @@ Production URL shape:
 
 This manual endpoint runs:
   potential-load safety check
-  relationship promotion if safe
+  copy staged genre/provider rows into live tables if safe
   movie-list build if safe
   current-count snapshot after success
 
@@ -6222,9 +6357,9 @@ Status and timing:
   /admin/import/job-runs?jobName=movie-list-build&limit=1
 ```
 
-Schedule details: [Step 18-1: Current `wrangler.jsonc` Schedule](#step-18-1-current-wranglerjsonc-schedule).
+Schedule details: [Step 18-1: Production Cron Schedule](#step-18-1-production-cron-schedule).
 
-### Step 17-6: Movie List Potential-Load Safety Check
+#### Step 17-5-1: Movie List Potential-Load Safety Check
 
 What this job does:
 
@@ -6277,9 +6412,31 @@ Status and timing:
   /admin/import/job-runs?jobName=movie-list-potential-load-check&limit=1
 ```
 
-Schedule flow details: [Step 18-3: What `scheduled(...)` Does](#step-18-3-what-scheduled-does).
+Schedule flow details: [Step 18-3: Cron Handler Routing](#step-18-3-cron-handler-routing).
 
-### Step 17-7: Movie List Current-Count Snapshot
+#### Step 17-5-2: Movie List Insert/Upsert And Live Genre/Provider Tables
+
+What this step does:
+
+```text
+Runs only after the potential-load safety check passes.
+Copies approved staged genre rows into movie_genres.
+Copies approved staged US provider rows into movie_watch_providers.
+Inserts or updates ready rows into movie_list_items.
+Does not delete unrelated old movie_list_items rows.
+```
+
+Manual endpoint:
+
+```text
+No separate endpoint for this middle step.
+Run the parent movie-list endpoint:
+/admin/import/movie-list/rebuild-manual
+```
+
+Schedule flow details: [Step 18-3: Cron Handler Routing](#step-18-3-cron-handler-routing).
+
+#### Step 17-5-3: Movie List Current-Count Snapshot
 
 What this tracked step does:
 
@@ -6313,9 +6470,58 @@ Status and timing:
   /admin/import/job-runs?jobName=movie-list-current-count-snapshot&limit=1
 ```
 
-Schedule flow details: [Step 18-3: What `scheduled(...)` Does](#step-18-3-what-scheduled-does).
+Schedule flow details: [Step 18-3: Cron Handler Routing](#step-18-3-cron-handler-routing).
 
-### Step 17-8: Job Dependencies and Order
+### Step 17-6: Search Cache Warm Job
+
+What this job does:
+
+```text
+Runs after the search data has been refreshed.
+Reads the configured search-cache URL sets.
+Queues cache-warm work for either all genres or one requested genre.
+Requests each search page so Cloudflare and the app-level cache have hot entries.
+Retries each requested page once to confirm the warmed URL is now a cache hit.
+```
+
+Manual endpoint:
+
+```text
+All configured cache URLs:
+  /admin/cache/search/warm-manual
+
+One genre by slug:
+  /admin/cache/search/warm-manual?genre=horror
+
+One genre by TMDB genre id:
+  /admin/cache/search/warm-manual?genreId=27
+```
+
+Manual run and schedule:
+
+```text
+Manual endpoint:
+  /admin/cache/search/warm-manual
+
+Production URL shape:
+  https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/cache/search/warm-manual?genre=horror
+
+Schedule:
+  not currently listed in wrangler.jsonc
+  run manually after the movie-list build, or add a cron after movie-list build when ready
+
+Status and timing:
+  /admin/import/job-runs?jobName=cache-warm-search&limit=1
+```
+
+Schedule details: [Step 18-1: Production Cron Schedule](#step-18-1-production-cron-schedule).
+
+**Supporting Operations And References**
+
+The remaining Step 17 sections are supporting details. They explain dependencies,
+history, and manual-only jobs, but they are not additional scheduled load jobs.
+
+### Step 17-7: Job Dependencies and Order
 
 The production order is:
 
@@ -6324,9 +6530,12 @@ The production order is:
 2. TMDB primary job
 3. TMDB new movie details job
 4. TMDB provider refresh job
-5. Movie list potential-load safety check
-6. Movie list build job
-7. Movie list current-count snapshot step
+5. Movie list build job
+   - potential-load safety check
+   - copy staged genre/provider rows into live tables
+   - movie_list_items insert/upsert
+   - current-count snapshot
+6. Search cache warm job
 ```
 
 **IMDb ratings job**
@@ -6396,9 +6605,20 @@ The production order is:
   * Uses `result_json.rowsInserted > 0` to decide which primary run actually required the new movie details handoff.
   * If any dependency fails, the movie-list job writes `skipped: true` with `skipReason = job_dependency_not_ready`.
   * Runs the potential-load safety check before changing the app-facing tables.
-  * Promotes staged relationship rows from `movie_genres_staging` and `movie_watch_providers_staging`.
+  * Copies staged genre/provider rows from `movie_genres_staging` and `movie_watch_providers_staging` into the live search filter tables.
   * Upserts the app-facing `movie_list_items` table from `tmdb_movies_staging` joined to `imdb_ratings_staging`.
   * Records a current-count snapshot only after the build succeeds.
+
+**Search cache warm job**
+
+* Dependencies:
+  * Not currently enforced by a cron schedule.
+  * Operationally, run it after a successful movie-list build so the cache reflects the newest app search data.
+* How:
+  * Reads configured cache-warm URL sets.
+  * Queues cache-warm messages with `job_name = 'cache-warm-search'`.
+  * Queue consumers request each search URL page and retry it once so the second request confirms the cache hit.
+  * The durable job row is written to `import_job_runs` with `job_name = 'cache-warm-search'`.
 
 **Manual-only TMDB full enrichment job**
 
@@ -6428,9 +6648,13 @@ Movie list build:
   Tuesday 1:00 AM UTC
   internally runs potential-load safety check first
   internally records current-count snapshot after success
+
+Search cache warm:
+  not currently in wrangler.jsonc
+  run manually after the movie-list build, or add a cron after movie-list build when ready
 ```
 
-### Step 17-9: Historical Job Info
+### Step 17-8: Historical Job Info
 
 This subsection records timing evidence from earlier full and backfill runs.
 
@@ -6599,7 +6823,7 @@ Core movie_list_items write:
 
 Full movie-list endpoint:
   about 4-6 minutes
-  includes potential-load safety check, relationship promotion, movie-list insert/upsert, and current-count snapshot
+  includes potential-load safety check, live genre/provider table copy, movie-list insert/upsert, and current-count snapshot
 ```
 
 Old `movie-search-build` warning:
@@ -6610,7 +6834,7 @@ Those rows are old partial, failed, or cancelled attempts from before the curren
 Do not use those rows as the expected timing for the current movie-list build.
 ```
 
-### Step 17-10: Manual-Only Jobs
+### Step 17-9: Manual-Only Jobs
 
 These endpoints are intentionally not part of the normal cron schedule.
 Use them only when you intentionally want a repair, backfill, or smaller controlled test.
@@ -6771,9 +6995,9 @@ Progress:
 ```
 
 <a id="phase-18-scheduled-refresh-cron-jobs"></a>
-## Step 18: Scheduled Refresh Cron Jobs
+## Step 18: Cron Schedule And Operations
 
-This page is the recurring production refresh schedule.
+This section is the operational runbook for the recurring production refresh schedule.
 
 Cloudflare Cron Triggers use UTC cron expressions.
 
@@ -6797,7 +7021,7 @@ after daylight saving time changes, review these expressions when Eastern time
 switches between EDT and EST.
 ```
 
-### Step 18-1: Current `wrangler.jsonc` Schedule
+### Step 18-1: Production Cron Schedule
 
 The current cron list is:
 
@@ -6854,7 +7078,10 @@ Cloudflare's cron day-of-week values here are:
 
 That is why the Monday jobs use `2`, and the Tuesday UTC final-table job uses `3`.
 
-### Step 18-2: Why Scheduled Jobs Use Fixed Times
+Search cache warm details are in [Step 17-6: Search Cache Warm Job](#step-17-6-search-cache-warm-job).
+It is not currently in this cron list. If it should run automatically, add a cron after the movie-list build.
+
+### Step 18-2: Scheduling Rationale And Buffers
 
 Preferred ideal:
 
@@ -6911,7 +7138,7 @@ job progress table says prior job completed
 
 Cloudflare Workflows could also be evaluated later if we want a first-class workflow engine.
 
-### Step 18-3: What `scheduled(...)` Does
+### Step 18-3: Cron Handler Routing
 
 The Worker branches on `controller.cron`.
 
@@ -6949,7 +7176,7 @@ controller.cron === "0 1 * * 3"
   -> records movie-list current-count snapshot after a successful build
 ```
 
-### Step 18-4: Manual Testing
+### Step 18-4: Local Scheduled-Event Testing
 
 Do not assume the Cloudflare dashboard can manually fire a Cron Trigger.
 
@@ -7094,7 +7321,11 @@ curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cl
 curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/current-count-snapshot"
 ```
 
-### Step 18-5: Monitoring Order
+```bash
+curl -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/cache/search/warm-manual?genre=horror"
+```
+
+### Step 18-5: Production Monitoring Checklist
 
 Use this order after the weekly refresh begins:
 
@@ -7106,6 +7337,7 @@ Use this order after the weekly refresh begins:
 5. Check movie_list_load_counts potential-load safety result.
 6. Check final movie_list_items counts.
 7. Check movie_list_load_counts current-count snapshot.
+8. If cache warming was run, check cache-warm-search progress.
 ```
 
 Useful VS Code tasks:
@@ -7144,6 +7376,171 @@ tmdb-provider-refresh-queue-message-start
 tmdb-provider-refresh-queue-message-end
 movie-list-build-start
 movie-list-build-end
+cache-warm-search-complete
+```
+
+### Step 18-6: Pausing And Resuming Scheduled Jobs
+
+There are two different controls:
+
+```text
+Worker pause flags
+  Cron still fires.
+  The Worker sees the pause flag and exits before starting the job.
+  Cloudflare Observability gets a scheduled-cron-paused event.
+
+Cloudflare Cron Trigger disable/remove
+  Cron does not fire.
+  The Worker scheduled(...) handler is not called.
+  There is no scheduled-cron-paused event because Cloudflare never invoked the Worker.
+```
+
+Use Worker pause flags first when testing or temporarily stopping jobs. They are
+safer operationally because they leave evidence that the scheduled time arrived.
+
+Use Cloudflare Cron Trigger disable/remove only when you want the schedule itself
+turned off.
+
+Current Worker pause flags live in `wrangler.jsonc` under `vars`:
+
+```jsonc
+"vars": {
+  "ALL_JOBS_PAUSED": "true",
+  "IMDB_JOB_PAUSED": "false",
+  "MOVIE_LIST_JOB_PAUSED": "false",
+  "TMDB_ENRICH_JOB_PAUSED": "false",
+  "TMDB_NEW_MOVIE_DETAILS_JOB_PAUSED": "false",
+  "TMDB_PRIMARY_JOB_PAUSED": "false"
+}
+```
+
+What each flag controls:
+
+```text
+ALL_JOBS_PAUSED
+  Pauses every scheduled cron job handled by this Worker.
+
+IMDB_JOB_PAUSED
+  Pauses the IMDb ratings scheduled job.
+
+TMDB_PRIMARY_JOB_PAUSED
+  Pauses the TMDB primary scheduled job.
+
+TMDB_NEW_MOVIE_DETAILS_JOB_PAUSED
+  Pauses the TMDB new movie details scheduled job.
+
+TMDB_ENRICH_JOB_PAUSED
+  Pauses the TMDB provider refresh scheduled job.
+
+MOVIE_LIST_JOB_PAUSED
+  Pauses the final movie-list build scheduled job.
+```
+
+Pause all scheduled jobs:
+
+```text
+1. Open wrangler.jsonc.
+2. Set ALL_JOBS_PAUSED to "true".
+3. Deploy.
+```
+
+```bash
+npm run deploy
+```
+
+Resume all scheduled jobs:
+
+```text
+1. Open wrangler.jsonc.
+2. Set ALL_JOBS_PAUSED to "false".
+3. Confirm any individual job pause flags are also "false" for jobs that should run.
+4. Deploy.
+```
+
+```bash
+npm run deploy
+```
+
+Pause one scheduled job:
+
+```text
+1. Keep ALL_JOBS_PAUSED as "false".
+2. Set the one job flag to "true".
+3. Deploy.
+```
+
+Example:
+
+```jsonc
+"ALL_JOBS_PAUSED": "false",
+"TMDB_ENRICH_JOB_PAUSED": "true"
+```
+
+That example pauses only the TMDB provider refresh cron.
+
+Resume one scheduled job:
+
+```text
+1. Set that job flag back to "false".
+2. Deploy.
+```
+
+Example:
+
+```jsonc
+"TMDB_ENRICH_JOB_PAUSED": "false"
+```
+
+How to verify a Worker-level pause:
+
+```text
+Cloudflare Observability should show:
+
+scheduled-cron-paused
+  jobName=<job name>
+  cron=<cron expression>
+  pausedBy=<pause flag name>
+```
+
+If a job is paused this way, it should not create a normal `import_job_runs`
+entry for that scheduled run because the Worker exits before calling the job.
+
+Local pause test:
+
+```bash
+npx wrangler dev --test-scheduled
+```
+
+Then call one scheduled URL:
+
+```bash
+curl "http://localhost:8787/__scheduled?cron=0+10+*+*+2"
+```
+
+If `ALL_JOBS_PAUSED` or `TMDB_ENRICH_JOB_PAUSED` is `"true"`, that local call
+should log `scheduled-cron-paused` and should not enqueue the provider refresh.
+
+Cloudflare Cron Trigger disable/remove path:
+
+```text
+Workers & Pages
+movieapp-cloudflare
+Settings
+Triggers
+Cron Triggers
+```
+
+If disabling through code instead of the dashboard, remove the cron expression
+from `wrangler.jsonc` under `triggers.crons`, then deploy.
+
+Important:
+
+```text
+Removing a cron from triggers.crons stops Cloudflare from firing that schedule.
+It is not the same as setting a Worker pause flag.
+
+Use the pause flags when you want proof that the schedule fired but was intentionally skipped.
+Use Cron Trigger removal when you want Cloudflare not to call the Worker at all.
 ```
 
 ## Step 19: Import Job Runs Table
@@ -7458,7 +7855,7 @@ If the Worker is deployed before the migration is applied, any job path that tou
 
 ## Step 20: Movie List Load Counts Safety Table
 
-This table protects the movie-list build and relationship-table promotion from silent upstream data loss.
+This table protects the movie-list build and the live genre/provider table copy from silent upstream data loss.
 
 Table name:
 
@@ -7469,9 +7866,9 @@ movie_list_load_counts
 Plain-English purpose:
 
 ```text
-Before promoting staged data, count what would be loaded.
+Before copying staged data into live tables, count what would be loaded.
 Count the current live tables at the same time and compare the potential load to those fresh counts.
-If the potential load dropped too much, stop the movie-list build and relationship promotion.
+If the potential load dropped too much, stop the movie-list build and the live genre/provider table copy.
 After a successful build, record the new current count for review and history.
 ```
 
@@ -7523,11 +7920,11 @@ Column meanings:
 ```text
 cc means current count.
 These are counts from the already-built movie_list_items table.
-They also include live relationship counts from movie_genres and movie_watch_providers.
+They also include live genre/provider counts from movie_genres and movie_watch_providers.
 
 pl means potential load.
 These are counts from the source query that would feed movie_list_items.
-They also include staged relationship counts from movie_genres_staging and movie_watch_providers_staging.
+They also include staged genre/provider counts from movie_genres_staging and movie_watch_providers_staging.
 
 threshold is the percent allowed to drop.
 The default is 1.0, meaning more than a 1% drop stops the build.
@@ -7645,11 +8042,11 @@ The order around the final table is:
 
 2. movie-genres-promote
    only runs if the potential-load check passes
-   promotes unpromoted movie_genres_staging rows into movie_genres
+   copies unpromoted movie_genres_staging rows into movie_genres
 
 3. movie-watch-providers-promote
    only runs if the potential-load check passes
-   promotes unpromoted movie_watch_providers_staging rows into movie_watch_providers
+   copies unpromoted movie_watch_providers_staging rows into movie_watch_providers
    uses NULL staging rows to clear live providers for movies that now have none
 
 4. movie-list-build
@@ -7695,7 +8092,7 @@ The full rebuild path does this:
 
 ```text
 potential-load safety check
-relationship promotion if safe
+copy staged genre/provider rows into live tables if safe
 movie-list build if safe
 current-count snapshot after success
 ```
@@ -7780,7 +8177,7 @@ The base table is created by:
 migrations/0013_add_movie_list_load_counts.sql
 ```
 
-Relationship staging and the extra genre/provider safety columns are added by:
+Genre/provider staging and the extra genre/provider safety columns are added by:
 
 ```text
 migrations/0014_add_relationship_staging_and_safety_counts.sql
