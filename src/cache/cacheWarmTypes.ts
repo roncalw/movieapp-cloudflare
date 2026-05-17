@@ -19,6 +19,7 @@ export type CacheWarmGenreConfig = {
 export type CacheWarmSearchQueueMessage = {
 	kind: typeof CACHE_WARM_SEARCH_QUEUE_KIND;
 	jobRunId: string;
+	messageId?: string;
 	genreKey: string;
 	genreLabel: string;
 	entryName: string;

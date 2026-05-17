@@ -12,6 +12,7 @@
 	},
 	"vars": {
 		"ALL_JOBS_PAUSED": "true",
+		"CACHE_WARM_JOB_PAUSED": "false",
 		"IMDB_JOB_PAUSED": "false",
 		"MOVIE_LIST_JOB_PAUSED": "false",
 		"TMDB_ENRICH_JOB_PAUSED": "false",
@@ -105,16 +106,41 @@
 	},
 	"triggers": {
 		"crons": [
-			// IMDb ratings refresh: Sunday 6:00 PM ET while on EDT; Sunday 22:00 UTC.
-			"0 22 * * 1",
-			// TMDB primary refresh: Monday 12:00 AM ET while on EDT; Monday 04:00 UTC.
-			"0 4 * * 2",
-			// TMDB new movie details refresh: Monday 2:00 AM ET while on EDT; Monday 06:00 UTC.
-			"0 6 * * 2",
-			// TMDB provider refresh: Monday 6:00 AM ET while on EDT; Monday 10:00 UTC.
-			"0 10 * * 2",
-			// Final movie_list_items rebuild: Monday 9:00 PM ET while on EDT; Tuesday 01:00 UTC.
-			"0 1 * * 3"
+			// Saturday
+				// IMDb Ratings Staging 
+					// 9:00 PM EDT
+						// 01:00 UTC Sunday.
+			"0 1 * * 1",
+			//============================================
+			// Saturday
+				// TMDB Primary Staging 
+					// 11:00 PM EDT
+						// 03:00 UTC Sunday.
+			"0 3 * * 1",
+			//============================================
+			// Sunday
+				// TMDB New Movie Details Staging 
+					// 1:00 AM EDT
+						// 05:00 UTC.
+			"0 5 * * 1",
+			//============================================
+			// Sunday
+				// TMDB Watch Providers Staging 
+					// 3:00 AM EDT
+						// 07:00 UTC.
+			"0 7 * * 1",
+			//============================================
+			// Sunday
+				// Movie List Production 
+					// 8:00 AM EDT
+						// 12:00 UTC.
+			"0 12 * * 1",
+			//============================================
+			// Sunday
+				// Search Cache Warm All Genres
+					// 9:00 AM EDT
+						// 13:00 UTC.
+			"0 13 * * 1"
 		]
 	}
 	/**

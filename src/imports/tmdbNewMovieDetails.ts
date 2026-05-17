@@ -16,7 +16,7 @@ import {
 	finishImportJobRun,
 	getActiveImportJobRun,
 	getImportJobRunById,
-	incrementImportJobRunQueueProgress,
+	recordImportJobQueueMessageCompletion,
 	setImportJobRunQueueTotals,
 	TMDB_ENRICH_JOB_NAME,
 	TMDB_NEW_MOVIE_DETAILS_JOB_NAME,
@@ -57,6 +57,7 @@ const TMDB_NEW_MOVIE_DETAILS_IDS_PER_QUEUE_MESSAGE = 100;
 const TMDB_NEW_MOVIE_DETAILS_QUEUE_MESSAGES_PER_SEND_BATCH = 100;
 const TMDB_NEW_MOVIE_DETAILS_D1_BATCH_MOVIES = 100;
 const TMDB_NEW_MOVIE_DETAILS_TMDB_CONCURRENCY = 25;
+const TMDB_ENRICHMENT_QUEUE_NAME = "movieapp-tmdb-enrichment-queue";
 
 export function isTmdbNewMovieDetailsQueueMessage(
 	body: WorkerQueueMessage,
@@ -202,6 +203,7 @@ export async function enqueueTmdbNewMovieDetailsJob(
 		let queueMessages: TmdbNewMovieDetailsQueueMessage[] = [];
 		let rowsQueued = 0;
 		let messagesQueued = 0;
+		let messageNumber = 0;
 
 		await createImportJobRun(env, {
 			jobRunId,
@@ -239,10 +241,12 @@ export async function enqueueTmdbNewMovieDetailsJob(
 			const tmdbIds = rows
 				.slice(index, index + TMDB_NEW_MOVIE_DETAILS_IDS_PER_QUEUE_MESSAGE)
 				.map((row) => row.tmdb_id);
+			messageNumber += 1;
 
 			queueMessages.push({
 				kind: "tmdb-new-movie-details",
 				jobRunId,
+				messageId: `${jobRunId}-${String(messageNumber).padStart(6, "0")}`,
 				tmdbIds,
 			});
 			rowsQueued += tmdbIds.length;
@@ -331,6 +335,7 @@ export async function processTmdbNewMovieDetailsRows(
 	jobRunId: string,
 	rows: TmdbNewMovieDetailsRow[],
 	trigger: "queue",
+	messageId?: string,
 ) {
 	const startedAtMs = Date.now();
 	const startedAt = new Date(startedAtMs).toISOString();
@@ -512,7 +517,18 @@ export async function processTmdbNewMovieDetailsRows(
 		tmdbIDNotFoundSkippedCount,
 	};
 
-	await incrementImportJobRunQueueProgress(env, jobRunId, stats, null);
+	await recordImportJobQueueMessageCompletion(env, {
+		jobRunId,
+		messageId:
+			messageId ??
+			`${jobRunId}-legacy-tmdb-new-details-${rows[0]?.tmdb_id ?? "first"}-${
+				rows[rows.length - 1]?.tmdb_id ?? "last"
+			}-${rows.length}`,
+		jobName: TMDB_NEW_MOVIE_DETAILS_JOB_NAME,
+		queueName: TMDB_ENRICHMENT_QUEUE_NAME,
+		stats,
+		lastError: null,
+	});
 
 	const endedAtMs = Date.now();
 	const endedAt = new Date(endedAtMs).toISOString();

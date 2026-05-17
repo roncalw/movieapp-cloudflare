@@ -17,7 +17,7 @@ import {
 	finishImportJobRun,
 	getActiveImportJobRun,
 	getImportJobRunById,
-	incrementImportJobRunQueueProgress,
+	recordImportJobQueueMessageCompletion,
 	setImportJobRunQueueTotals,
 	TMDB_ENRICH_JOB_NAME,
 	TMDB_NEW_MOVIE_DETAILS_JOB_NAME,
@@ -67,6 +67,7 @@ const TMDB_PROVIDER_REFRESH_IDS_PER_QUEUE_MESSAGE = 100;
 const TMDB_PROVIDER_REFRESH_QUEUE_MESSAGES_PER_SEND_BATCH = 100;
 const TMDB_PROVIDER_REFRESH_D1_BATCH_MOVIES = 100;
 const TMDB_PROVIDER_REFRESH_TMDB_CONCURRENCY = 25;
+const TMDB_ENRICHMENT_QUEUE_NAME = "movieapp-tmdb-enrichment-queue";
 
 function todayIsoDate(nowMs = Date.now()) {
 	return new Date(nowMs).toISOString().slice(0, 10);
@@ -420,6 +421,7 @@ export async function enqueueTmdbProviderRefreshJob(
 		let queueMessages: TmdbProviderRefreshQueueMessage[] = [];
 		let rowsQueued = 0;
 		let messagesQueued = 0;
+		let messageNumber = 0;
 
 		async function flushQueueMessages() {
 			if (queueMessages.length === 0) {
@@ -442,10 +444,12 @@ export async function enqueueTmdbProviderRefreshJob(
 			const tmdbIds = rows
 				.slice(index, index + TMDB_PROVIDER_REFRESH_IDS_PER_QUEUE_MESSAGE)
 				.map((row) => row.tmdb_id);
+			messageNumber += 1;
 
 			queueMessages.push({
 				kind: "tmdb-provider-refresh",
 				jobRunId,
+				messageId: `${jobRunId}-${String(messageNumber).padStart(6, "0")}`,
 				tmdbIds,
 			});
 			rowsQueued += tmdbIds.length;
@@ -537,6 +541,7 @@ export async function processTmdbProviderRefreshRows(
 	jobRunId: string,
 	rows: TmdbProviderRefreshRow[],
 	trigger: "queue",
+	messageId?: string,
 ) {
 	const startedAtMs = Date.now();
 	const startedAt = new Date(startedAtMs).toISOString();
@@ -724,7 +729,18 @@ export async function processTmdbProviderRefreshRows(
 		providerRowsInserted,
 	};
 
-	await incrementImportJobRunQueueProgress(env, jobRunId, stats, lastError);
+	await recordImportJobQueueMessageCompletion(env, {
+		jobRunId,
+		messageId:
+			messageId ??
+			`${jobRunId}-legacy-tmdb-provider-refresh-${
+				rows[0]?.tmdb_id ?? "first"
+			}-${rows[rows.length - 1]?.tmdb_id ?? "last"}-${rows.length}`,
+		jobName: TMDB_PROVIDER_REFRESH_JOB_NAME,
+		queueName: TMDB_ENRICHMENT_QUEUE_NAME,
+		stats,
+		lastError,
+	});
 
 	const endedAtMs = Date.now();
 	const endedAt = new Date(endedAtMs).toISOString();

@@ -163,6 +163,9 @@ export async function processCacheWarmSearchMessage(
 
 	await recordCacheWarmSearchProgress(env, {
 		jobRunId: message.jobRunId,
+		messageId:
+			message.messageId ??
+			`${message.jobRunId}-legacy-${message.genreKey}-${message.entryName}`,
 		genreKey: message.genreKey,
 		entryName: message.entryName,
 		stats,

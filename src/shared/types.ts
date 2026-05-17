@@ -10,6 +10,7 @@ export interface Env {
 	TMDB_API_KEY: string;
 	ADMIN_IMPORT_TOKEN?: string;
 	ALL_JOBS_PAUSED?: string;
+	CACHE_WARM_JOB_PAUSED?: string;
 	IMDB_JOB_PAUSED?: string;
 	TMDB_PRIMARY_JOB_PAUSED?: string;
 	TMDB_NEW_MOVIE_DETAILS_JOB_PAUSED?: string;
@@ -26,30 +27,35 @@ export type ImdbRatingRow = {
 export type ImdbRatingQueueMessage = {
 	kind?: "imdb-ratings";
 	jobRunId?: string;
+	messageId?: string;
 	rows: ImdbRatingRow[];
 };
 
 export type TmdbEnrichmentQueueMessage = {
 	kind: "tmdb-enrichment";
 	jobRunId: string;
+	messageId?: string;
 	tmdbIds: number[];
 };
 
 export type TmdbNewMovieDetailsQueueMessage = {
 	kind: "tmdb-new-movie-details";
 	jobRunId: string;
+	messageId?: string;
 	tmdbIds: number[];
 };
 
 export type TmdbProviderRefreshQueueMessage = {
 	kind: "tmdb-provider-refresh";
 	jobRunId: string;
+	messageId?: string;
 	tmdbIds: number[];
 };
 
 export type CacheWarmSearchQueueMessage = {
 	kind: "cache-warm-search";
 	jobRunId: string;
+	messageId?: string;
 	genreKey: string;
 	genreLabel: string;
 	entryName: string;

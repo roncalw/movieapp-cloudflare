@@ -283,7 +283,7 @@ So the three-source picture is:
 3. TMDB enrichment API      -> imdb_id, us_certification, watch providers
 ```
 
-## Target Database Design
+## Database Design
 
 Use staging tables first, then build an app-facing movie list table.
 
@@ -304,7 +304,7 @@ movie_genres
 movie_watch_providers
 ```
 
-## Data Model Table Inventory
+## Tables
 
 This is the current table map. Start here when you need to understand what each table is for before changing a job or writing a SQL check.
 
@@ -2162,14 +2162,14 @@ The recurring IMDb Cron Trigger is now part of the full production schedule in S
 Current IMDb schedule:
 
 ```text
-0 22 * * 1
+0 1 * * 1
 ```
 
 Meaning:
 
 ```text
-Sunday 6:00 PM Eastern while on Eastern Daylight Time
-Sunday 22:00 UTC in Cloudflare's cron expression
+Saturday 9:00 PM Eastern while on Eastern Daylight Time
+Sunday 01:00 UTC in Cloudflare's cron expression
 ```
 
 Cloudflare's cron day-of-week value in this dashboard/API is:
@@ -4070,16 +4070,17 @@ max_concurrency: 1:
 
 Current cron config is listed in Step 18.
 
-The current recurring schedule has five cron entries:
+The current recurring schedule has six cron entries:
 
 ```jsonc
 "triggers": {
   "crons": [
-    "0 22 * * 1",
-    "0 4 * * 2",
-    "0 6 * * 2",
-    "0 10 * * 2",
-    "0 1 * * 3"
+    "0 1 * * 1",
+    "0 3 * * 1",
+    "0 5 * * 1",
+    "0 7 * * 1",
+    "0 12 * * 1",
+    "0 13 * * 1"
   ]
 }
 ```
@@ -5435,7 +5436,7 @@ These are the jobs to think about as the normal production refresh path, in run 
     * Asynchronous after enqueue response - wait for the JSON response, then you can walk away or close the computer because the Cloudflare Queue drains remotely.
     * Queue enqueue means the Worker reads the IMDb file and puts small work messages on a queue.
     * Queue consumer D1 batches mean Cloudflare later processes those messages and writes groups of rows into D1.
-* Cron Job: `0 22 * * 1` = <span class="green">Sunday 6:00 PM ET while on EDT; Sunday 22:00 UTC.</span>
+* Cron Job: `0 1 * * 1` = <span class="green">Saturday 9:00 PM ET while on EDT; Sunday 01:00 UTC.</span>
 * Expected Duration for Full Job: <span class="green">About 9-13 minutes</span> (the enqueues kickoff after about <span class="green">60 seconds</span> when the command returns the JSON) end to end for the current full IMDb file. The manual endpoint returns after enqueue; the queue continues draining remotely.
 * Query to Monitor Progress:
   * Endpoint: `/admin/import/job-runs?jobName=imdb-ratings&limit=1` (`limit=1` shows the latest run; increase the limit to see previous runs).
@@ -5485,7 +5486,7 @@ These are the jobs to think about as the normal production refresh path, in run 
     * TMDB Discover API pages mean the Worker calls TMDB one page at a time.
     * Release-date windows mean the job splits the search by date ranges so each TMDB request stays manageable.
     * D1 upserts mean existing rows are updated and new rows are inserted.
-* Cron Job: `0 4 * * 2` = <span class="green">Monday 12:00 AM ET while on EDT; Monday 04:00 UTC.</span>
+* Cron Job: `0 3 * * 1` = <span class="green">Saturday 11:00 PM ET while on EDT; Sunday 03:00 UTC.</span>
 * Expected Duration for Weekly New-Movies Job: <span class="green">From 10 seconds to a few minutes</span> - Normal weekly incremental loads start from the latest staged release date. Historical backfill timing is in [Step 17-8: Historical Job Info](#step-17-8-historical-job-info).
 * Query to Monitor Progress:
   * Endpoint: `/admin/import/job-runs?jobName=tmdb-primary&limit=1` (`limit=1` shows the latest run; increase the limit to see previous runs).
@@ -5517,7 +5518,7 @@ These are the jobs to think about as the normal production refresh path, in run 
     * Dependency check means this will only run after a clean completed TMDB primary run.
     * Per-movie details API calls mean each queued movie is checked for IMDb id and US certification.
     * Controlled failure means a final TMDB API failure marks the row error, cancels the job, and stops later dependent jobs.
-* Cron Job: `0 6 * * 2` = <span class="green">Monday 2:00 AM ET while on EDT; Monday 06:00 UTC.</span>
+* Cron Job: `0 5 * * 1` = <span class="green">Sunday 1:00 AM ET while on EDT; Sunday 05:00 UTC.</span>
 * Expected Duration for Full Job: <span class="green">Usually minutes or less for normal weekly new movies</span>. It only processes movies from the latest TMDB primary run that still have no detail enrichment.
 * Query to Monitor Progress:
   * Endpoint: `/admin/import/job-runs?jobName=tmdb-new-movie-details&limit=1` (`limit=1` shows the latest run; increase the limit to see previous runs).
@@ -5572,7 +5573,7 @@ These are the jobs to think about as the normal production refresh path, in run 
     * Queue enqueue means the Worker then creates one small work item per group of movie ids.
     * Per-movie watch-provider API calls mean each queued movie is checked for current US flatrate provider ids.
     * Queue consumers mean Cloudflare processes that work safely in small pieces.
-* Cron Job: `0 10 * * 2` = <span class="green">Monday 6:00 AM ET while on EDT; Monday 10:00 UTC.</span>
+* Cron Job: `0 7 * * 1` = <span class="green">Sunday 3:00 AM ET while on EDT; Sunday 07:00 UTC.</span>
 * Expected Duration for Full Job:
   * This is expected to be much smaller than full enrichment because it only refreshes provider data for the current US flatrate candidate set. Use `import_job_runs` after the first full run as the source of truth for observed timing.
   * 5/8 - The full watch-provider refresh took 3,738,000 ms, which is 62 minutes 18 seconds.
@@ -5607,7 +5608,7 @@ These are the jobs to think about as the normal production refresh path, in run 
     * Not Updated in this Job
       * This parent does not load a table directly.
       * The three child steps below write the safety-count, live search, genre, and watch-provider tables.
-* Cron Job: `0 1 * * 3` = <span class="green">Monday 9:00 PM ET while on EDT; Tuesday 01:00 UTC.</span>
+* Cron Job: `0 12 * * 1` = <span class="green">Sunday 8:00 AM ET while on EDT; Sunday 12:00 UTC.</span>
 * Type:
   * Parent scheduled job means one cron trigger runs the safety check, then the insert/upsert, then the snapshot.
   * The parent is orchestration only; the concrete endpoints, sources, and progress checks are listed on the steps.
@@ -5782,7 +5783,7 @@ These are the jobs to think about as the normal production refresh path, in run 
   * Type:
     * Asynchronous after enqueue response - wait for the JSON response, then the cache-warm queue drains remotely.
     * Cache-warm queue messages request each configured search URL page by page, up to 10 pages per configured URL, and then retry each page once to confirm the cache hit.
-* Cron Job: Not currently listed in `wrangler.jsonc`; run it manually after the movie-list build, or add a cron after the movie-list build when this should become fully scheduled.
+* Cron Job: `0 13 * * 1` = <span class="green">Sunday 9:00 AM ET while on EDT; Sunday 13:00 UTC.</span>
 * Expected Duration for Full Job: One genre usually takes minutes. All genres depend on how many configured cache URLs are queued.
 * Query to Monitor Progress:
   * Endpoint: `/admin/import/job-runs?jobName=cache-warm-search&limit=1` (`limit=1` shows the latest run; increase the limit to see previous runs).
@@ -5887,8 +5888,8 @@ Production URL shape:
   https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual
 
 Schedule:
-  0 22 * * 1
-  Sunday 6:00 PM Eastern while on EDT
+  0 1 * * 1
+  Saturday 9:00 PM Eastern while on EDT
 
 Status and timing:
   /admin/import/job-runs?jobName=imdb-ratings&limit=1
@@ -5964,8 +5965,8 @@ Production URL shape:
   https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-primary-manual
 
 Schedule:
-  0 4 * * 2
-  Monday 12:00 AM Eastern while on EDT
+  0 3 * * 1
+  Saturday 11:00 PM Eastern while on EDT
 
 Status and timing:
   /admin/import/job-runs?jobName=tmdb-primary&limit=1
@@ -6078,8 +6079,8 @@ Production URL shape:
   https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-movie-details-manual
 
 Schedule:
-  0 6 * * 2
-  Monday 2:00 AM Eastern while on EDT
+  0 5 * * 1
+  Sunday 1:00 AM Eastern while on EDT
 
 Status and timing:
   /admin/import/job-runs?jobName=tmdb-new-movie-details&limit=1
@@ -6175,8 +6176,8 @@ Production URL shape:
   https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/provider-refresh-manual
 
 Schedule:
-  0 10 * * 2
-  Monday 6:00 AM Eastern while on EDT
+  0 7 * * 1
+  Sunday 3:00 AM Eastern while on EDT
 
 Status and timing:
   /admin/import/job-runs?jobName=tmdb-provider-refresh&limit=1
@@ -6350,8 +6351,8 @@ This manual endpoint runs:
   current-count snapshot after success
 
 Schedule:
-  0 1 * * 3
-  Monday 9:00 PM Eastern while on EDT
+  0 12 * * 1
+  Sunday 8:00 AM Eastern while on EDT
 
 Status and timing:
   /admin/import/job-runs?jobName=movie-list-build&limit=1
@@ -6507,8 +6508,10 @@ Production URL shape:
   https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/cache/search/warm-manual?genre=horror
 
 Schedule:
-  not currently listed in wrangler.jsonc
-  run manually after the movie-list build, or add a cron after movie-list build when ready
+  Sunday 9:00 AM EDT
+  Sunday 13:00 UTC
+  runs one hour after the movie-list build
+  skips itself if the movie-list build did not complete cleanly within the last 6 hours
 
 Status and timing:
   /admin/import/job-runs?jobName=cache-warm-search&limit=1
@@ -6612,9 +6615,11 @@ The production order is:
 **Search cache warm job**
 
 * Dependencies:
-  * Not currently enforced by a cron schedule.
-  * Operationally, run it after a successful movie-list build so the cache reflects the newest app search data.
+  * Requires the latest `movie-list-build` job to be clean, complete, and ended within the last 6 hours.
+  * This keeps the Sunday 9:00 AM cache warm tied to the Sunday 8:00 AM movie-list build, rather than accidentally warming against an older successful build.
 * How:
+  * Checks `import_job_runs` before enqueueing cache-warm work.
+  * If the movie-list build dependency is not ready, the job writes `skipped: true` with `skipReason = job_dependency_not_ready`.
   * Reads configured cache-warm URL sets.
   * Queues cache-warm messages with `job_name = 'cache-warm-search'`.
   * Queue consumers request each search URL page and retry it once so the second request confirms the cache hit.
@@ -6633,25 +6638,31 @@ The current weekly schedule intentionally leaves wide gaps between jobs:
 
 ```text
 IMDb ratings:
-  Sunday 10:00 PM UTC
+  Sunday 1:00 AM UTC
+  Saturday 9:00 PM Eastern while on EDT
 
 TMDB primary:
-  Monday 4:00 AM UTC
+  Sunday 3:00 AM UTC
+  Saturday 11:00 PM Eastern while on EDT
 
 TMDB new movie details:
-  Monday 6:00 AM UTC
+  Sunday 5:00 AM UTC
+  Sunday 1:00 AM Eastern while on EDT
 
 TMDB provider refresh:
-  Monday 10:00 AM UTC
+  Sunday 7:00 AM UTC
+  Sunday 3:00 AM Eastern while on EDT
 
 Movie list build:
-  Tuesday 1:00 AM UTC
+  Sunday 12:00 PM UTC
+  Sunday 8:00 AM Eastern while on EDT
   internally runs potential-load safety check first
   internally records current-count snapshot after success
 
 Search cache warm:
-  not currently in wrangler.jsonc
-  run manually after the movie-list build, or add a cron after movie-list build when ready
+  Sunday 1:00 PM UTC
+  Sunday 9:00 AM Eastern while on EDT
+  skips if the movie-list build did not complete cleanly within the last 6 hours
 ```
 
 ### Step 17-8: Historical Job Info
@@ -7004,11 +7015,12 @@ Cloudflare Cron Triggers use UTC cron expressions.
 The schedule below maps your requested Eastern-time schedule to UTC while the account is on Eastern Daylight Time:
 
 ```text
-Sunday 6:00 PM Eastern  -> Sunday 22:00 UTC
-Monday 12:00 AM Eastern -> Monday 04:00 UTC
-Monday 2:00 AM Eastern  -> Monday 06:00 UTC
-Monday 6:00 AM Eastern  -> Monday 10:00 UTC
-Monday 9:00 PM Eastern  -> Tuesday 01:00 UTC
+Saturday 9:00 PM Eastern  -> Sunday 01:00 UTC
+Saturday 11:00 PM Eastern -> Sunday 03:00 UTC
+Sunday 1:00 AM Eastern    -> Sunday 05:00 UTC
+Sunday 3:00 AM Eastern    -> Sunday 07:00 UTC
+Sunday 8:00 AM Eastern    -> Sunday 12:00 UTC
+Sunday 9:00 AM Eastern    -> Sunday 13:00 UTC
 ```
 
 Important daylight-saving note:
@@ -7028,16 +7040,18 @@ The current cron list is:
 ```jsonc
 "triggers": {
   "crons": [
-    // IMDb ratings refresh: Sunday 6:00 PM ET while on EDT; Sunday 22:00 UTC.
-    "0 22 * * 1",
-    // TMDB primary refresh: Monday 12:00 AM ET while on EDT; Monday 04:00 UTC.
-    "0 4 * * 2",
-    // TMDB new movie details refresh: Monday 2:00 AM ET while on EDT; Monday 06:00 UTC.
-    "0 6 * * 2",
-    // TMDB provider refresh: Monday 6:00 AM ET while on EDT; Monday 10:00 UTC.
-    "0 10 * * 2",
-    // Final movie_list_items rebuild: Monday 9:00 PM ET while on EDT; Tuesday 01:00 UTC.
-    "0 1 * * 3"
+    // IMDb ratings refresh: Saturday 9:00 PM ET while on EDT; Sunday 01:00 UTC.
+    "0 1 * * 1",
+    // TMDB primary refresh: Saturday 11:00 PM ET while on EDT; Sunday 03:00 UTC.
+    "0 3 * * 1",
+    // TMDB new movie details refresh: Sunday 1:00 AM ET while on EDT; Sunday 05:00 UTC.
+    "0 5 * * 1",
+    // TMDB provider refresh: Sunday 3:00 AM ET while on EDT; Sunday 07:00 UTC.
+    "0 7 * * 1",
+    // Final movie_list_items rebuild: Sunday 8:00 AM ET while on EDT; Sunday 12:00 UTC.
+    "0 12 * * 1",
+    // Search cache warm all genres: Sunday 9:00 AM ET while on EDT; Sunday 13:00 UTC.
+    "0 13 * * 1"
   ]
 }
 ```
@@ -7045,25 +7059,37 @@ The current cron list is:
 Meaning:
 
 ```text
-0 22 * * 1
-  IMDb ratings refresh
-  Sunday 6:00 PM Eastern while on EDT
 
-0 4 * * 2
-  TMDB primary staging refresh
-  Monday 12:00 AM Eastern while on EDT
+Saturday
+  IMDb Ratings Staging
+    9:00 PM EDT
+      0 1 * * 1
+  
+Saturday
+  TMDB Primary Staging 
+    11:00 PM EDT
+      0 3 * * 1
+  
+Sunday
+  TMDB New Movie Details Staging
+    1:00 AM EDT
+      0 5 * * 1
+  
+Sunday
+  TMDB Watch Providers Staging
+    3:00 AM EDT  
+      0 7 * * 1
+  
+Sunday
+  Movie List Production
+    8:00 AM Eastern while on EDT
+      0 12 * * 1
 
-0 6 * * 2
-  TMDB new movie details refresh
-  Monday 2:00 AM Eastern while on EDT
-
-0 10 * * 2
-  TMDB provider refresh
-  Monday 6:00 AM Eastern while on EDT
-
-0 1 * * 3
-  Final movie_list_items rebuild
-  Monday 9:00 PM Eastern while on EDT
+Sunday
+  Search Cache Warm All Genres
+    9:00 AM Eastern while on EDT
+      0 13 * * 1
+  
 ```
 
 Cloudflare's cron day-of-week values here are:
@@ -7076,10 +7102,10 @@ Cloudflare's cron day-of-week values here are:
 7 = Saturday
 ```
 
-That is why the Monday jobs use `2`, and the Tuesday UTC final-table job uses `3`.
+That is why all six scheduled entries above use `1`: each one lands on Sunday in UTC.
 
 Search cache warm details are in [Step 17-6: Search Cache Warm Job](#step-17-6-search-cache-warm-job).
-It is not currently in this cron list. If it should run automatically, add a cron after the movie-list build.
+It now runs automatically one hour after the movie-list build and skips if the movie-list build did not complete cleanly within the last 6 hours.
 
 ### Step 18-2: Scheduling Rationale And Buffers
 
@@ -7109,23 +7135,34 @@ They do not directly express "run 30 minutes after another cron job completes".
 So we use the fixed fallback times:
 
 ```text
+IMDb ratings:
+  Saturday 9:00 PM Eastern
+
+TMDB primary:
+  Saturday 11:00 PM Eastern
+
 TMDB new movie details:
-  Monday 2:00 AM Eastern
+  Sunday 1:00 AM Eastern
 
 TMDB provider refresh:
-  Monday 6:00 AM Eastern
+  Sunday 3:00 AM Eastern
 
 Final movie_list_items rebuild:
-  Monday 9:00 PM Eastern
+  Sunday 8:00 AM Eastern
+
+Search cache warm all genres:
+  Sunday 9:00 AM Eastern
 ```
 
 That gives the upstream work a wide buffer:
 
 ```text
-TMDB primary starts at midnight Eastern.
-TMDB new movie details starts 2 hours later.
-TMDB provider refresh starts 4 hours after new movie details starts.
-Final movie_list_items rebuild starts 15 hours after provider refresh starts.
+IMDb ratings starts Saturday at 9:00 PM Eastern.
+TMDB primary starts 2 hours later.
+TMDB new movie details starts 2 hours after TMDB primary starts.
+TMDB provider refresh starts 2 hours after new movie details starts.
+Final movie_list_items rebuild starts 5 hours after provider refresh starts.
+Search cache warm starts 1 hour after the movie-list build starts, but only runs if the movie-list build completed cleanly within the last 6 hours.
 ```
 
 Later, if we want true completion-based chaining, use an orchestrator pattern:
@@ -7145,28 +7182,28 @@ The Worker branches on `controller.cron`.
 Current mapping:
 
 ```text
-controller.cron === "0 22 * * 1"
+controller.cron === "0 1 * * 1"
   -> runScheduledImdbRatingsRefresh(env)
   -> reads IMDb title.ratings.tsv.gz
   -> enqueues IMDb rating rows into IMDB_RATING_QUEUE
 
-controller.cron === "0 4 * * 2"
+controller.cron === "0 3 * * 1"
   -> runScheduledTmdbPrimaryRefresh(env)
   -> reads MAX(release_date) from tmdb_movies_staging
   -> loads TMDB discover/movie rows through today
 
-controller.cron === "0 6 * * 2"
+controller.cron === "0 5 * * 1"
   -> enqueueTmdbNewMovieDetailsJob(env, ...)
   -> selects movies from the latest successful TMDB primary run
   -> enriches new movies with IMDb id and US certification
 
-controller.cron === "0 10 * * 2"
+controller.cron === "0 7 * * 1"
   -> enqueueTmdbProviderRefreshJob(env, ...)
   -> refreshes the current US flatrate provider staging set
   -> enqueues TMDB provider messages into TMDB_ENRICHMENT_QUEUE
 
-controller.cron === "0 1 * * 3"
-  -> rebuildMovieListItems(env, "cron")
+controller.cron === "0 12 * * 1"
+  -> runScheduledMovieListBuild(env)
   -> runs movie-list potential-load safety check
   -> skips the build if the potential-load counts crossed the threshold
   -> inserts final rows that have:
@@ -7174,6 +7211,11 @@ controller.cron === "0 1 * * 3"
        tmdb_enrichment_error IS NULL
      with IMDb rating/vote fields populated only when a matching IMDb rating row exists
   -> records movie-list current-count snapshot after a successful build
+
+controller.cron === "0 13 * * 1"
+  -> runScheduledCacheWarmAllGenres(env)
+  -> checks the latest movie-list build completed cleanly within the last 6 hours
+  -> enqueues all configured genre cache-warm sets into CACHE_WARM_QUEUE
 ```
 
 ### Step 18-4: Local Scheduled-Event Testing
@@ -7193,17 +7235,18 @@ npx wrangler dev --test-scheduled
 Then call the special local scheduled URL with the cron expression:
 
 ```bash
-curl "http://localhost:8787/__scheduled?cron=0+22+*+*+1"
+curl "http://localhost:8787/__scheduled?cron=0+1+*+*+1"
 ```
 
 Use this map:
 
 ```text
-0 22 * * 1 -> IMDb ratings
-0 4 * * 2  -> TMDB primary
-0 6 * * 2  -> TMDB new movie details
-0 10 * * 2 -> TMDB provider refresh
-0 1 * * 3  -> Potential-load safety check, final movie_list_items build, current-count snapshot
+0 1 * * 1  -> IMDb ratings
+0 3 * * 1  -> TMDB primary
+0 5 * * 1  -> TMDB new movie details
+0 7 * * 1  -> TMDB provider refresh
+0 12 * * 1 -> Potential-load safety check, final movie_list_items build, current-count snapshot
+0 13 * * 1 -> Search cache warm all genres
 ```
 
 What this proves:
@@ -7221,7 +7264,7 @@ that was just deployed, use this sequence:
 ```bash
 npm run deploy
 npx wrangler dev --test-scheduled
-curl "http://localhost:8787/__scheduled?cron=0+22+*+*+1"
+curl "http://localhost:8787/__scheduled?cron=0+1+*+*+1"
 ```
 
 The reason this works is:
@@ -7280,11 +7323,12 @@ Cron Triggers
 If the dashboard only shows the UTC expression, use the same map:
 
 ```text
-0 22 * * 1 -> IMDb ratings
-0 4 * * 2  -> TMDB primary
-0 6 * * 2  -> TMDB new movie details
-0 10 * * 2 -> TMDB provider refresh
-0 1 * * 3  -> Final movie_list_items build
+0 1 * * 1  -> IMDb ratings
+0 3 * * 1  -> TMDB primary
+0 5 * * 1  -> TMDB new movie details
+0 7 * * 1  -> TMDB provider refresh
+0 12 * * 1 -> Final movie_list_items build
+0 13 * * 1 -> Search cache warm all genres
 ```
 
 Manual HTTP fallbacks also exist for testing:
@@ -7406,6 +7450,7 @@ Current Worker pause flags live in `wrangler.jsonc` under `vars`:
 ```jsonc
 "vars": {
   "ALL_JOBS_PAUSED": "true",
+  "CACHE_WARM_JOB_PAUSED": "false",
   "IMDB_JOB_PAUSED": "false",
   "MOVIE_LIST_JOB_PAUSED": "false",
   "TMDB_ENRICH_JOB_PAUSED": "false",
@@ -7419,6 +7464,9 @@ What each flag controls:
 ```text
 ALL_JOBS_PAUSED
   Pauses every scheduled cron job handled by this Worker.
+
+CACHE_WARM_JOB_PAUSED
+  Pauses the search cache warm scheduled job.
 
 IMDB_JOB_PAUSED
   Pauses the IMDb ratings scheduled job.
@@ -8065,7 +8113,7 @@ These are not separate Cloudflare Cron Triggers.
 They run inside the existing movie-list scheduled job:
 
 ```text
-0 1 * * 3
+0 12 * * 1
 ```
 
 ### Step 20-4: Manual Endpoints

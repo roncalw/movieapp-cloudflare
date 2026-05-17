@@ -38,6 +38,7 @@ export async function handleQueue(
 					message.body.jobRunId,
 					rows,
 					"queue",
+					message.body.messageId,
 				);
 
 				message.ack();
@@ -52,6 +53,7 @@ export async function handleQueue(
 					message.body.jobRunId,
 					rows,
 					"queue",
+					message.body.messageId,
 				);
 
 				message.ack();
@@ -66,6 +68,7 @@ export async function handleQueue(
 					message.body.jobRunId,
 					rows,
 					"queue",
+					message.body.messageId,
 				);
 
 				message.ack();
@@ -76,6 +79,7 @@ export async function handleQueue(
 				env,
 				message.body.rows,
 				message.body.jobRunId,
+				message.body.messageId,
 			);
 			message.ack();
 		} catch (error) {

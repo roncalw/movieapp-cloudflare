@@ -9,8 +9,8 @@ import {
 	createTmdbEnrichmentJobRunId,
 	getActiveTmdbEnrichmentImportJobRun,
 	getImportJobRunById,
+	recordImportJobQueueMessageCompletion,
 	TMDB_ENRICH_JOB_NAME,
-	updateTmdbEnrichmentImportJobRunProgress,
 } from "../jobs/importJobRuns";
 import {
 	getTmdbMovieDetails,
@@ -54,6 +54,7 @@ const TMDB_ENRICH_IDS_PER_QUEUE_MESSAGE = 100;
 const TMDB_ENRICH_QUEUE_MESSAGES_PER_SEND_BATCH = 100;
 export const TMDB_ENRICH_TMDB_CONCURRENCY = 25;
 const TMDB_ENRICH_LOCK_MINUTES = 30;
+const TMDB_ENRICHMENT_QUEUE_NAME = "movieapp-tmdb-enrichment-queue";
 
 function buildTmdbEnrichmentStatements(
 	tmdbId: number,
@@ -173,6 +174,7 @@ export async function processTmdbEnrichmentRows(
 	jobRunId: string,
 	rows: TmdbEnrichmentRow[],
 	trigger: "queue",
+	messageId?: string,
 ) {
 	const startedAtMs = Date.now();
 	const startedAt = new Date(startedAtMs).toISOString();
@@ -372,7 +374,18 @@ export async function processTmdbEnrichmentRows(
 		providerRowsInserted,
 	};
 
-	await updateTmdbEnrichmentImportJobRunProgress(env, jobRunId, stats, lastError);
+	await recordImportJobQueueMessageCompletion(env, {
+		jobRunId,
+		messageId:
+			messageId ??
+			`${jobRunId}-legacy-tmdb-enrich-${rows[0]?.tmdb_id ?? "first"}-${
+				rows[rows.length - 1]?.tmdb_id ?? "last"
+			}-${rows.length}`,
+		jobName: TMDB_ENRICH_JOB_NAME,
+		queueName: TMDB_ENRICHMENT_QUEUE_NAME,
+		stats,
+		lastError,
+	});
 
 	const endedAtMs = Date.now();
 	const endedAt = new Date(endedAtMs).toISOString();
@@ -463,6 +476,7 @@ export async function enqueueTmdbEnrichmentJob(
 		let queueMessages: TmdbEnrichmentQueueMessage[] = [];
 		let rowsQueued = 0;
 		let messagesQueued = 0;
+		let messageNumber = 0;
 
 		await createTmdbEnrichmentImportJobRun(
 			env,
@@ -504,10 +518,12 @@ export async function enqueueTmdbEnrichmentJob(
 			const tmdbIds = rows
 				.slice(index, index + TMDB_ENRICH_IDS_PER_QUEUE_MESSAGE)
 				.map((row) => row.tmdb_id);
+			messageNumber += 1;
 
 			queueMessages.push({
 				kind: "tmdb-enrichment",
 				jobRunId,
+				messageId: `${jobRunId}-${String(messageNumber).padStart(6, "0")}`,
 				tmdbIds,
 			});
 			rowsQueued += tmdbIds.length;

@@ -1,18 +1,30 @@
+import { enqueueCacheWarmSearchJob } from "../cache/cacheWarmJob";
+import { CACHE_WARM_SEARCH_JOB_NAME } from "../cache/cacheWarmTypes";
 import { enqueueImdbRatingRows } from "../imports/imdbRatings";
 import { rebuildMovieListItems } from "../imports/movieListBuild";
 import { enqueueTmdbNewMovieDetailsJob } from "../imports/tmdbNewMovieDetails";
 import { enqueueTmdbProviderRefreshJob } from "../imports/tmdbProviderRefresh";
 import { loadNewTmdbPrimaryRows } from "../imports/tmdbPrimary";
+import {
+	checkImportJobDependencies,
+	finishSkippedDependencyRun,
+} from "./importJobDependencies";
+import {
+	createImportJobRunId,
+	MOVIE_LIST_BUILD_JOB_NAME,
+} from "./importJobRuns";
 import { logEvent } from "../shared/logging";
 import type { Env } from "../shared/types";
 
-const SCHEDULED_IMDB_CRON = "0 22 * * 1";
-const SCHEDULED_TMDB_PRIMARY_CRON = "0 4 * * 2";
-const SCHEDULED_TMDB_NEW_MOVIE_DETAILS_CRON = "0 6 * * 2";
-const SCHEDULED_TMDB_ENRICHMENT_CRON = "0 10 * * 2";
-const SCHEDULED_MOVIE_LIST_BUILD_CRON = "0 1 * * 3";
+const SCHEDULED_IMDB_CRON = "0 1 * * 1";
+const SCHEDULED_TMDB_PRIMARY_CRON = "0 3 * * 1";
+const SCHEDULED_TMDB_NEW_MOVIE_DETAILS_CRON = "0 5 * * 1";
+const SCHEDULED_TMDB_ENRICHMENT_CRON = "0 7 * * 1";
+const SCHEDULED_MOVIE_LIST_BUILD_CRON = "0 12 * * 1";
+const SCHEDULED_CACHE_WARM_ALL_GENRES_CRON = "0 13 * * 1";
 
 type JobPauseFlagName =
+	| "CACHE_WARM_JOB_PAUSED"
 	| "IMDB_JOB_PAUSED"
 	| "TMDB_PRIMARY_JOB_PAUSED"
 	| "TMDB_NEW_MOVIE_DETAILS_JOB_PAUSED"
@@ -85,6 +97,45 @@ async function runScheduledImdbRatingsRefresh(env: Env) {
 
 async function runScheduledTmdbPrimaryRefresh(env: Env) {
 	return loadNewTmdbPrimaryRows(env, "cron");
+}
+
+async function runScheduledMovieListBuild(env: Env) {
+	return rebuildMovieListItems(env, "cron");
+}
+
+async function runScheduledCacheWarmAllGenres(env: Env) {
+	const startedAtMs = Date.now();
+	const startedAt = new Date(startedAtMs).toISOString();
+	const requiredMovieListEndedAfter = new Date(startedAtMs - 6 * 60 * 60 * 1000)
+		.toISOString()
+		.slice(0, 19)
+		.replace("T", " ");
+	const dependencies = await checkImportJobDependencies(env, [
+		{
+			jobName: MOVIE_LIST_BUILD_JOB_NAME,
+			endedAfter: requiredMovieListEndedAfter,
+			endedAfterLabel: "cache-warm freshness window",
+		},
+	]);
+
+	if (!dependencies.ok) {
+		return finishSkippedDependencyRun(env, {
+			jobRunId: createImportJobRunId(CACHE_WARM_SEARCH_JOB_NAME, "cron"),
+			jobName: CACHE_WARM_SEARCH_JOB_NAME,
+			trigger: "cron",
+			startedAtMs,
+			startedAt,
+			blockers: dependencies.blockers,
+			extraResult: {
+				reason: "movie_list_build_not_ready",
+				requiredMovieListEndedAfter,
+			},
+		});
+	}
+
+	return enqueueCacheWarmSearchJob(env, {
+		trigger: "cron",
+	});
 }
 
 function waitUntilLogged(
@@ -219,7 +270,28 @@ export function handleScheduled(
 			ctx,
 			"movie-list-build",
 			controller.cron,
-			rebuildMovieListItems(env, "cron"),
+			runScheduledMovieListBuild(env),
+		);
+		return;
+	}
+
+	if (controller.cron === SCHEDULED_CACHE_WARM_ALL_GENRES_CRON) {
+		if (
+			skipPausedScheduledJob(
+				env,
+				controller,
+				"cache-warm-search",
+				"CACHE_WARM_JOB_PAUSED",
+			)
+		) {
+			return;
+		}
+
+		waitUntilLogged(
+			ctx,
+			"cache-warm-search",
+			controller.cron,
+			runScheduledCacheWarmAllGenres(env),
 		);
 		return;
 	}

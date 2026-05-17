@@ -8,7 +8,7 @@ import {
 	createImportJobRunId,
 	finishImportJobRun,
 	IMDB_RATINGS_JOB_NAME,
-	incrementImportJobRunQueueProgress,
+	recordImportJobQueueMessageCompletion,
 	type ImportJobTrigger,
 	setImportJobRunQueueTotals,
 } from "../jobs/importJobRuns";
@@ -18,6 +18,7 @@ const IMDB_RATINGS_URL = "https://datasets.imdbws.com/title.ratings.tsv.gz";
 const IMDB_SAMPLE_SIZE = 33;
 const IMDB_QUEUE_ROWS_PER_MESSAGE = 33;
 const IMDB_QUEUE_MESSAGES_PER_SEND_BATCH = 100;
+const IMDB_RATINGS_QUEUE_NAME = "movieapp-imdb-rating-import-queue";
 
 export async function dryRunReadImdbRatings(limit: number) {
 	const response = await fetch(IMDB_RATINGS_URL);
@@ -161,6 +162,10 @@ export async function enqueueImdbRatingRows(
 			queueMessages.push({
 				kind: "imdb-ratings",
 				jobRunId,
+				messageId: `${jobRunId}-${String(queueMessageCount + 1).padStart(
+					6,
+					"0",
+				)}`,
 				rows: batch,
 			});
 			rowsQueued += batch.length;
@@ -275,6 +280,7 @@ export async function insertImdbRatingQueueRows(
 	env: Env,
 	rows: ImdbRatingRow[],
 	jobRunId?: string,
+	messageId?: string,
 ) {
 	if (rows.length === 0) {
 		return;
@@ -297,16 +303,22 @@ export async function insertImdbRatingQueueRows(
 		.run();
 
 	if (jobRunId) {
-		await incrementImportJobRunQueueProgress(
-			env,
+		await recordImportJobQueueMessageCompletion(env, {
 			jobRunId,
-			{
+			messageId:
+				messageId ??
+				`${jobRunId}-legacy-${rows[0]?.imdb_id ?? "first"}-${
+					rows[rows.length - 1]?.imdb_id ?? "last"
+				}-${rows.length}`,
+			jobName: IMDB_RATINGS_JOB_NAME,
+			queueName: IMDB_RATINGS_QUEUE_NAME,
+			stats: {
 				processed: rows.length,
 				updated: rows.length,
 				errors: 0,
 				providerRowsInserted: 0,
 			},
-			null,
-		);
+			lastError: null,
+		});
 	}
 }

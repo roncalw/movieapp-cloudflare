@@ -46,12 +46,15 @@ function buildQueueMessages(
 	genres: CacheWarmGenreConfig[],
 ) {
 	const messages: CacheWarmSearchQueueMessage[] = [];
+	let messageNumber = 0;
 
 	for (const genre of genres) {
 		for (const entry of genre.entries) {
+			messageNumber += 1;
 			messages.push({
 				kind: CACHE_WARM_SEARCH_QUEUE_KIND,
 				jobRunId,
+				messageId: `${jobRunId}-${String(messageNumber).padStart(6, "0")}`,
 				genreKey: genre.key,
 				genreLabel: genre.label,
 				entryName: entry.name,

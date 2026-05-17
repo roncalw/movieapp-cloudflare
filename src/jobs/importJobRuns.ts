@@ -26,6 +26,15 @@ export type ImportJobProgressStats = {
 	tmdbIDNotFoundSkippedCount?: number;
 };
 
+export type ImportJobQueueMessageCompletion = {
+	jobRunId: string;
+	messageId: string;
+	jobName: string;
+	queueName: string;
+	stats: ImportJobProgressStats;
+	lastError: string | null;
+};
+
 export type ImportJobTrigger = "manual" | "cron";
 
 export const TMDB_ENRICH_JOB_NAME = "tmdb-enrich";
@@ -300,7 +309,7 @@ export async function setImportJobRunQueueTotals(
 		`UPDATE import_job_runs
 		 SET status =
 		       CASE
-		         WHEN ? > 0 AND MIN(processed_count, ?) >= ? THEN
+		         WHEN ? > 0 AND processed_count >= ? THEN
 		           CASE
 		             WHEN error_count > 0 THEN 'complete_with_errors'
 		             ELSE 'complete'
@@ -309,20 +318,10 @@ export async function setImportJobRunQueueTotals(
 		       END,
 		     selected_count = ?,
 		     queued_count = ?,
-		     processed_count =
-		       CASE
-		         WHEN ? > 0 AND processed_count > ? THEN ?
-		         ELSE processed_count
-		       END,
-		     updated_count =
-		       CASE
-		         WHEN ? > 0 AND updated_count > ? THEN ?
-		         ELSE updated_count
-		       END,
 		     last_progress_at = CURRENT_TIMESTAMP,
 		     ended_at =
 		       CASE
-		         WHEN ? > 0 AND MIN(processed_count, ?) >= ? THEN CURRENT_TIMESTAMP
+		         WHEN ? > 0 AND processed_count >= ? THEN COALESCE(ended_at, CURRENT_TIMESTAMP)
 		         ELSE ended_at
 		       END,
 		     result_json = COALESCE(?, result_json),
@@ -333,15 +332,7 @@ export async function setImportJobRunQueueTotals(
 			totals.selected,
 			totals.selected,
 			totals.selected,
-			totals.selected,
 			totals.queued,
-			totals.selected,
-			totals.selected,
-			totals.selected,
-			totals.selected,
-			totals.selected,
-			totals.selected,
-			totals.selected,
 			totals.selected,
 			totals.selected,
 			totals.result === undefined ? null : JSON.stringify(totals.result),
@@ -351,41 +342,168 @@ export async function setImportJobRunQueueTotals(
 		.run();
 }
 
-export async function incrementImportJobRunQueueProgress(
+async function refreshImportJobRunProgressFromQueueMessages(
 	env: Env,
 	jobRunId: string,
-	stats: ImportJobProgressStats,
-	lastError: string | null,
 ) {
+	await env.DB.prepare(
+		`UPDATE import_job_runs
+		 SET status =
+		       CASE
+		         WHEN selected_count > 0
+		              AND (
+		                SELECT COALESCE(SUM(processed_count), 0)
+		                FROM import_job_queue_messages
+		                WHERE job_run_id = ?
+		              ) >= selected_count THEN
+		           CASE
+		             WHEN (
+		               SELECT COALESCE(SUM(error_count), 0)
+		               FROM import_job_queue_messages
+		               WHERE job_run_id = ?
+		             ) > 0 THEN 'complete_with_errors'
+		             ELSE 'complete'
+		           END
+		         ELSE 'running'
+		       END,
+		     processed_count = (
+		       SELECT COALESCE(SUM(processed_count), 0)
+		       FROM import_job_queue_messages
+		       WHERE job_run_id = ?
+		     ),
+		     updated_count = (
+		       SELECT COALESCE(SUM(updated_count), 0)
+		       FROM import_job_queue_messages
+		       WHERE job_run_id = ?
+		     ),
+		     error_count = (
+		       SELECT COALESCE(SUM(error_count), 0)
+		       FROM import_job_queue_messages
+		       WHERE job_run_id = ?
+		     ),
+		     provider_rows_inserted = (
+		       SELECT COALESCE(SUM(provider_rows_inserted), 0)
+		       FROM import_job_queue_messages
+		       WHERE job_run_id = ?
+		     ),
+		     last_progress_at = CURRENT_TIMESTAMP,
+		     ended_at =
+		       CASE
+		         WHEN selected_count > 0
+		              AND (
+		                SELECT COALESCE(SUM(processed_count), 0)
+		                FROM import_job_queue_messages
+		                WHERE job_run_id = ?
+		              ) >= selected_count THEN COALESCE(ended_at, CURRENT_TIMESTAMP)
+		         ELSE ended_at
+		       END,
+		     result_json =
+		       CASE
+		         WHEN (
+		           SELECT COALESCE(SUM(tmdb_id_not_found_skipped_count), 0)
+		           FROM import_job_queue_messages
+		           WHERE job_run_id = ?
+		         ) > 0 THEN
+		           json_set(
+		             COALESCE(result_json, '{}'),
+		             '$.tmdbIDNotFoundSkippedCount',
+		             (
+		               SELECT COALESCE(SUM(tmdb_id_not_found_skipped_count), 0)
+		               FROM import_job_queue_messages
+		               WHERE job_run_id = ?
+		             )
+		           )
+		         ELSE result_json
+		       END,
+		     last_error = COALESCE(
+		       (
+		         SELECT last_error
+		         FROM import_job_queue_messages
+		         WHERE job_run_id = ?
+		           AND last_error IS NOT NULL
+		         ORDER BY completed_at DESC
+		         LIMIT 1
+		       ),
+		       last_error
+		     )
+		 WHERE job_run_id = ?
+		   AND status IN ('running', 'queued', 'complete', 'complete_with_errors')`,
+	)
+		.bind(
+			jobRunId,
+			jobRunId,
+			jobRunId,
+			jobRunId,
+			jobRunId,
+			jobRunId,
+			jobRunId,
+			jobRunId,
+			jobRunId,
+			jobRunId,
+			jobRunId,
+		)
+		.run();
+}
+
+export async function recordImportJobQueueMessageCompletion(
+	env: Env,
+	options: ImportJobQueueMessageCompletion,
+) {
+	const stats = options.stats;
 	const tmdbIDNotFoundSkippedCount = stats.tmdbIDNotFoundSkippedCount ?? 0;
+	const insertResult = await env.DB.prepare(
+		`INSERT OR IGNORE INTO import_job_queue_messages (
+			 job_run_id,
+			 message_id,
+			 job_name,
+			 queue_name,
+			 processed_count,
+			 updated_count,
+			 error_count,
+			 provider_rows_inserted,
+			 tmdb_id_not_found_skipped_count,
+			 last_error
+		 )
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	)
+		.bind(
+			options.jobRunId,
+			options.messageId,
+			options.jobName,
+			options.queueName,
+			stats.processed,
+			stats.updated,
+			stats.errors,
+			stats.providerRowsInserted,
+			tmdbIDNotFoundSkippedCount,
+			options.lastError,
+		)
+		.run();
+
+	if (insertResult.meta.changes === 0) {
+		await refreshImportJobRunProgressFromQueueMessages(env, options.jobRunId);
+		return;
+	}
 
 	await env.DB.prepare(
 		`UPDATE import_job_runs
 		 SET status =
 		       CASE
-		         WHEN selected_count > 0 AND MIN(selected_count, processed_count + ?) >= selected_count THEN
+		         WHEN selected_count > 0 AND processed_count + ? >= selected_count THEN
 		           CASE
 		             WHEN error_count + ? > 0 THEN 'complete_with_errors'
 		             ELSE 'complete'
 		           END
 		         ELSE 'running'
 		       END,
-		     processed_count =
-		       CASE
-		         WHEN selected_count > 0 THEN MIN(selected_count, processed_count + ?)
-		         ELSE processed_count + ?
-		       END,
-		     updated_count =
-		       CASE
-		         WHEN selected_count > 0 THEN MIN(selected_count, updated_count + ?)
-		         ELSE updated_count + ?
-		       END,
+		     processed_count = processed_count + ?,
+		     updated_count = updated_count + ?,
 		     error_count = error_count + ?,
 		     provider_rows_inserted = provider_rows_inserted + ?,
 		     last_progress_at = CURRENT_TIMESTAMP,
 		     ended_at =
 		       CASE
-		         WHEN selected_count > 0 AND MIN(selected_count, processed_count + ?) >= selected_count THEN CURRENT_TIMESTAMP
+		         WHEN selected_count > 0 AND processed_count + ? >= selected_count THEN COALESCE(ended_at, CURRENT_TIMESTAMP)
 		         ELSE ended_at
 		       END,
 		     result_json =
@@ -406,55 +524,7 @@ export async function incrementImportJobRunQueueProgress(
 		       END,
 		     last_error = COALESCE(?, last_error)
 		 WHERE job_run_id = ?
-		   AND status IN ('running', 'queued')`,
-	)
-		.bind(
-			stats.processed,
-			stats.errors,
-			stats.processed,
-			stats.processed,
-			stats.updated,
-			stats.updated,
-			stats.errors,
-			stats.providerRowsInserted,
-			stats.processed,
-			tmdbIDNotFoundSkippedCount,
-			tmdbIDNotFoundSkippedCount,
-			lastError,
-			jobRunId,
-		)
-		.run();
-}
-
-export async function updateTmdbEnrichmentImportJobRunProgress(
-	env: Env,
-	jobRunId: string,
-	stats: ImportJobProgressStats,
-	lastError: string | null,
-) {
-	await env.DB.prepare(
-		`UPDATE import_job_runs
-		 SET status =
-		       CASE
-		         WHEN processed_count + ? >= selected_count THEN
-		           CASE
-		             WHEN error_count + ? > 0 THEN 'complete_with_errors'
-		             ELSE 'complete'
-		           END
-		         ELSE 'running'
-		       END,
-		     processed_count = processed_count + ?,
-		     updated_count = updated_count + ?,
-		     error_count = error_count + ?,
-		     provider_rows_inserted = provider_rows_inserted + ?,
-		     last_progress_at = CURRENT_TIMESTAMP,
-		     ended_at =
-		       CASE
-		         WHEN processed_count + ? >= selected_count THEN CURRENT_TIMESTAMP
-		         ELSE ended_at
-		       END,
-		     last_error = COALESCE(?, last_error)
-		 WHERE job_run_id = ?`,
+		   AND status IN ('running', 'queued', 'complete', 'complete_with_errors')`,
 	)
 		.bind(
 			stats.processed,
@@ -464,8 +534,10 @@ export async function updateTmdbEnrichmentImportJobRunProgress(
 			stats.errors,
 			stats.providerRowsInserted,
 			stats.processed,
-			lastError,
-			jobRunId,
+			tmdbIDNotFoundSkippedCount,
+			tmdbIDNotFoundSkippedCount,
+			options.lastError,
+			options.jobRunId,
 		)
 		.run();
 }

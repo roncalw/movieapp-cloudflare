@@ -101,34 +101,78 @@ export async function recordCacheWarmSearchProgress(
 	env: Env,
 	options: {
 		jobRunId: string;
+		messageId: string;
 		genreKey: string;
 		entryName: string;
 		stats: CacheWarmSearchStats;
 	},
 ) {
 	const stats = options.stats;
+	const insertResult = await env.DB.prepare(
+		`INSERT OR IGNORE INTO import_job_queue_messages (
+			 job_run_id,
+			 message_id,
+			 job_name,
+			 queue_name,
+			 processed_count,
+			 updated_count,
+			 error_count,
+			 cache_page_count,
+			 cache_first_request_count,
+			 cache_retry_request_count,
+			 cache_hit_count,
+			 cache_miss_count,
+			 cache_retry_hit_count,
+			 cache_error_count,
+			 genre_key,
+			 entry_name,
+			 last_error
+		 )
+		 VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	)
+		.bind(
+			options.jobRunId,
+			options.messageId,
+			CACHE_WARM_SEARCH_JOB_NAME,
+			"movieapp-cache-warm-queue",
+			stats.pageCount,
+			stats.errorCount,
+			stats.pageCount,
+			stats.firstRequestCount,
+			stats.retryRequestCount,
+			stats.hitCount,
+			stats.missCount,
+			stats.retryHitCount,
+			stats.errorCount,
+			options.genreKey,
+			options.entryName,
+			stats.lastError,
+		)
+		.run();
+
+	if (insertResult.meta.changes === 0) {
+		await refreshCacheWarmSearchProgressFromQueueMessages(env, options.jobRunId);
+		return;
+	}
+
 	const updateResult = await env.DB.prepare(
 		`UPDATE import_job_runs
 		 SET status =
 		       CASE
-		         WHEN selected_count > 0 AND MIN(selected_count, processed_count + 1) >= selected_count THEN
+		         WHEN selected_count > 0 AND processed_count + 1 >= selected_count THEN
 		           CASE
 		             WHEN error_count + ? > 0 THEN 'complete_with_errors'
 		             ELSE 'complete'
 		           END
 		         ELSE 'running'
 		       END,
-		     processed_count =
-		       CASE
-		         WHEN selected_count > 0 THEN MIN(selected_count, processed_count + 1)
-		         ELSE processed_count + 1
-		       END,
+		     processed_count = processed_count + 1,
 		     updated_count = updated_count + ?,
 		     error_count = error_count + ?,
 		     last_progress_at = CURRENT_TIMESTAMP,
 		     ended_at =
 		       CASE
-		         WHEN selected_count > 0 AND MIN(selected_count, processed_count + 1) >= selected_count THEN CURRENT_TIMESTAMP
+		         WHEN selected_count > 0 AND processed_count + 1 >= selected_count THEN COALESCE(ended_at, CURRENT_TIMESTAMP)
 		         ELSE ended_at
 		       END,
 		     result_json = json_set(
@@ -156,7 +200,7 @@ export async function recordCacheWarmSearchProgress(
 		     ),
 		     last_error = COALESCE(?, last_error)
 		 WHERE job_run_id = ?
-		   AND status IN ('queued', 'running')`,
+		   AND status IN ('queued', 'running', 'complete', 'complete_with_errors')`,
 	)
 		.bind(
 			stats.errorCount,
@@ -203,6 +247,128 @@ export async function recordCacheWarmSearchProgress(
 			endedAt: run.ended_at,
 		});
 	}
+}
+
+async function refreshCacheWarmSearchProgressFromQueueMessages(
+	env: Env,
+	jobRunId: string,
+) {
+	const totals = await env.DB.prepare(
+		`SELECT COALESCE(SUM(processed_count), 0) AS processed_count,
+		        COALESCE(SUM(updated_count), 0) AS updated_count,
+		        COALESCE(SUM(error_count), 0) AS error_count,
+		        COALESCE(SUM(cache_page_count), 0) AS cache_page_count,
+		        COALESCE(SUM(cache_first_request_count), 0) AS cache_first_request_count,
+		        COALESCE(SUM(cache_retry_request_count), 0) AS cache_retry_request_count,
+		        COALESCE(SUM(cache_hit_count), 0) AS cache_hit_count,
+		        COALESCE(SUM(cache_miss_count), 0) AS cache_miss_count,
+		        COALESCE(SUM(cache_retry_hit_count), 0) AS cache_retry_hit_count,
+		        COALESCE(SUM(cache_error_count), 0) AS cache_error_count
+		 FROM import_job_queue_messages
+		 WHERE job_run_id = ?`,
+	)
+		.bind(jobRunId)
+		.first<{
+			processed_count: number;
+			updated_count: number;
+			error_count: number;
+			cache_page_count: number;
+			cache_first_request_count: number;
+			cache_retry_request_count: number;
+			cache_hit_count: number;
+			cache_miss_count: number;
+			cache_retry_hit_count: number;
+			cache_error_count: number;
+		}>();
+
+	if (!totals) {
+		return;
+	}
+
+	const latest = await env.DB.prepare(
+		`SELECT genre_key,
+		        entry_name,
+		        last_error
+		 FROM import_job_queue_messages
+		 WHERE job_run_id = ?
+		 ORDER BY completed_at DESC
+		 LIMIT 1`,
+	)
+		.bind(jobRunId)
+		.first<{
+			genre_key: string | null;
+			entry_name: string | null;
+			last_error: string | null;
+		}>();
+
+	await env.DB.prepare(
+		`UPDATE import_job_runs
+		 SET status =
+		       CASE
+		         WHEN selected_count > 0 AND ? >= selected_count THEN
+		           CASE
+		             WHEN ? > 0 THEN 'complete_with_errors'
+		             ELSE 'complete'
+		           END
+		         ELSE 'running'
+		       END,
+		     processed_count = ?,
+		     updated_count = ?,
+		     error_count = ?,
+		     last_progress_at = CURRENT_TIMESTAMP,
+		     ended_at =
+		       CASE
+		         WHEN selected_count > 0 AND ? >= selected_count THEN COALESCE(ended_at, CURRENT_TIMESTAMP)
+		         ELSE ended_at
+		       END,
+		     result_json = json_set(
+		       COALESCE(result_json, '{}'),
+		       '$.pageCount',
+		       ?,
+		       '$.firstRequestCount',
+		       ?,
+		       '$.retryRequestCount',
+		       ?,
+		       '$.hitCount',
+		       ?,
+		       '$.missCount',
+		       ?,
+		       '$.retryHitCount',
+		       ?,
+		       '$.errorCount',
+		       ?,
+		       '$.lastGenreKey',
+		       ?,
+		       '$.lastEntryName',
+		       ?,
+		       '$.lastError',
+		       ?
+		     ),
+		     last_error = COALESCE(?, last_error)
+		 WHERE job_run_id = ?
+		   AND status IN ('queued', 'running', 'complete', 'complete_with_errors')`,
+	)
+		.bind(
+			totals.processed_count,
+			totals.error_count,
+			totals.processed_count,
+			totals.updated_count,
+			totals.error_count,
+			totals.processed_count,
+			totals.cache_page_count,
+			totals.cache_first_request_count,
+			totals.cache_retry_request_count,
+			totals.cache_hit_count,
+			totals.cache_miss_count,
+			totals.cache_retry_hit_count,
+			totals.cache_error_count,
+			latest?.genre_key ?? null,
+			latest?.entry_name ?? null,
+			latest?.last_error ?? null,
+			latest?.last_error ?? null,
+			jobRunId,
+		)
+		.run();
 }
 
 export async function getRecentCacheWarmSearchJobRuns(
