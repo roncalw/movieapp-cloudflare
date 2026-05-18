@@ -499,6 +499,45 @@ describe("MovieApp Worker", () => {
 		expect(mock.getPreparedSql()).not.toContain("provider.provider_id IN");
 	});
 
+	it("parses import job result_json for monitor responses", async () => {
+		const mock = createMockEnv([
+			{
+				job_run_id: "tmdb-genre-lookup-refresh-manual-test",
+				job_name: "tmdb-genre-lookup-refresh",
+				status: "complete",
+				trigger: "manual",
+				selected_count: 19,
+				queued_count: 0,
+				processed_count: 19,
+				updated_count: 19,
+				error_count: 0,
+				provider_rows_inserted: 0,
+				started_at: "2026-05-18 00:43:39",
+				last_progress_at: "2026-05-18 00:43:40",
+				ended_at: "2026-05-18 00:43:40",
+				duration_ms: 999,
+				last_error: null,
+				result_json:
+					'{"jobRunId":"tmdb-genre-lookup-refresh-manual-test","notificationEmailMessageId":"message@test.example"}',
+				notification_sent_at: "2026-05-18 00:43:42",
+				notification_error: null,
+			},
+		]);
+		const request = new IncomingRequest(
+			"http://example.com/admin/import/job-runs?jobName=tmdb-genre-lookup-refresh&limit=1",
+		);
+		const response = await worker.fetch(request, mock.env);
+		const body = (await response.json()) as {
+			runs: Array<{ result_json: unknown }>;
+		};
+
+		expect(response.status).toBe(200);
+		expect(body.runs[0].result_json).toEqual({
+			jobRunId: "tmdb-genre-lookup-refresh-manual-test",
+			notificationEmailMessageId: "message@test.example",
+		});
+	});
+
 	it("requires POST for manual admin import endpoints", async () => {
 		const mock = createMockEnv([]);
 		const request = new IncomingRequest(

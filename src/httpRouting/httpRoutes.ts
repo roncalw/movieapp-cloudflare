@@ -42,6 +42,7 @@ import {
 	refreshTmdbGenreLookup,
 	refreshTmdbWatchProviderLookup,
 } from "../imports/tmdbLookupRefresh";
+import { sendJobNotificationTestEmail } from "../notifications/jobNotifications";
 import { logEvent } from "../shared/logging";
 import type { Env } from "../shared/types";
 
@@ -75,6 +76,7 @@ const MANUAL_MUTATION_PATHS = new Set([
 	"/admin/import/movie-list/rebuild-manual",
 	"/admin/import/movie-list/potential-load-check",
 	"/admin/import/movie-list/current-count-snapshot",
+	"/admin/notifications/email-test-manual",
 ]);
 
 const ACCESS_NOT_PERMITTED_BODY = {
@@ -390,6 +392,30 @@ export async function handleFetch(
 
 		const runs = await getRecentImportJobRuns(env, { jobName, limit });
 		return Response.json({ runs });
+	}
+
+	if (url.pathname === "/admin/notifications/email-test-manual") {
+		if (url.search !== "") {
+			return Response.json(
+				{
+					error:
+						"email-test-manual does not accept query parameters. It sends one test email through the configured Dynu SMTP settings.",
+				},
+				{ status: 400 },
+			);
+		}
+
+		try {
+			const result = await sendJobNotificationTestEmail(env);
+
+			return Response.json(result);
+		} catch (error) {
+			return jobErrorResponse(
+				error,
+				"job-notification-email-test",
+				"/admin/notifications/email-test-manual",
+			);
+		}
 	}
 
 	if (url.pathname === "/admin/cache/search/warm-manual") {

@@ -50,6 +50,7 @@
         - [ ] [Step 17-7: Job Dependencies and Order](#step-17-7-job-dependencies-and-order)
         - [ ] [Step 17-8: Historical Job Info](#step-17-8-historical-job-info)
         - [ ] [Step 17-9: Manual-Only Jobs](#step-17-9-manual-only-jobs)
+        - [ ] [Step 17-10: Job Completion Emails](#step-17-10-job-completion-emails)
     - [ ] [Step 18: Cron Schedule And Operations](#step-18-cron-schedule-and-operations)
       - [ ] [Step 18-1: Production Cron Schedule](#step-18-1-production-cron-schedule)
       - [ ] [Step 18-2: Scheduling Rationale And Buffers](#step-18-2-scheduling-rationale-and-buffers)
@@ -63,6 +64,7 @@
     - [ ] [Step 21: Recommended Build Order](#step-21-recommended-build-order)
     - [ ] [Step 22: Useful Commands](#step-22-useful-commands)
     - [ ] [Step 23: Data Usage Notes](#step-23-data-usage-notes)
+      - [ ] [Step 23-1: Cloudflare Queue Usage And Limits](#step-23-1-cloudflare-queue-usage-and-limits)
     - [ ] [Step 24: Caching](#step-24-caching)
     - [ ] [Step 25: MyD1 SQL Client](#step-25-myd1-sql-client)
 
@@ -332,7 +334,7 @@ lookup tables   -> support manual SQL review and debugging
 | `movie_watch_providers` | Live US flatrate movie-to-provider filter table. | Movie-list build copies from `movie_watch_providers_staging`. | `/movies/search` reads it when streamer filters are used. |
 | <span class="green">Safety and job operation tables</span> |  |  |  |
 | `movie_list_load_counts` | Safety and audit table for current counts and potential-load counts. | Movie-list safety check and current-count snapshot. | Movie-list build uses it to stop if candidate counts drop beyond thresholds. |
-| `import_job_runs` | Durable job status, progress, timing, errors, and JSON result table. | All import, build, lookup, and cache-warm jobs. | Admin monitor endpoint and SQL tasks read it to prove job state. |
+| `import_job_runs` | Durable job status, progress, timing, errors, JSON result, and notification status table. | All import, build, lookup, and cache-warm jobs. | Admin monitor endpoint and SQL tasks read it to prove job state and whether the completion email sent. |
 | `import_job_locks` | Runtime lock table that prevents duplicate job execution. | Jobs that need single-run protection. | Manual endpoints and cron handlers use it before starting long-running work. |
 | <span class="green">Manual SQL lookup tables</span> |  |  |  |
 | `tmdb_genre_lookup` | Manual SQL lookup table for TMDB genre IDs and names by language. | Manual-only TMDB genre lookup refresh. | Your SQL scripts can join to it for readable genre names. |
@@ -4127,8 +4129,8 @@ Current constants:
 ```ts
 const TMDB_MAX_REQUESTS_PER_SECOND = 35;
 const TMDB_MAX_RETRIES = 3;
-const TMDB_ENRICH_D1_BATCH_MOVIES = 100;
-const TMDB_ENRICH_IDS_PER_QUEUE_MESSAGE = 100;
+const TMDB_ENRICH_D1_BATCH_MOVIES = 25;
+const TMDB_ENRICH_IDS_PER_QUEUE_MESSAGE = 25;
 const TMDB_ENRICH_QUEUE_MESSAGES_PER_SEND_BATCH = 100;
 const TMDB_ENRICH_TMDB_CONCURRENCY = 25;
 const TMDB_ENRICH_JOB_NAME = "tmdb-enrich";
@@ -4142,10 +4144,10 @@ TMDB_MAX_REQUESTS_PER_SECOND:
   our request-start governor stays below TMDB's rough 40-per-second upper range
 
 TMDB_ENRICH_IDS_PER_QUEUE_MESSAGE:
-  each queue message handles about 100 movies
+  each queue message handles about 25 movies
 
 TMDB_ENRICH_D1_BATCH_MOVIES:
-  D1 writes flush after about 100 movies worth of prepared statements
+  D1 writes stay under about 25 movies worth of prepared statements
 
 TMDB_ENRICH_TMDB_CONCURRENCY:
   up to 25 TMDB detail requests can be in flight inside one queue message
@@ -4243,7 +4245,7 @@ for each movie:
   build INSERT-new-provider statements
   add statements to pending list
 
-when pending list reaches about 100 movies:
+when pending list reaches about 25 movies:
   env.DB.batch(pendingStatements)
 ```
 
@@ -4426,7 +4428,9 @@ Use this endpoint or the VS Code SQL task when Observability is delayed.
 
 ### Step 9B-11: Queue Operation Cost Check
 
-The queue message size is intentionally around 100 TMDB IDs per message.
+TMDB queue messages that write detail/provider rows are intentionally small, around 25 TMDB IDs per message.
+
+That keeps one completed queue ticket's D1 transaction bounded when the Worker writes data rows, inserts the `import_job_queue_messages` ledger row, and updates the `import_job_runs` summary together.
 
 Approximate queue billing math:
 
@@ -4440,11 +4444,11 @@ Approximate queue billing math:
 For the full TMDB staging table:
 
 ```text
-1,011,396 movies / 100 IDs per message
-= about 10,114 queue messages
+1,011,396 movies / 25 IDs per message
+= about 40,456 queue messages
 
-10,114 messages * about 3 operations
-= about 30,342 queue operations per full TMDB enrichment pass
+40,456 messages * about 3 operations
+= about 121,368 queue operations per full TMDB enrichment pass
 ```
 
 That is small compared with the paid Queues included monthly usage.
@@ -4465,19 +4469,33 @@ Four IMDb imports per month:
 151,416 * 4 = about 605,664 queue operations
 ```
 
-Add one weekly TMDB enrichment pass:
+The weekly TMDB provider refresh is the normal recurring TMDB queue job now.
+
+Recent full provider refreshes have been around 78,862 movies:
 
 ```text
-30,342 * 4 = about 121,368 queue operations
+78,862 movies / 25 IDs per message
+= about 3,155 queue messages
+
+3,155 messages * about 3 operations
+= about 9,465 queue operations per provider refresh
 ```
 
-Together:
+Four provider refreshes per month:
 
 ```text
-about 727,032 queue operations per month
+9,465 * 4 = about 37,860 queue operations
 ```
 
-That is still under the paid plan's 1 million included Queues operations.
+Together, before optional cache warming:
+
+```text
+605,664 + 37,860 = about 643,524 queue operations per month
+```
+
+That is still under the paid plan's 1 million included Queues operations before the optional cache-warm job.
+
+The full TMDB enrichment job is manual-only now. If that manual job were run across the full TMDB staging table, it would be about 121,368 queue operations for that one run.
 
 ### Step 9B-12: Test And Monitor TMDB Enrichment
 
@@ -5359,6 +5377,13 @@ That means if you manually run TMDB primary and it fails, `/admin/import/tmdb/ne
 
 Manual job kickoff endpoints are protected because they write data or start queue work. They require `POST` and `Authorization: Bearer $ADMIN_IMPORT_TOKEN`. Read-only monitor endpoints, such as `/admin/import/job-runs`, stay `GET`.
 
+Completion email behavior:
+
+* All jobs that write `import_job_runs` now use the same best-effort completion email path.
+* The email is attempted only after the job row reaches a final state with `ended_at` filled in.
+* A notification failure does not change the job result. The job can still be `complete` while `notification_error` explains that email delivery was not configured or failed.
+* Dynu SMTP must be configured before messages can actually leave the Worker. The Worker uses `JOB_SMTP_HOST`, `JOB_SMTP_PORT`, `JOB_SMTP_USERNAME`, secret `JOB_SMTP_PASSWORD`, `JOB_NOTIFICATION_EMAIL_FROM`, and `JOB_NOTIFICATION_EMAIL_TO`.
+
 The short version:
 
 Admin token reminder:
@@ -5372,36 +5397,36 @@ Admin token reminder:
 
 
 IMDB
-* curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/imdb-ratings/enqueue-manual" | jq
-  * For enqueues, monitor progress with this: (response comes back in under a minute that enqueueing has started takes about 8 minutes to complete)
-    * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=imdb-ratings&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+* Kickoff shortcut: `npm run job1imdb`
+  * For <span class="orange">enqueues</span>, monitor progress with this: (response comes back in <span class="green">under a minute</span> that enqueueing has started takes about <span class="green">8 minutes</span> to complete)
+    * Monitor shortcut: `npm run monjob1imdb`
 
 PRIMARY NEW MOVIES
-* curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-primary-manual" | jq
-  * Synchronous API/database load, so the response takes from 10 seconds to a minute
-    * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-primary&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+* Kickoff shortcut: `npm run job2np`
+  * <span class="diagram">Synchronous</span> API/database load, so the response takes from <span class="green">10 seconds to a minute</span>
+    * Monitor shortcut: `npm run monjob2np`
 
 PRIMARY NEW MOVIE DETAILS
-* curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/new-movie-details-manual" | jq
-  * For enqueues, monitor progress with this: (response comes back in just a few seconds that enqueing has started takes about another few seconds to complete)
-    * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-new-movie-details&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+* Kickoff shortcut: `npm run job3npd`
+  * For <span class="orange">enqueues</span>, monitor progress with this: (response comes back in just a <span class="green">few seconds</span> that enqueueing has started takes about another <span class="green">few seconds</span> to complete)
+    * Monitor shortcut: `npm run monjob3npd`
 
 WATCH PROVIDERS REFRESH
-* curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/provider-refresh-manual" | jq
-  * For <span class="green">enqueues</span>, monitor progress with this: (response comes back in about 6 minutes that enqueing has started takes about another hour to complete)
-    * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-provider-refresh&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+* Kickoff shortcut: `npm run job4wpr`
+  * For <span class="orange">enqueues</span>, monitor progress with this: (response comes back in <span class="green">about 6 minutes</span> that enqueueing has started takes about another <span class="green">hour to complete</span>)
+    * Monitor shortcut: `npm run monjob4wpr`
 
 FINAL MOVIES LIST
-* curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/movie-list/rebuild-manual" | jq
-  * Synchronous SQL, so the response takes about 8 minutes --- 1. dependency check, 2. potential-load safety check, 3. copy staged genres and staged watch providers into the live search tables, 4. insert/update movie_list_items, 5. current-count snapshot
-    * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=movie-list-build&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+* Kickoff shortcut: `npm run job5fml`
+  * <span class="diagram">Synchronous</span> SQL, so the response takes <span class="green">about 8 minutes</span> --- 1. dependency check, 2. potential-load safety check, 3. copy staged genres and staged watch providers into the live search tables, 4. insert/update movie_list_items, 5. current-count snapshot
+    * Monitor shortcut: `npm run monjob5fml`
 
 CACHE WARM SEARCHES
-* curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/cache/search/warm-manual?genre=horror" | jq
-  * For enqueues, monitor progress with this: (response comes back after queueing the selected genre URL set; the cache warm queue continues remotely)
-    * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=cache-warm-search&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
+* Kickoff shortcut: `npm run job6cache`
+  * For <span class="orange">enqueues</span>, monitor progress with this: (response comes back after queueing the selected genre URL set; the cache warm queue continues remotely)
+    * Monitor shortcut: `npm run monjob6cache`
 
-MANUAL-ONLY LOOKUP TABLES
+!!!!--MANUAL-ONLY--!!!! LOOKUP TABLE REFRESH FOR LOADING TMDB GENRE IDS AND WATCH PROVIDER IDS AND DESCRIPTIONS FOR SUPPORT QUERIES ONLY NOT THE MOVIE APP
 * curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/genre-lookup-refresh-manual" | jq
   * Synchronous SQL after one TMDB lookup API call; monitor with:
     * curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-genre-lookup-refresh&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
@@ -7005,6 +7030,196 @@ Progress:
   curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-primary&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
 ```
 
+### Step 17-10: Job Completion Emails
+
+Purpose:
+
+```text
+Send one email when a tracked job reaches its final import_job_runs status.
+The email is a notification, not part of the import transaction.
+```
+
+What sends:
+
+```text
+Any job or tracked step that finishes through import_job_runs:
+  imdb-ratings
+  tmdb-primary
+  tmdb-new-movie-details
+  tmdb-provider-refresh
+  movie-list-build
+  movie-list-potential-load-check
+  movie-list-current-count-snapshot
+  movie-genres-promote
+  movie-watch-providers-promote
+  cache-warm-search
+  tmdb-genre-lookup-refresh
+  tmdb-watch-provider-lookup-refresh
+  tmdb-enrich
+```
+
+The email includes:
+
+```text
+job name
+status
+trigger
+duration
+job_run_id
+selected / queued / processed / updated / error counts
+started_at / ended_at
+last_error
+monitor URL
+result_json
+```
+
+DB tracking:
+
+```text
+import_job_runs.notification_sent_at
+  filled when the Dynu SMTP server accepts the email
+
+import_job_runs.notification_error
+  filled when the Worker could not send the email
+  example: SMTP password is missing, login failed, or Dynu rejected the message
+
+import_job_runs.result_json.notificationEmailMessageId
+  generated email Message-ID for tracing a sent notification
+
+import_job_runs.result_json.notificationEmailSmtpReply
+  final Dynu SMTP response after the message body is accepted
+```
+
+Operational rule:
+
+```text
+Email is best effort.
+A notification problem must not turn a good import into a failed import.
+Use the job status and error_count columns to decide whether the job itself passed.
+Use notification_sent_at / notification_error only to troubleshoot the email.
+```
+
+SMTP delivery path:
+
+```text
+Job finishes
+  -> import_job_runs row reaches ended_at
+  -> notifyImportJobRunCompletion claims the notification
+  -> Worker opens a TLS SMTP socket to Dynu on port 465
+  -> Worker logs in with JOB_SMTP_USERNAME and secret JOB_SMTP_PASSWORD
+  -> Worker sends the email body
+  -> Worker stores the Message-ID and Dynu acceptance reply in result_json
+  -> Worker sets notification_sent_at if Dynu accepts the message
+  -> Worker writes notification_error if login or send fails
+```
+
+Worker configuration:
+
+```text
+JOB_NOTIFICATION_EMAIL_ENABLED
+  true means send job completion emails
+  false means skip all job completion emails
+
+JOB_NOTIFICATION_EMAIL_FROM
+  sender mailbox; currently movieapp-jobs@codefest.com
+
+JOB_NOTIFICATION_EMAIL_TO
+  destination address; currently roncalw@hotmail.com
+
+JOB_SMTP_HOST
+  Dynu outgoing SMTP host; currently codefest-com-smtp.dynu.com
+
+JOB_SMTP_PORT
+  Dynu SMTP SSL port; currently 465
+
+JOB_SMTP_USERNAME
+  Dynu mailbox username; currently movieapp-jobs@codefest.com
+
+JOB_SMTP_PASSWORD
+  Dynu mailbox password stored as a Cloudflare secret
+```
+
+Dynu setup required before real emails can send:
+
+```text
+1. In Dynu, create the mailbox:
+     movieapp-jobs@codefest.com
+
+2. Use Dynu's outgoing SMTP server:
+     codefest-com-smtp.dynu.com
+     port 465
+     SSL/TLS
+
+3. Put the mailbox password into Cloudflare:
+     npx wrangler secret put JOB_SMTP_PASSWORD
+
+4. Deploy the Worker after the secret exists:
+     npm run deploy
+```
+
+Manual test endpoint:
+
+```text
+Purpose:
+  send one real SMTP test email through the same Dynu path used by job notifications
+
+Endpoint:
+  /admin/notifications/email-test-manual
+
+Command:
+  curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/notifications/email-test-manual" | jq
+
+Expected response:
+  status = sent
+  from = movieapp-jobs@codefest.com
+  to = roncalw@hotmail.com
+  messageId = generated Message-ID header
+  smtpAcceptedReply = Dynu's final SMTP acceptance reply
+```
+
+Troubleshooting:
+
+```text
+If the job completes but no email arrives:
+  check import_job_runs.notification_error
+
+If notification_error says SMTP login failed:
+  verify JOB_SMTP_USERNAME and the JOB_SMTP_PASSWORD secret
+
+If notification_error says connection or timeout:
+  verify JOB_SMTP_HOST, JOB_SMTP_PORT, and that Dynu accepts SMTP SSL on port 465
+
+If notification_sent_at is filled:
+  Dynu accepted the message; check spam/junk or Dynu sent-mail/rejected-mail logs
+  compare notificationEmailMessageId and notificationEmailSmtpReply when tracing delivery
+```
+
+Code locations:
+
+```text
+src/notifications/jobNotifications.ts
+  reads import_job_runs, builds the email, decides whether to send,
+  and writes notification_sent_at / notification_error
+
+src/notifications/smtpClient.ts
+  owns the raw SMTP conversation with Dynu:
+  TLS socket, EHLO, AUTH LOGIN, MAIL FROM, RCPT TO, DATA, QUIT
+
+src/jobs/importJobRuns.ts
+  calls notifyImportJobRunCompletion when import jobs finish or cancel
+
+src/cache/cacheWarmJobRuns.ts
+  calls notifyImportJobRunCompletion when cache warm jobs finish
+```
+
+Important DNS note:
+
+```text
+This SMTP setup does not require moving codefest.com nameservers to Cloudflare.
+Dynu can stay authoritative DNS and email host.
+Cloudflare only stores the Worker secret and runs the Worker code.
+```
+
 <a id="phase-18-scheduled-refresh-cron-jobs"></a>
 ## Step 18: Cron Schedule And Operations
 
@@ -7621,10 +7836,17 @@ Current jobs and tracked steps:
 ```text
 imdb-ratings
 tmdb-primary
+tmdb-new-movie-details
+tmdb-provider-refresh
 tmdb-enrich
 movie-list-potential-load-check
 movie-list-build
 movie-list-current-count-snapshot
+movie-genres-promote
+movie-watch-providers-promote
+cache-warm-search
+tmdb-genre-lookup-refresh
+tmdb-watch-provider-lookup-refresh
 ```
 
 Each row represents one whole job run.
@@ -7683,6 +7905,14 @@ last_error
 
 result_json
   job-specific summary data that does not deserve its own column
+
+notification_sent_at
+  when the completion email was successfully accepted by Dynu SMTP
+  null means no success has been recorded
+
+notification_error
+  why the completion email did not send
+  this is separate from the job's own last_error
 ```
 
 ### Step 19-3: What `result_json` Is For
@@ -7730,7 +7960,9 @@ Use this command shape when reading job runs from the terminal:
 curl -s "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=imdb-ratings&limit=1" | jq '.runs |= map(.result_json = (.result_json | fromjson? // .))'
 ```
 
-That `jq` expression keeps the normal response formatted and also turns `result_json` from an escaped JSON string into a readable JSON object.
+The endpoint now returns valid `result_json` values as readable JSON objects.
+
+The `jq` expression above is still safe to use because it also handles older rows or older deployed responses where `result_json` was still an escaped JSON string.
 
 Filter by job:
 
@@ -8359,6 +8591,101 @@ https://developers.cloudflare.com/d1/platform/limits/
 https://developers.cloudflare.com/workers/configuration/cron-triggers/
 https://developers.cloudflare.com/queues/platform/limits/
 ```
+
+### Step 23-1: Cloudflare Queue Usage And Limits
+
+Use this section when you want to know where the project is against Cloudflare Queues usage and limits.
+
+Cloudflare account usage and paid-overage view:
+
+```text
+Cloudflare Dashboard
+Manage account
+Billing
+Billable usage
+```
+
+This is the screen that shows accumulated usage against included plan amounts.
+
+Read the table like this:
+
+```text
+Product = the Cloudflare meter and included amount
+Total usage = accumulated usage for the selected billing month
+Billable usage = usage over the included amount
+Usage cost = current overage charge
+```
+
+For Queues, look for this row:
+
+```text
+Queues - Standard operations (First 1M included)
+```
+
+Observed May 2026 example:
+
+```text
+Total usage: 480.04k
+Billable usage: 0
+Usage cost: $0.00
+```
+
+That means the account had used about 48% of the 1M included queue operations for the billing month and had no Queues overage at that point.
+
+Workers plans can confirm the plan, but Billing > Billable usage is the better screen for accumulated usage versus included limits.
+
+Individual queue health and backlog:
+
+```text
+Cloudflare Dashboard
+Workers & Pages
+Queues
+```
+
+Check these queues:
+
+```text
+movieapp-imdb-rating-import-queue
+movieapp-tmdb-enrichment-queue
+movieapp-cache-warm-queue
+```
+
+Useful things to check there:
+
+```text
+messages queued
+message retries
+delivery failures
+dead-letter or error counts, if shown
+```
+
+Worker event details:
+
+```text
+Cloudflare Dashboard
+Workers & Pages
+movieapp-cloudflare
+Observability
+Events
+```
+
+Search by queue name or job name when a queue job looks stuck or noisy.
+
+CLI checks:
+
+```bash
+npx wrangler queues list
+```
+
+Important distinction:
+
+```text
+Cloudflare dashboard usage = account/platform queue usage and limits.
+import_job_runs = app job progress and status.
+import_job_queue_messages = app-level completed queue ticket ledger.
+```
+
+`import_job_runs` and `import_job_queue_messages` help prove our jobs completed correctly, but they are not the official Cloudflare account quota screen.
 
 ## Step 24: Caching
 

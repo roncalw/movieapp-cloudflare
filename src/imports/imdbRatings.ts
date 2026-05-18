@@ -293,14 +293,13 @@ export async function insertImdbRatingQueueRows(
 		row.num_votes,
 	]);
 
-	await env.DB
+	const insertStatement = env.DB
 		.prepare(
 			`INSERT OR REPLACE INTO imdb_ratings_staging
 				(imdb_id, average_rating, num_votes)
 			VALUES ${placeholders}`,
 		)
-		.bind(...values)
-		.run();
+		.bind(...values);
 
 	if (jobRunId) {
 		await recordImportJobQueueMessageCompletion(env, {
@@ -319,6 +318,9 @@ export async function insertImdbRatingQueueRows(
 				providerRowsInserted: 0,
 			},
 			lastError: null,
+			dataStatements: [insertStatement],
 		});
+	} else {
+		await insertStatement.run();
 	}
 }

@@ -49,8 +49,8 @@ type TmdbEnrichmentStats = {
 	providerRowsInserted: number;
 };
 
-const TMDB_ENRICH_D1_BATCH_MOVIES = 100;
-const TMDB_ENRICH_IDS_PER_QUEUE_MESSAGE = 100;
+const TMDB_ENRICH_D1_BATCH_MOVIES = 25;
+const TMDB_ENRICH_IDS_PER_QUEUE_MESSAGE = 25;
 const TMDB_ENRICH_QUEUE_MESSAGES_PER_SEND_BATCH = 100;
 export const TMDB_ENRICH_TMDB_CONCURRENCY = 25;
 const TMDB_ENRICH_LOCK_MINUTES = 30;
@@ -325,7 +325,7 @@ export async function processTmdbEnrichmentRows(
 				providerMoviesFound += result.enrichment.providerMovieFound;
 				providerRowsInserted += result.enrichment.providerRowsInserted;
 
-				if (pendingStatementMovies >= TMDB_ENRICH_D1_BATCH_MOVIES) {
+				if (pendingStatementMovies > TMDB_ENRICH_D1_BATCH_MOVIES) {
 					await flushStatements();
 				}
 			} else {
@@ -345,7 +345,7 @@ export async function processTmdbEnrichmentRows(
 					);
 					pendingStatementMovies += 1;
 
-					if (pendingStatementMovies >= TMDB_ENRICH_D1_BATCH_MOVIES) {
+					if (pendingStatementMovies > TMDB_ENRICH_D1_BATCH_MOVIES) {
 						await flushStatements();
 					}
 				}
@@ -361,8 +361,6 @@ export async function processTmdbEnrichmentRows(
 			processed += 1;
 		}
 	}
-
-	await flushStatements();
 
 	const stats: TmdbEnrichmentStats = {
 		processed,
@@ -385,7 +383,10 @@ export async function processTmdbEnrichmentRows(
 		queueName: TMDB_ENRICHMENT_QUEUE_NAME,
 		stats,
 		lastError,
+		dataStatements: pendingStatements,
 	});
+	pendingStatements = [];
+	pendingStatementMovies = 0;
 
 	const endedAtMs = Date.now();
 	const endedAt = new Date(endedAtMs).toISOString();

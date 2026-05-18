@@ -471,7 +471,7 @@ export async function processTmdbNewMovieDetailsRows(
 				processed += 1;
 				updated += 1;
 
-				if (pendingStatements.length >= TMDB_NEW_MOVIE_DETAILS_D1_BATCH_MOVIES) {
+				if (pendingStatements.length > TMDB_NEW_MOVIE_DETAILS_D1_BATCH_MOVIES) {
 					await flushStatements();
 				}
 
@@ -500,14 +500,12 @@ export async function processTmdbNewMovieDetailsRows(
 					error: lastError,
 				});
 
-				if (pendingStatements.length >= TMDB_NEW_MOVIE_DETAILS_D1_BATCH_MOVIES) {
+				if (pendingStatements.length > TMDB_NEW_MOVIE_DETAILS_D1_BATCH_MOVIES) {
 					await flushStatements();
 				}
 			}
 		}
 	}
-
-	await flushStatements();
 
 	const stats: TmdbNewMovieDetailsStats = {
 		processed,
@@ -528,7 +526,9 @@ export async function processTmdbNewMovieDetailsRows(
 		queueName: TMDB_ENRICHMENT_QUEUE_NAME,
 		stats,
 		lastError: null,
+		dataStatements: pendingStatements,
 	});
+	pendingStatements = [];
 
 	const endedAtMs = Date.now();
 	const endedAt = new Date(endedAtMs).toISOString();

@@ -1,4 +1,5 @@
 import type { Env } from "../shared/types";
+import { notifyImportJobRunCompletion } from "../notifications/jobNotifications";
 
 export type ImportJobRunRow = {
 	job_run_id: string;
@@ -16,6 +17,13 @@ export type ImportJobRunRow = {
 	ended_at: string | null;
 	last_error: string | null;
 	result_json: string | null;
+	notification_sent_at: string | null;
+	notification_error: string | null;
+};
+
+export type ImportJobRunMonitorRow = Omit<ImportJobRunRow, "result_json"> & {
+	result_json: unknown;
+	duration_ms?: number | null;
 };
 
 export type ImportJobProgressStats = {
@@ -33,6 +41,7 @@ export type ImportJobQueueMessageCompletion = {
 	queueName: string;
 	stats: ImportJobProgressStats;
 	lastError: string | null;
+	dataStatements?: D1PreparedStatement[];
 };
 
 export type ImportJobTrigger = "manual" | "cron";
@@ -109,6 +118,10 @@ export async function createTmdbEnrichmentImportJobRun(
 			selectedCount,
 		)
 		.run();
+
+	if (selectedCount === 0) {
+		await notifyImportJobRunCompletion(env, jobRunId);
+	}
 }
 
 export async function createImportJobRun(
@@ -122,6 +135,8 @@ export async function createImportJobRun(
 		queuedCount?: number;
 	},
 ) {
+	const status = options.status ?? "running";
+
 	await env.DB.prepare(
 		`INSERT INTO import_job_runs (
 			 job_run_id,
@@ -131,19 +146,57 @@ export async function createImportJobRun(
 			 selected_count,
 			 queued_count,
 			 started_at,
-			 last_progress_at
+			 last_progress_at,
+			 ended_at
 		 )
-		 VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+		 VALUES (
+			 ?,
+			 ?,
+			 ?,
+			 ?,
+			 ?,
+			 ?,
+			 CURRENT_TIMESTAMP,
+			 CURRENT_TIMESTAMP,
+			 CASE
+			   WHEN ? IN ('complete', 'complete_with_errors', 'cancelled', 'failed', 'skipped')
+			   THEN CURRENT_TIMESTAMP
+			   ELSE NULL
+			 END
+		 )`,
 	)
 		.bind(
 			options.jobRunId,
 			options.jobName,
-			options.status ?? "running",
+			status,
 			options.trigger,
 			options.selectedCount ?? 0,
 			options.queuedCount ?? 0,
+			status,
 		)
 		.run();
+
+}
+
+function parseStoredResultJson(resultJson: string | null) {
+	if (resultJson === null) {
+		return null;
+	}
+
+	try {
+		return JSON.parse(resultJson) as unknown;
+	} catch {
+		return resultJson;
+	}
+}
+
+function parseMonitorRunResultJson(
+	run: ImportJobRunRow & { duration_ms?: number | null },
+): ImportJobRunMonitorRow {
+	return {
+		...run,
+		result_json: parseStoredResultJson(run.result_json),
+	};
 }
 
 export async function updateImportJobRunProgress(
@@ -231,7 +284,9 @@ export async function finishImportJobRun(
 			jobRunId,
 		)
 		.run();
-	}
+
+	await notifyImportJobRunCompletion(env, jobRunId);
+}
 
 export async function cancelImportJobRun(
 	env: Env,
@@ -269,6 +324,8 @@ export async function cancelImportJobRun(
 			jobRunId,
 		)
 		.run();
+
+	await notifyImportJobRunCompletion(env, jobRunId);
 }
 
 export async function getImportJobRunById(env: Env, jobRunId: string) {
@@ -287,7 +344,9 @@ export async function getImportJobRunById(env: Env, jobRunId: string) {
 		        last_progress_at,
 		        ended_at,
 		        last_error,
-		        result_json
+		        result_json,
+		        notification_sent_at,
+		        notification_error
 		 FROM import_job_runs
 		 WHERE job_run_id = ?`,
 	)
@@ -340,6 +399,8 @@ export async function setImportJobRunQueueTotals(
 			jobRunId,
 		)
 		.run();
+
+	await notifyImportJobRunCompletion(env, jobRunId);
 }
 
 async function refreshImportJobRunProgressFromQueueMessages(
@@ -443,6 +504,8 @@ async function refreshImportJobRunProgressFromQueueMessages(
 			jobRunId,
 		)
 		.run();
+
+	await notifyImportJobRunCompletion(env, jobRunId);
 }
 
 export async function recordImportJobQueueMessageCompletion(
@@ -451,7 +514,7 @@ export async function recordImportJobQueueMessageCompletion(
 ) {
 	const stats = options.stats;
 	const tmdbIDNotFoundSkippedCount = stats.tmdbIDNotFoundSkippedCount ?? 0;
-	const insertResult = await env.DB.prepare(
+	const insertStatement = env.DB.prepare(
 		`INSERT OR IGNORE INTO import_job_queue_messages (
 			 job_run_id,
 			 message_id,
@@ -477,15 +540,9 @@ export async function recordImportJobQueueMessageCompletion(
 			stats.providerRowsInserted,
 			tmdbIDNotFoundSkippedCount,
 			options.lastError,
-		)
-		.run();
+		);
 
-	if (insertResult.meta.changes === 0) {
-		await refreshImportJobRunProgressFromQueueMessages(env, options.jobRunId);
-		return;
-	}
-
-	await env.DB.prepare(
+	const progressStatement = env.DB.prepare(
 		`UPDATE import_job_runs
 		 SET status =
 		       CASE
@@ -524,7 +581,8 @@ export async function recordImportJobQueueMessageCompletion(
 		       END,
 		     last_error = COALESCE(?, last_error)
 		 WHERE job_run_id = ?
-		   AND status IN ('running', 'queued', 'complete', 'complete_with_errors')`,
+		   AND status IN ('running', 'queued', 'complete', 'complete_with_errors')
+		   AND changes() > 0`,
 	)
 		.bind(
 			stats.processed,
@@ -538,8 +596,21 @@ export async function recordImportJobQueueMessageCompletion(
 			tmdbIDNotFoundSkippedCount,
 			options.lastError,
 			options.jobRunId,
-		)
-		.run();
+		);
+
+	const dataStatements = options.dataStatements ?? [];
+	const batchResult = await env.DB.batch([
+		...dataStatements,
+		insertStatement,
+		progressStatement,
+	]);
+	const insertResult = batchResult[dataStatements.length];
+
+	if (insertResult?.meta.changes === 0) {
+		await refreshImportJobRunProgressFromQueueMessages(env, options.jobRunId);
+	}
+
+	await notifyImportJobRunCompletion(env, options.jobRunId);
 }
 
 export async function getRecentTmdbEnrichmentImportJobRuns(env: Env) {
@@ -558,7 +629,9 @@ export async function getRecentTmdbEnrichmentImportJobRuns(env: Env) {
 		        last_progress_at,
 		        ended_at,
 		        last_error,
-		        result_json
+		        result_json,
+		        notification_sent_at,
+		        notification_error
 		 FROM import_job_runs
 		 WHERE job_name = ?
 		 ORDER BY started_at DESC
@@ -567,7 +640,7 @@ export async function getRecentTmdbEnrichmentImportJobRuns(env: Env) {
 		.bind(TMDB_ENRICH_JOB_NAME)
 		.all<ImportJobRunRow>();
 
-	return results;
+	return results.map(parseMonitorRunResultJson);
 }
 
 export async function getRecentImportJobRuns(
@@ -593,7 +666,9 @@ export async function getRecentImportJobRuns(
 	        ended_at,
 	        CAST((julianday(ended_at) - julianday(started_at)) * 86400000 AS INTEGER) AS duration_ms,
 	        last_error,
-	        result_json
+	        result_json,
+	        notification_sent_at,
+	        notification_error
 	 FROM import_job_runs`;
 
 	const query = options.jobName
@@ -601,10 +676,14 @@ export async function getRecentImportJobRuns(
 		: `${selectSql} ORDER BY started_at DESC LIMIT ?`;
 	const statement = env.DB.prepare(query);
 	const { results } = options.jobName
-		? await statement.bind(options.jobName, limit).all()
-		: await statement.bind(limit).all();
+		? await statement
+				.bind(options.jobName, limit)
+				.all<ImportJobRunRow & { duration_ms: number | null }>()
+		: await statement
+				.bind(limit)
+				.all<ImportJobRunRow & { duration_ms: number | null }>();
 
-	return results;
+	return results.map(parseMonitorRunResultJson);
 }
 
 export async function getActiveTmdbEnrichmentImportJobRun(env: Env) {
@@ -627,7 +706,9 @@ export async function getActiveImportJobRun(env: Env, jobName: string) {
 		        last_progress_at,
 		        ended_at,
 		        last_error,
-		        result_json
+		        result_json,
+		        notification_sent_at,
+		        notification_error
 		 FROM import_job_runs
 		 WHERE job_name = ?
 		   AND status IN ('queued', 'running')

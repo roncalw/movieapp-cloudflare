@@ -5,6 +5,7 @@ import {
 	getRecentImportJobRuns,
 	type ImportJobTrigger,
 } from "../jobs/importJobRuns";
+import { notifyImportJobRunCompletion } from "../notifications/jobNotifications";
 import { logEvent } from "../shared/logging";
 import type { Env } from "../shared/types";
 import {
@@ -62,6 +63,10 @@ export async function createCacheWarmSearchJobRun(
 			options.jobRunId,
 		)
 		.run();
+
+	if (options.selectedEntryCount === 0) {
+		await notifyImportJobRunCompletion(env, options.jobRunId);
+	}
 }
 
 function parseCacheWarmSearchResultJson(resultJson: string | null) {
@@ -108,7 +113,7 @@ export async function recordCacheWarmSearchProgress(
 	},
 ) {
 	const stats = options.stats;
-	const insertResult = await env.DB.prepare(
+	const insertStatement = env.DB.prepare(
 		`INSERT OR IGNORE INTO import_job_queue_messages (
 			 job_run_id,
 			 message_id,
@@ -148,14 +153,9 @@ export async function recordCacheWarmSearchProgress(
 			options.entryName,
 			stats.lastError,
 		)
-		.run();
+		;
 
-	if (insertResult.meta.changes === 0) {
-		await refreshCacheWarmSearchProgressFromQueueMessages(env, options.jobRunId);
-		return;
-	}
-
-	const updateResult = await env.DB.prepare(
+	const updateStatement = env.DB.prepare(
 		`UPDATE import_job_runs
 		 SET status =
 		       CASE
@@ -200,7 +200,8 @@ export async function recordCacheWarmSearchProgress(
 		     ),
 		     last_error = COALESCE(?, last_error)
 		 WHERE job_run_id = ?
-		   AND status IN ('queued', 'running', 'complete', 'complete_with_errors')`,
+		   AND status IN ('queued', 'running', 'complete', 'complete_with_errors')
+		   AND changes() > 0`,
 	)
 		.bind(
 			stats.errorCount,
@@ -218,10 +219,19 @@ export async function recordCacheWarmSearchProgress(
 			stats.lastError,
 			stats.lastError,
 			options.jobRunId,
-		)
-		.run();
+		);
 
-	if (updateResult.meta.changes === 0) {
+	const batchResult = await env.DB.batch([insertStatement, updateStatement]);
+	const insertResult = batchResult[0];
+	const updateResult = batchResult[1];
+
+	if (insertResult?.meta.changes === 0) {
+		await refreshCacheWarmSearchProgressFromQueueMessages(env, options.jobRunId);
+		await notifyImportJobRunCompletion(env, options.jobRunId);
+		return;
+	}
+
+	if (updateResult?.meta.changes === 0) {
 		return;
 	}
 
@@ -246,6 +256,8 @@ export async function recordCacheWarmSearchProgress(
 			startedAt: run.started_at,
 			endedAt: run.ended_at,
 		});
+
+		await notifyImportJobRunCompletion(env, options.jobRunId);
 	}
 }
 
@@ -369,6 +381,8 @@ async function refreshCacheWarmSearchProgressFromQueueMessages(
 			jobRunId,
 		)
 		.run();
+
+	await notifyImportJobRunCompletion(env, jobRunId);
 }
 
 export async function getRecentCacheWarmSearchJobRuns(

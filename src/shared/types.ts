@@ -9,6 +9,13 @@ export interface Env {
 	>;
 	TMDB_API_KEY: string;
 	ADMIN_IMPORT_TOKEN?: string;
+	JOB_NOTIFICATION_EMAIL_ENABLED?: string;
+	JOB_NOTIFICATION_EMAIL_FROM?: string;
+	JOB_NOTIFICATION_EMAIL_TO?: string;
+	JOB_SMTP_HOST?: string;
+	JOB_SMTP_PASSWORD?: string;
+	JOB_SMTP_PORT?: string;
+	JOB_SMTP_USERNAME?: string;
 	ALL_JOBS_PAUSED?: string;
 	CACHE_WARM_JOB_PAUSED?: string;
 	IMDB_JOB_PAUSED?: string;
