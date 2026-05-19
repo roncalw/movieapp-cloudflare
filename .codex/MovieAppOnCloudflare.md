@@ -5390,41 +5390,54 @@ Admin token reminder:
 
 * `$ADMIN_IMPORT_TOKEN` is this app's private manual-job token, not the TMDB key.
 * The same random token value is used two places: Cloudflare Worker secret `ADMIN_IMPORT_TOKEN`, and your Mac's local token storage for the `dbcurl` helper.
-* Run `dbcurl` in a terminal before the manual kickoff commands below. That function lives in `~/.zshrc`, reads the token from the login Keychain, and exports it only for the current shell session.
+* <span class="blue">Run <span class="yellow">dbcurl</span> in a terminal</span> before the manual kickoff commands below. That function lives in `~/.zshrc`, reads the token from the login Keychain, and exports it only for the current shell session.
   * NOTE: If `dbcurl` cannot find the token yet (it will display: "Could not find MovieApp ADMIN_IMPORT_TOKEN in the login Keychain."), it asks you to paste the token just one time, hides the input, saves it as a login Keychain item `MovieApp ADMIN_IMPORT_TOKEN`, then exports it for the current shell.
 * We do not run the command, dbcurl, on every launch of the shell, intentionally, because the token can start production import jobs and should not be available to unrelated terminal commands.
 * The token was generated with the OpenSSL random command `openssl rand -hex 32`; that asks OpenSSL for cryptographically strong random bytes and to then print them as a copyable token string.
 
+Jobs in order:
+* <span class="blue">IMDB</span>
+  * Kickoff shortcut: `npm run job:imdb`
+    * For <span class="orange">enqueues</span>, monitor progress with this: (response comes back in <span class="green">under a minute</span> that enqueueing has started takes about <span class="green">8 minutes</span> to complete)
+      * Monitor shortcut: `npm run monitor:imdb`
+      * https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=imdb-ratings&limit=1
 
-IMDB
-* Kickoff shortcut: `npm run job1imdb`
-  * For <span class="orange">enqueues</span>, monitor progress with this: (response comes back in <span class="green">under a minute</span> that enqueueing has started takes about <span class="green">8 minutes</span> to complete)
-    * Monitor shortcut: `npm run monjob1imdb`
+_____
 
-PRIMARY NEW MOVIES
-* Kickoff shortcut: `npm run job2np`
-  * <span class="diagram">Synchronous</span> API/database load, so the response takes from <span class="green">10 seconds to a minute</span>
-    * Monitor shortcut: `npm run monjob2np`
+* <span class="blue">PRIMARY NEW MOVIES</span>
+  * Kickoff shortcut: `npm run job:np`
+    * <span class="diagram">Synchronous</span> API/database load, so the response takes from <span class="green">10 seconds to a minute</span>
+      * Monitor shortcut: `npm run monitor:np`
+      * https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-primary&limit=1 
+_____
 
-PRIMARY NEW MOVIE DETAILS
-* Kickoff shortcut: `npm run job3npd`
-  * For <span class="orange">enqueues</span>, monitor progress with this: (response comes back in just a <span class="green">few seconds</span> that enqueueing has started takes about another <span class="green">few seconds</span> to complete)
-    * Monitor shortcut: `npm run monjob3npd`
+* <span class="blue">PRIMARY NEW MOVIE DETAILS</span>
+  * Kickoff shortcut: `npm run job:npd`
+    * For <span class="orange">enqueues</span>, monitor progress with this: (response comes back in just a <span class="green">few seconds</span> that enqueueing has started takes about another <span class="green">few seconds</span> to complete)
+      * Monitor shortcut: `npm run monitor:npd`
+      * https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-new-movie-details&limit=1
+_____
 
-WATCH PROVIDERS REFRESH
-* Kickoff shortcut: `npm run job4wpr`
-  * For <span class="orange">enqueues</span>, monitor progress with this: (response comes back in <span class="green">about 6 minutes</span> that enqueueing has started takes about another <span class="green">hour to complete</span>)
-    * Monitor shortcut: `npm run monjob4wpr`
+* <span class="blue">WATCH PROVIDERS REFRESH</span>
+  * Kickoff shortcut: `npm run job:wpr`
+    * For <span class="orange">enqueues</span>, monitor progress with this: (response comes back in <span class="green">about 6 minutes</span> that enqueueing has started takes about another <span class="green">hour to complete</span>)
+      * Monitor shortcut: `npm run monitor:wpr`
+      * https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-provider-refresh&limit=1 
+_____
 
-FINAL MOVIES LIST
-* Kickoff shortcut: `npm run job5fml`
-  * <span class="diagram">Synchronous</span> SQL, so the response takes <span class="green">about 8 minutes</span> --- 1. dependency check, 2. potential-load safety check, 3. copy staged genres and staged watch providers into the live search tables, 4. insert/update movie_list_items, 5. current-count snapshot
-    * Monitor shortcut: `npm run monjob5fml`
+* <span class="blue">FINAL MOVIES LIST</span>
+  * Kickoff shortcut: `npm run job:ml`
+    * <span class="diagram">Synchronous</span> SQL, so the response takes <span class="green">about 8 minutes</span> --- 1. dependency check, 2. potential-load safety check, 3. copy staged genres and staged watch providers into the live search tables, 4. insert/update movie_list_items, 5. current-count snapshot
+      * Monitor shortcut: `npm run monitor:ml`
+      * https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=movie-list-build&limit=1 
+_____
 
-CACHE WARM SEARCHES
-* Kickoff shortcut: `npm run job6cache`
-  * For <span class="orange">enqueues</span>, monitor progress with this: (response comes back after queueing the selected genre URL set; the cache warm queue continues remotely)
-    * Monitor shortcut: `npm run monjob6cache`
+* <span class="blue">CACHE WARM SEARCHES</span>
+  * Kickoff shortcut: `npm run job:cache`
+    * For <span class="orange">enqueues</span>, monitor progress with this: (response comes back after queueing the selected genre URL set; the cache warm queue continues remotely)
+      * Monitor shortcut: `npm run monitor:cache`
+      * https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=cache-warm-search&limit=1 
+_____
 
 !!!!--MANUAL-ONLY--!!!! LOOKUP TABLE REFRESH FOR LOADING TMDB GENRE IDS AND WATCH PROVIDER IDS AND DESCRIPTIONS FOR SUPPORT QUERIES ONLY NOT THE MOVIE APP
 * curl -s -X POST -H "Authorization: Bearer $ADMIN_IMPORT_TOKEN" "https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/tmdb/genre-lookup-refresh-manual" | jq
