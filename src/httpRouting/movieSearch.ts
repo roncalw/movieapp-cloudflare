@@ -6,6 +6,11 @@ type MovieSearchListItem = {
 	imdb_rating: number | null;
 };
 
+type MovieListImdbRatingRow = {
+	tmdb_id: number;
+	imdb_rating: number | null;
+};
+
 type MovieSearchSort = "popularity" | "imdb";
 
 type MovieSearchCursor = {
@@ -44,6 +49,39 @@ function parsePositiveIntegerParam(
 	}
 
 	return parsedValue;
+}
+
+export function parseMovieListTmdbIdPath(pathname: string) {
+	const match = pathname.match(/^\/movies\/(\d+)\/imdb-rating$/);
+
+	if (!match) {
+		return null;
+	}
+
+	const tmdbId = Number(match[1]);
+
+	if (!Number.isSafeInteger(tmdbId) || tmdbId < 1) {
+		throw new RequestValidationError("tmdbId must be a positive integer.");
+	}
+
+	return tmdbId;
+}
+
+export async function getMovieListImdbRatingByTmdbId(env: Env, tmdbId: number) {
+	const row = await env.DB.prepare(
+		`SELECT
+		    tmdb_id,
+		    imdb_rating
+		  FROM movie_list_items
+		  WHERE tmdb_id = ?
+		  LIMIT 1`,
+	).bind(tmdbId)
+		.first<MovieListImdbRatingRow>();
+
+	return {
+		tmdb_id: tmdbId,
+		imdb_rating: row?.imdb_rating ?? null,
+	};
 }
 
 function parseOptionalPositiveIntegerParam(

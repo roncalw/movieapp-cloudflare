@@ -331,6 +331,9 @@ function createMockEnv(rows: unknown[]) {
 					async all() {
 						return { results: rows };
 					},
+					async first() {
+						return rows[0] ?? null;
+					},
 				};
 			},
 		},
@@ -464,6 +467,41 @@ describe("MovieApp Worker", () => {
 		expect(mock.getPreparedSql()).toContain(
 			"FROM movie_genres AS genre",
 		);
+	});
+
+	it("returns one MovieList IMDb rating by TMDB id", async () => {
+		const mock = createMockEnv([
+			{
+				tmdb_id: 281979,
+				imdb_rating: 8.8,
+			},
+		]);
+		const request = new IncomingRequest(
+			"http://example.com/movies/281979/imdb-rating",
+		);
+		const response = await worker.fetch(request, mock.env);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			tmdb_id: 281979,
+			imdb_rating: 8.8,
+		});
+		expect(mock.getPreparedSql()).toContain("FROM movie_list_items");
+		expect(mock.getPreparedSql()).toContain("WHERE tmdb_id = ?");
+	});
+
+	it("returns null when a MovieList IMDb rating is not available", async () => {
+		const mock = createMockEnv([]);
+		const request = new IncomingRequest(
+			"http://example.com/movies/999999/imdb-rating",
+		);
+		const response = await worker.fetch(request, mock.env);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			tmdb_id: 999999,
+			imdb_rating: null,
+		});
 	});
 
 	it("accepts a stable current-day end date preset for movie search", async () => {

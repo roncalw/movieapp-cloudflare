@@ -23,6 +23,8 @@ import {
 } from "../jobs/importJobRuns";
 import {
 	getCachedMovieSearchResponse,
+	getMovieListImdbRatingByTmdbId,
+	parseMovieListTmdbIdPath,
 	RequestValidationError,
 } from "./movieSearch";
 import { rebuildMovieListItems } from "../imports/movieListBuild";
@@ -196,6 +198,32 @@ export async function handleFetch(
 
 			return Response.json({ error: "Movie search failed." }, { status: 500 });
 		}
+	}
+
+	try {
+		const movieListRatingTmdbId = parseMovieListTmdbIdPath(url.pathname);
+
+		if (movieListRatingTmdbId !== null) {
+			if (url.search !== "") {
+				return Response.json(
+					{ error: "This endpoint does not accept query parameters." },
+					{ status: 400 },
+				);
+			}
+
+			return Response.json(
+				await getMovieListImdbRatingByTmdbId(env, movieListRatingTmdbId),
+			);
+		}
+	} catch (error) {
+		if (error instanceof RequestValidationError) {
+			return Response.json({ error: error.message }, { status: 400 });
+		}
+
+		return Response.json(
+			{ error: "Movie IMDb rating lookup failed." },
+			{ status: 500 },
+		);
 	}
 
 	if (url.pathname === "/admin/import/imdb-ratings/dry-run") {
