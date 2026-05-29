@@ -4,6 +4,7 @@ import {
 	getUsFlatrateProviderIdsFromWatchProviders,
 	isTerminalTmdbEnrichmentError,
 	TMDB_DISCOVER_MAX_PAGE,
+	type TmdbFetchRetryOptions,
 } from "../externalApis/tmdbClient";
 import {
 	acquireImportJobLock,
@@ -60,6 +61,20 @@ type TmdbProviderRefreshStats = {
 	providerRowsInserted: number;
 };
 
+type TmdbProviderRefreshDiscoveryProgress = {
+	phase: "candidate_discovery";
+	beginDate: string;
+	endDate: string;
+	currentWindow: TmdbDateWindow | null;
+	currentPage: number | null;
+	pagesRead: number;
+	rowsSeen: number;
+	totalPagesSeen: number | null;
+	windowsLoaded: number;
+	windowsSplit: number;
+	pendingWindows: number;
+};
+
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const TMDB_PROVIDER_REFRESH_BEGIN_DATE = "1874-01-01";
 const TMDB_PROVIDER_REFRESH_LOCK_MINUTES = 30;
@@ -68,6 +83,20 @@ const TMDB_PROVIDER_REFRESH_QUEUE_MESSAGES_PER_SEND_BATCH = 100;
 const TMDB_PROVIDER_REFRESH_D1_BATCH_MOVIES = 25;
 const TMDB_PROVIDER_REFRESH_TMDB_CONCURRENCY = 25;
 const TMDB_ENRICHMENT_QUEUE_NAME = "movieapp-tmdb-enrichment-queue";
+const TMDB_PROVIDER_DISCOVER_RETRY_OPTIONS: TmdbFetchRetryOptions = {
+	maxAttempts: 10,
+	retryDelayMs: 2000,
+};
+
+class TmdbProviderRefreshDiscoveryError extends Error {
+	constructor(
+		message: string,
+		readonly progress: TmdbProviderRefreshDiscoveryProgress,
+	) {
+		super(message);
+		this.name = "TmdbProviderRefreshDiscoveryError";
+	}
+}
 
 function todayIsoDate(nowMs = Date.now()) {
 	return new Date(nowMs).toISOString().slice(0, 10);
@@ -164,6 +193,47 @@ async function loadUsFlatrateCandidateStaging(
 		{ beginDate: TMDB_PROVIDER_REFRESH_BEGIN_DATE, endDate },
 	];
 	let pendingStatements: D1PreparedStatement[] = [];
+	const progress: TmdbProviderRefreshDiscoveryProgress = {
+		phase: "candidate_discovery",
+		beginDate: TMDB_PROVIDER_REFRESH_BEGIN_DATE,
+		endDate,
+		currentWindow: null,
+		currentPage: null,
+		pagesRead,
+		rowsSeen,
+		totalPagesSeen,
+		windowsLoaded,
+		windowsSplit,
+		pendingWindows: pendingWindows.length,
+	};
+
+	function updateProgress() {
+		progress.pagesRead = pagesRead;
+		progress.rowsSeen = rowsSeen;
+		progress.totalPagesSeen = totalPagesSeen;
+		progress.windowsLoaded = windowsLoaded;
+		progress.windowsSplit = windowsSplit;
+		progress.pendingWindows = pendingWindows.length;
+	}
+
+	function getProgressSnapshot() {
+		updateProgress();
+		return {
+			...progress,
+			currentWindow: progress.currentWindow
+				? { ...progress.currentWindow }
+				: null,
+		};
+	}
+
+	function logDiscoveryProgress(reason: string) {
+		logEvent("tmdb-provider-refresh-discovery-progress", {
+			trigger: "candidate-discovery",
+			jobRunId,
+			reason,
+			...getProgressSnapshot(),
+		});
+	}
 
 	async function flushStatements() {
 		if (pendingStatements.length === 0) {
@@ -174,84 +244,109 @@ async function loadUsFlatrateCandidateStaging(
 		pendingStatements = [];
 	}
 
-	await env.DB.batch([
-		env.DB.prepare("DELETE FROM tmdb_us_flatrate_movies_staging"),
-		env.DB.prepare(
-			`DELETE FROM movie_watch_providers_staging
-			 WHERE region = ?`,
-		).bind("US"),
-	]);
+	try {
+		await env.DB.batch([
+			env.DB.prepare("DELETE FROM tmdb_us_flatrate_movies_staging"),
+		]);
 
-	while (pendingWindows.length > 0) {
-		const currentWindow = pendingWindows.shift();
+		while (pendingWindows.length > 0) {
+			const currentWindow = pendingWindows.shift();
 
-		if (!currentWindow) {
-			break;
-		}
-
-		const firstPage = await getTmdbUsFlatrateDiscoverPage(
-			1,
-			currentWindow.beginDate,
-			env,
-			currentWindow.endDate,
-		);
-
-		pagesRead += 1;
-		totalPagesSeen = Math.max(totalPagesSeen ?? 0, firstPage.total_pages);
-
-		if (firstPage.total_pages > TMDB_DISCOVER_MAX_PAGE) {
-			const splitWindow = splitDateWindow(currentWindow);
-
-			if (!splitWindow) {
-				stopReason = "single_day_page_cap_reached";
-				stoppedWindow = currentWindow;
+			if (!currentWindow) {
 				break;
 			}
 
-			windowsSplit += 1;
-			pendingWindows.unshift(splitWindow.right);
-			pendingWindows.unshift(splitWindow.left);
-			continue;
+			progress.currentWindow = currentWindow;
+			progress.currentPage = 1;
+			updateProgress();
+
+			const firstPage = await getTmdbUsFlatrateDiscoverPage(
+				1,
+				currentWindow.beginDate,
+				env,
+				currentWindow.endDate,
+				TMDB_PROVIDER_DISCOVER_RETRY_OPTIONS,
+			);
+
+			pagesRead += 1;
+			totalPagesSeen = Math.max(totalPagesSeen ?? 0, firstPage.total_pages);
+			updateProgress();
+
+			if (firstPage.total_pages > TMDB_DISCOVER_MAX_PAGE) {
+				const splitWindow = splitDateWindow(currentWindow);
+
+				if (!splitWindow) {
+					stopReason = "single_day_page_cap_reached";
+					stoppedWindow = currentWindow;
+					break;
+				}
+
+				windowsSplit += 1;
+				pendingWindows.unshift(splitWindow.right);
+				pendingWindows.unshift(splitWindow.left);
+				logDiscoveryProgress("window-split");
+				continue;
+			}
+
+			windowsLoaded += 1;
+			logDiscoveryProgress("window-loaded");
+
+			for (let page = 1; page <= firstPage.total_pages; page += 1) {
+				progress.currentPage = page;
+				updateProgress();
+
+				const discoverPage =
+					page === 1
+						? firstPage
+						: await getTmdbUsFlatrateDiscoverPage(
+								page,
+								currentWindow.beginDate,
+								env,
+								currentWindow.endDate,
+								TMDB_PROVIDER_DISCOVER_RETRY_OPTIONS,
+							);
+
+				if (page !== 1) {
+					pagesRead += 1;
+					updateProgress();
+				}
+
+				for (const movie of discoverPage.results) {
+					rowsSeen += 1;
+					pendingStatements.push(
+						env.DB.prepare(
+							`INSERT OR REPLACE INTO tmdb_us_flatrate_movies_staging (
+								tmdb_id,
+								load_run_id,
+								discovered_at
+							)
+							VALUES (?, ?, CURRENT_TIMESTAMP)`,
+						).bind(movie.id, jobRunId),
+					);
+				}
+
+				if (pagesRead > 0 && pagesRead % 50 === 0) {
+					logDiscoveryProgress("page-batch-read");
+				}
+
+				if (pendingStatements.length >= 1000) {
+					await flushStatements();
+				}
+			}
 		}
 
-		windowsLoaded += 1;
+		await flushStatements();
+	} catch (error) {
+		const message =
+			error instanceof Error
+				? error.message
+				: "TMDB provider refresh Discover candidate build failed.";
 
-		for (let page = 1; page <= firstPage.total_pages; page += 1) {
-			const discoverPage =
-				page === 1
-					? firstPage
-					: await getTmdbUsFlatrateDiscoverPage(
-							page,
-							currentWindow.beginDate,
-							env,
-							currentWindow.endDate,
-						);
-
-			if (page !== 1) {
-				pagesRead += 1;
-			}
-
-			for (const movie of discoverPage.results) {
-				rowsSeen += 1;
-				pendingStatements.push(
-					env.DB.prepare(
-						`INSERT OR REPLACE INTO tmdb_us_flatrate_movies_staging (
-							tmdb_id,
-							load_run_id,
-							discovered_at
-						)
-						VALUES (?, ?, CURRENT_TIMESTAMP)`,
-					).bind(movie.id, jobRunId),
-				);
-			}
-
-			if (pendingStatements.length >= 1000) {
-				await flushStatements();
-			}
-		}
+		throw new TmdbProviderRefreshDiscoveryError(
+			message,
+			getProgressSnapshot(),
+		);
 	}
-
-	await flushStatements();
 
 	const candidateRow = await env.DB.prepare(
 		`SELECT COUNT(*) AS candidateCount
@@ -501,12 +596,18 @@ export async function enqueueTmdbProviderRefreshJob(
 		const endedAt = new Date(endedAtMs).toISOString();
 		const lastError =
 			error instanceof Error ? error.message : "TMDB provider refresh failed.";
+		const discoveryProgress =
+			error instanceof TmdbProviderRefreshDiscoveryError
+				? error.progress
+				: null;
 
 		const result = {
 			jobRunId,
 			trigger: options.trigger,
 			status: "cancelled",
 			reason: "tmdb_provider_refresh_enqueue_error",
+			phase: discoveryProgress?.phase ?? "enqueue",
+			discoveryProgress,
 			error: lastError,
 			startedAt,
 			endedAt,

@@ -5423,6 +5423,13 @@ _____
     * For <span class="orange">enqueues</span>, monitor progress with this: (response comes back in <span class="green">about 6 minutes</span> that enqueueing has started takes about another <span class="green">hour to complete</span>)
       * Monitor shortcut: `npm run monitor:wpr`
       * https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=tmdb-provider-refresh&limit=1 
+        * Example run from 5/29/2026
+          * Candidate rows found: 80,463
+          * TMDB Discover pages read: 4,043
+          * Date windows loaded: 13
+          * Date windows split: 12
+          * Discovery duration: 430,295 ms, about 7 minutes 10 seconds
+          * Stop reason: end_of_windows
 _____
 
 * <span class="blue">FINAL MOVIES LIST</span>

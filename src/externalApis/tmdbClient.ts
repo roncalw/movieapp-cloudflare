@@ -76,10 +76,15 @@ export type TmdbWatchProviderLookupItem = {
 };
 
 const TMDB_MAX_REQUESTS_PER_SECOND = 35;
-const TMDB_MAX_RETRIES = 5;
+const TMDB_DEFAULT_MAX_ATTEMPTS = 6;
 const TMDB_RETRY_DELAY_MS = 3000;
 export const TMDB_DISCOVER_MAX_PAGE = 500;
 const tmdbRequestTimestamps: number[] = [];
+
+export type TmdbFetchRetryOptions = {
+	maxAttempts?: number;
+	retryDelayMs?: number;
+};
 
 function sleep(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -108,8 +113,16 @@ async function waitForTmdbRequestSlot() {
 	}
 }
 
-async function fetchTmdbJson<T>(url: URL, env: Env): Promise<T> {
-	for (let attempt = 0; attempt <= TMDB_MAX_RETRIES; attempt += 1) {
+async function fetchTmdbJson<T>(
+	url: URL,
+	env: Env,
+	retryOptions: TmdbFetchRetryOptions = {},
+): Promise<T> {
+	const maxAttempts =
+		retryOptions.maxAttempts ?? TMDB_DEFAULT_MAX_ATTEMPTS;
+	const retryDelayMs = retryOptions.retryDelayMs ?? TMDB_RETRY_DELAY_MS;
+
+	for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
 		await waitForTmdbRequestSlot();
 
 		if (!env.TMDB_API_KEY) {
@@ -139,7 +152,7 @@ async function fetchTmdbJson<T>(url: URL, env: Env): Promise<T> {
 			return response.json();
 		}
 
-		if (attempt === TMDB_MAX_RETRIES) {
+		if (attempt === maxAttempts) {
 			throw new Error(
 				`TMDB request failed after retries: ${response.status} ${response.statusText}`,
 			);
@@ -147,8 +160,8 @@ async function fetchTmdbJson<T>(url: URL, env: Env): Promise<T> {
 
 		const retryAfterSeconds = Number(response.headers.get("Retry-After"));
 		const retryAfterMs = Number.isFinite(retryAfterSeconds)
-			? retryAfterSeconds * 1000
-			: TMDB_RETRY_DELAY_MS;
+			? Math.max(retryAfterSeconds * 1000, retryDelayMs)
+			: retryDelayMs;
 
 		await sleep(retryAfterMs);
 	}
@@ -182,6 +195,7 @@ export async function getTmdbUsFlatrateDiscoverPage(
 	beginDate: string,
 	env: Env,
 	endDate?: string,
+	retryOptions?: TmdbFetchRetryOptions,
 ) {
 	const url = new URL("https://api.themoviedb.org/3/discover/movie");
 	url.searchParams.set("page", String(page));
@@ -196,7 +210,7 @@ export async function getTmdbUsFlatrateDiscoverPage(
 		url.searchParams.set("primary_release_date.lte", endDate);
 	}
 
-	return fetchTmdbJson<TmdbDiscoverPage>(url, env);
+	return fetchTmdbJson<TmdbDiscoverPage>(url, env, retryOptions);
 }
 
 export async function getTmdbMovieDetails(tmdbId: number, env: Env) {
