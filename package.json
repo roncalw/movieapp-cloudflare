@@ -70,7 +70,13 @@
     "db:cache:all": "node utils/warmCacheSearchUrls.mjs",
     "db:cache:horror": "node utils/warmCacheSearchUrls.mjs src/cache/data/cacheGenreHorrorURL.json",
     "db:cache:default-popularity": "curl -s -D - -o /dev/null -w 'time_total=%{time_total}\\n' 'https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years'",
-    "db:cache:vote25000-horror-flatrate": "curl -s -D - -o /dev/null -w 'time_total=%{time_total}\\n' 'https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&watchMonetizationTypes=flatrate&minImdbVotes=25000&sort=imdb'"
+    "db:cache:vote25000-horror-flatrate": "curl -s -D - -o /dev/null -w 'time_total=%{time_total}\\n' 'https://movieapp-cloudflare.carlo-roncallo.workers.dev/movies/search?pageSize=20&datePreset=last5years&genreIds=27&watchMonetizationTypes=flatrate&minImdbVotes=25000&sort=imdb'",
+    "sync:cron": "node scripts/syncScheduledCrons.mjs",
+    "predeploy": "npm run sync:cron",
+    "predev": "npm run sync:cron",
+    "predev:remote": "npm run sync:cron",
+    "prestart": "npm run sync:cron",
+    "pretest": "npm run sync:cron"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.12.4",

@@ -11,7 +11,7 @@
 		"enabled": true
 	},
 	"vars": {
-		"ALL_JOBS_PAUSED": "true",
+		"ALL_JOBS_PAUSED": "false",
 		"CACHE_WARM_JOB_PAUSED": "false",
 		"IMDB_JOB_PAUSED": "false",
 		"JOB_NOTIFICATION_EMAIL_ENABLED": "true",
@@ -112,41 +112,51 @@
 	},
 	"triggers": {
 		"crons": [
+			/*
+				NOTE on the asterisks: (for every n interval ...use a star followed by / (slash) and then a step value eg. every other day would be a star followed by /2)				
+				0 1 * * 1
+				| | | | |
+				| | | | Sunday ... 1-Sunday, 2-Monday, 3-Tuesday, 4-Wednesday, 5-Thursday, 6-Friday, 7-Saturday
+				| | | on a particular month (star for every month)
+				| | on a particular day of the month 
+				| 1:00 AM UTC
+				minute 0
+			*/
 			// Saturday
 				// IMDb Ratings Staging 
 					// 9:00 PM EDT
-						// 01:00 UTC Sunday.
-			"0 1 * * 1",
+						// 01:00 UTC Sunday
+			"0 2 * * 6",
 			//============================================
 			// Saturday
 				// TMDB Primary Staging 
 					// 11:00 PM EDT
-						// 03:00 UTC Sunday.
-			"0 3 * * 1",
+						// 03:00 UTC Sunday
+			"0 3 * * 6",
 			//============================================
 			// Sunday
 				// TMDB New Movie Details Staging 
 					// 1:00 AM EDT
-						// 05:00 UTC.
-			"0 5 * * 1",
+						// 05:00 UTC Sunday
+			"0 5 * * 6",
 			//============================================
 			// Sunday
 				// TMDB Watch Providers Staging 
 					// 3:00 AM EDT
-						// 07:00 UTC.
-			"0 7 * * 1",
+						// 07:00 UTC Sunday
+			"0 7 * * 6",
 			//============================================
 			// Sunday
 				// Movie List Production 
 					// 8:00 AM EDT
-						// 12:00 UTC.
-			"0 12 * * 1",
+						// 12:00 UTC Sunday
+			"0 12 * * 6",
 			//============================================
 			// Sunday
 				// Search Cache Warm All Genres
 					// 9:00 AM EDT
-						// 13:00 UTC.
-			"0 13 * * 1"
+						// 13:00 UTC Sunday
+			"0 13 * * 6"
 		]
 	}
 	/**
