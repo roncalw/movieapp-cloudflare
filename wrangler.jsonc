@@ -7,6 +7,9 @@
 	"name": "movieapp-cloudflare",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-04-20",
+	"build": {
+		"command": "node scripts/syncScheduledCrons.mjs"
+	},
 	"observability": {
 		"enabled": true
 	},
@@ -126,37 +129,37 @@
 				// IMDb Ratings Staging 
 					// 9:00 PM EDT
 						// 01:00 UTC Sunday
-			"0 2 * * 6",
+			"0 1 * * 7",
 			//============================================
 			// Saturday
 				// TMDB Primary Staging 
 					// 11:00 PM EDT
 						// 03:00 UTC Sunday
-			"0 3 * * 6",
+			"0 3 * * 7",
 			//============================================
 			// Sunday
 				// TMDB New Movie Details Staging 
 					// 1:00 AM EDT
 						// 05:00 UTC Sunday
-			"0 5 * * 6",
+			"0 5 * * 7",
 			//============================================
 			// Sunday
 				// TMDB Watch Providers Staging 
 					// 3:00 AM EDT
 						// 07:00 UTC Sunday
-			"0 7 * * 6",
+			"0 7 * * 7",
 			//============================================
 			// Sunday
 				// Movie List Production 
 					// 8:00 AM EDT
 						// 12:00 UTC Sunday
-			"0 12 * * 6",
+			"0 12 * * 7",
 			//============================================
 			// Sunday
 				// Search Cache Warm All Genres
 					// 9:00 AM EDT
 						// 13:00 UTC Sunday
-			"0 13 * * 6"
+			"0 13 * * 7"
 		]
 	}
 	/**

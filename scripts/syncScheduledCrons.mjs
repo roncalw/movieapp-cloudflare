@@ -98,8 +98,8 @@ const [
 	cacheWarmAllGenresCron,
 ] = crons.map(assertCron);
 
-const output = `// Generated from wrangler.jsonc by scripts/syncScheduledCrons.mjs.
-// Edit wrangler.jsonc, then run npm run sync:cron or npm run deploy.
+const output = `// Generated from wrangler.jsonc by Wrangler's build command.
+// Edit only wrangler.jsonc. Wrangler runs scripts/syncScheduledCrons.mjs before deploy/dev.
 
 export const SCHEDULED_IMDB_CRON = ${JSON.stringify(imdbCron)};
 export const SCHEDULED_TMDB_PRIMARY_CRON = ${JSON.stringify(tmdbPrimaryCron)};
