@@ -147,18 +147,12 @@ function buildProviderRefreshStatements(
 	env: Env,
 	loadRunId: string,
 ) {
-	const statements = [
-		env.DB.prepare(
-			`DELETE FROM movie_watch_providers_staging
-			 WHERE tmdb_id = ?
-			   AND region = ?`,
-		).bind(tmdbId, "US"),
-	];
+	const statements: D1PreparedStatement[] = [];
 
 	for (const providerId of providerIds) {
 		statements.push(
 			env.DB.prepare(
-				`INSERT INTO movie_watch_providers_staging (
+				`INSERT OR REPLACE INTO movie_watch_providers_staging (
 					tmdb_id,
 					provider_id,
 					region,

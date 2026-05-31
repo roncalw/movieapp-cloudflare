@@ -221,20 +221,28 @@ export async function promotePendingMovieWatchProviders(
 						region,
 						?,
 						CURRENT_TIMESTAMP
-					FROM movie_watch_providers_staging
-					WHERE promoted_at IS NULL
-					  AND region = 'US'
-					  AND is_full_refresh = 1
-					  AND provider_id IS NOT NULL`,
-				).bind(jobRunId),
-				env.DB.prepare(
-					`UPDATE movie_watch_providers_staging
-					 SET promoted_at = CURRENT_TIMESTAMP
-					 WHERE promoted_at IS NULL
-					   AND region = 'US'
-					   AND is_full_refresh = 1`,
-				),
-			]);
+						FROM movie_watch_providers_staging
+						WHERE promoted_at IS NULL
+						  AND region = 'US'
+						  AND is_full_refresh = 1
+						  AND load_run_id = ?
+						  AND provider_id IS NOT NULL`,
+					).bind(jobRunId, latestProviderRefreshRun.job_run_id),
+					env.DB.prepare(
+						`UPDATE movie_watch_providers_staging
+						 SET promoted_at = CURRENT_TIMESTAMP
+						 WHERE promoted_at IS NULL
+						   AND region = 'US'
+						   AND is_full_refresh = 1
+						   AND load_run_id = ?`,
+					).bind(latestProviderRefreshRun.job_run_id),
+					env.DB.prepare(
+						`DELETE FROM movie_watch_providers_staging
+						 WHERE region = 'US'
+						   AND is_full_refresh = 1
+						   AND load_run_id <> ?`,
+					).bind(latestProviderRefreshRun.job_run_id),
+				]);
 		} else if (counts.pendingMovieCount > 0) {
 			await env.DB.batch([
 				env.DB.prepare(

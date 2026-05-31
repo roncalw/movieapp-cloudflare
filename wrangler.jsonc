@@ -129,37 +129,37 @@
 				// IMDb Ratings Staging 
 					// 9:00 PM EDT
 						// 01:00 UTC Sunday
-			"0 1 * * 7",
+			"0 1 * * 1",
 			//============================================
 			// Saturday
 				// TMDB Primary Staging 
 					// 11:00 PM EDT
 						// 03:00 UTC Sunday
-			"0 3 * * 7",
+			"0 3 * * 1",
 			//============================================
 			// Sunday
 				// TMDB New Movie Details Staging 
 					// 1:00 AM EDT
 						// 05:00 UTC Sunday
-			"0 5 * * 7",
+			"0 5 * * 1",
 			//============================================
 			// Sunday
 				// TMDB Watch Providers Staging 
 					// 3:00 AM EDT
 						// 07:00 UTC Sunday
-			"0 7 * * 7",
+			"0 7 * * 1",
 			//============================================
 			// Sunday
 				// Movie List Production 
 					// 8:00 AM EDT
 						// 12:00 UTC Sunday
-			"0 12 * * 7",
+			"0 12 * * 1",
 			//============================================
 			// Sunday
 				// Search Cache Warm All Genres
 					// 9:00 AM EDT
 						// 13:00 UTC Sunday
-			"0 13 * * 7"
+			"0 13 * * 1"
 		]
 	}
 	/**
