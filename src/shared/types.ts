@@ -5,6 +5,7 @@ export interface Env {
 	TMDB_ENRICHMENT_QUEUE: Queue<
 		| TmdbEnrichmentQueueMessage
 		| TmdbNewMovieDetailsQueueMessage
+		| TmdbProviderRefreshDiscoveryQueueMessage
 		| TmdbProviderRefreshQueueMessage
 	>;
 	TMDB_API_KEY: string;
@@ -59,6 +60,14 @@ export type TmdbProviderRefreshQueueMessage = {
 	tmdbIds: number[];
 };
 
+export type TmdbProviderRefreshDiscoveryQueueMessage = {
+	kind: "tmdb-provider-refresh-discovery";
+	jobRunId: string;
+	messageId?: string;
+	endDate: string;
+	attempt: number;
+};
+
 export type CacheWarmSearchQueueMessage = {
 	kind: "cache-warm-search";
 	jobRunId: string;
@@ -75,4 +84,5 @@ export type WorkerQueueMessage =
 	| ImdbRatingQueueMessage
 	| TmdbEnrichmentQueueMessage
 	| TmdbNewMovieDetailsQueueMessage
+	| TmdbProviderRefreshDiscoveryQueueMessage
 	| TmdbProviderRefreshQueueMessage;

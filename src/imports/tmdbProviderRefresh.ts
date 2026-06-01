@@ -20,6 +20,7 @@ import {
 	getImportJobRunById,
 	recordImportJobQueueMessageCompletion,
 	setImportJobRunQueueTotals,
+	touchImportJobRunProgress,
 	TMDB_ENRICH_JOB_NAME,
 	TMDB_NEW_MOVIE_DETAILS_JOB_NAME,
 	TMDB_PRIMARY_JOB_NAME,
@@ -35,6 +36,7 @@ import {
 import { logEvent } from "../shared/logging";
 import type {
 	Env,
+	TmdbProviderRefreshDiscoveryQueueMessage,
 	TmdbProviderRefreshQueueMessage,
 	WorkerQueueMessage,
 } from "../shared/types";
@@ -66,18 +68,31 @@ type TmdbProviderRefreshDiscoveryProgress = {
 	beginDate: string;
 	endDate: string;
 	currentWindow: TmdbDateWindow | null;
+	currentWindowTotalPages: number | null;
 	currentPage: number | null;
 	pagesRead: number;
 	rowsSeen: number;
 	totalPagesSeen: number | null;
 	windowsLoaded: number;
 	windowsSplit: number;
-	pendingWindows: number;
+	pendingWindows: TmdbDateWindow[];
+	lastSuccessfulWindow: TmdbDateWindow | null;
+	lastSuccessfulPage: number | null;
+	attempt: number;
+	maxAttempts: number;
+	status: "running" | "complete";
+	reason: string;
+	error?: string | null;
 };
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const TMDB_PROVIDER_REFRESH_BEGIN_DATE = "1874-01-01";
 const TMDB_PROVIDER_REFRESH_LOCK_MINUTES = 30;
+const TMDB_PROVIDER_REFRESH_STALE_RUN_MINUTES = 60;
+const TMDB_PROVIDER_DISCOVERY_PROGRESS_HEARTBEAT_MS = 30 * 1000;
+const TMDB_PROVIDER_DISCOVERY_PAGES_PER_QUEUE_MESSAGE = 50;
+const TMDB_PROVIDER_DISCOVERY_MAX_ATTEMPTS = 10;
+const TMDB_PROVIDER_DISCOVERY_RETRY_DELAY_SECONDS = 10;
 const TMDB_PROVIDER_REFRESH_IDS_PER_QUEUE_MESSAGE = 25;
 const TMDB_PROVIDER_REFRESH_QUEUE_MESSAGES_PER_SEND_BATCH = 100;
 const TMDB_PROVIDER_REFRESH_D1_BATCH_MOVIES = 25;
@@ -111,6 +126,11 @@ function timeToIsoDate(value: number) {
 	return new Date(value).toISOString().slice(0, 10);
 }
 
+function parseStoredUtcTimestamp(value: string) {
+	const parsed = Date.parse(`${value.replace(" ", "T")}Z`);
+	return Number.isFinite(parsed) ? parsed : Date.now();
+}
+
 function splitDateWindow(window: TmdbDateWindow) {
 	const beginTime = isoDateToTime(window.beginDate);
 	const endTime = isoDateToTime(window.endDate);
@@ -141,6 +161,12 @@ export function isTmdbProviderRefreshQueueMessage(
 	return "kind" in body && body.kind === "tmdb-provider-refresh";
 }
 
+export function isTmdbProviderRefreshDiscoveryQueueMessage(
+	body: WorkerQueueMessage,
+): body is TmdbProviderRefreshDiscoveryQueueMessage {
+	return "kind" in body && body.kind === "tmdb-provider-refresh-discovery";
+}
+
 function buildProviderRefreshStatements(
 	tmdbId: number,
 	providerIds: number[],
@@ -169,180 +195,175 @@ function buildProviderRefreshStatements(
 	return statements;
 }
 
-async function loadUsFlatrateCandidateStaging(
-	env: Env,
-	jobRunId: string,
+function buildInitialDiscoveryCheckpoint(
 	endDate: string,
-) {
-	let pagesRead = 0;
-	let rowsSeen = 0;
-	let totalPagesSeen: number | null = null;
-	let windowsLoaded = 0;
-	let windowsSplit = 0;
-	let stoppedWindow: TmdbDateWindow | null = null;
-	let stopReason:
-		| "end_of_windows"
-		| "single_day_page_cap_reached" = "end_of_windows";
-	const pendingWindows: TmdbDateWindow[] = [
-		{ beginDate: TMDB_PROVIDER_REFRESH_BEGIN_DATE, endDate },
-	];
-	let pendingStatements: D1PreparedStatement[] = [];
-	const progress: TmdbProviderRefreshDiscoveryProgress = {
+	reason = "discovery-queued",
+): TmdbProviderRefreshDiscoveryProgress {
+	return {
 		phase: "candidate_discovery",
+		status: "running",
+		reason,
 		beginDate: TMDB_PROVIDER_REFRESH_BEGIN_DATE,
 		endDate,
 		currentWindow: null,
+		currentWindowTotalPages: null,
 		currentPage: null,
-		pagesRead,
-		rowsSeen,
-		totalPagesSeen,
-		windowsLoaded,
-		windowsSplit,
-		pendingWindows: pendingWindows.length,
+		pagesRead: 0,
+		rowsSeen: 0,
+		totalPagesSeen: null,
+		windowsLoaded: 0,
+		windowsSplit: 0,
+		pendingWindows: [
+			{ beginDate: TMDB_PROVIDER_REFRESH_BEGIN_DATE, endDate },
+		],
+		lastSuccessfulWindow: null,
+		lastSuccessfulPage: null,
+		attempt: 1,
+		maxAttempts: TMDB_PROVIDER_DISCOVERY_MAX_ATTEMPTS,
+		error: null,
 	};
+}
 
-	function updateProgress() {
-		progress.pagesRead = pagesRead;
-		progress.rowsSeen = rowsSeen;
-		progress.totalPagesSeen = totalPagesSeen;
-		progress.windowsLoaded = windowsLoaded;
-		progress.windowsSplit = windowsSplit;
-		progress.pendingWindows = pendingWindows.length;
-	}
+function cloneWindow(window: TmdbDateWindow | null) {
+	return window ? { ...window } : null;
+}
 
-	function getProgressSnapshot() {
-		updateProgress();
-		return {
-			...progress,
-			currentWindow: progress.currentWindow
-				? { ...progress.currentWindow }
-				: null,
-		};
-	}
+function cloneWindows(windows: TmdbDateWindow[]) {
+	return windows.map((window) => ({ ...window }));
+}
 
-	function logDiscoveryProgress(reason: string) {
-		logEvent("tmdb-provider-refresh-discovery-progress", {
-			trigger: "candidate-discovery",
-			jobRunId,
-			reason,
-			...getProgressSnapshot(),
-		});
-	}
+function isDateWindow(value: unknown): value is TmdbDateWindow {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"beginDate" in value &&
+		"endDate" in value &&
+		typeof value.beginDate === "string" &&
+		typeof value.endDate === "string"
+	);
+}
 
-	async function flushStatements() {
-		if (pendingStatements.length === 0) {
-			return;
-		}
-
-		await env.DB.batch(pendingStatements);
-		pendingStatements = [];
+function parseDiscoveryCheckpoint(
+	resultJson: string | null,
+	endDate: string,
+): TmdbProviderRefreshDiscoveryProgress {
+	if (!resultJson) {
+		return buildInitialDiscoveryCheckpoint(endDate);
 	}
 
 	try {
-		await env.DB.batch([
-			env.DB.prepare("DELETE FROM tmdb_us_flatrate_movies_staging"),
-		]);
+		const parsed = JSON.parse(resultJson) as Partial<TmdbProviderRefreshDiscoveryProgress>;
 
-		while (pendingWindows.length > 0) {
-			const currentWindow = pendingWindows.shift();
-
-			if (!currentWindow) {
-				break;
-			}
-
-			progress.currentWindow = currentWindow;
-			progress.currentPage = 1;
-			updateProgress();
-
-			const firstPage = await getTmdbUsFlatrateDiscoverPage(
-				1,
-				currentWindow.beginDate,
-				env,
-				currentWindow.endDate,
-				TMDB_PROVIDER_DISCOVER_RETRY_OPTIONS,
-			);
-
-			pagesRead += 1;
-			totalPagesSeen = Math.max(totalPagesSeen ?? 0, firstPage.total_pages);
-			updateProgress();
-
-			if (firstPage.total_pages > TMDB_DISCOVER_MAX_PAGE) {
-				const splitWindow = splitDateWindow(currentWindow);
-
-				if (!splitWindow) {
-					stopReason = "single_day_page_cap_reached";
-					stoppedWindow = currentWindow;
-					break;
-				}
-
-				windowsSplit += 1;
-				pendingWindows.unshift(splitWindow.right);
-				pendingWindows.unshift(splitWindow.left);
-				logDiscoveryProgress("window-split");
-				continue;
-			}
-
-			windowsLoaded += 1;
-			logDiscoveryProgress("window-loaded");
-
-			for (let page = 1; page <= firstPage.total_pages; page += 1) {
-				progress.currentPage = page;
-				updateProgress();
-
-				const discoverPage =
-					page === 1
-						? firstPage
-						: await getTmdbUsFlatrateDiscoverPage(
-								page,
-								currentWindow.beginDate,
-								env,
-								currentWindow.endDate,
-								TMDB_PROVIDER_DISCOVER_RETRY_OPTIONS,
-							);
-
-				if (page !== 1) {
-					pagesRead += 1;
-					updateProgress();
-				}
-
-				for (const movie of discoverPage.results) {
-					rowsSeen += 1;
-					pendingStatements.push(
-						env.DB.prepare(
-							`INSERT OR REPLACE INTO tmdb_us_flatrate_movies_staging (
-								tmdb_id,
-								load_run_id,
-								discovered_at
-							)
-							VALUES (?, ?, CURRENT_TIMESTAMP)`,
-						).bind(movie.id, jobRunId),
-					);
-				}
-
-				if (pagesRead > 0 && pagesRead % 50 === 0) {
-					logDiscoveryProgress("page-batch-read");
-				}
-
-				if (pendingStatements.length >= 1000) {
-					await flushStatements();
-				}
-			}
+		if (
+			parsed.phase !== "candidate_discovery" ||
+			parsed.endDate !== endDate ||
+			!Array.isArray(parsed.pendingWindows)
+		) {
+			return buildInitialDiscoveryCheckpoint(endDate);
 		}
 
-		await flushStatements();
-	} catch (error) {
-		const message =
-			error instanceof Error
-				? error.message
-				: "TMDB provider refresh Discover candidate build failed.";
+		const status: TmdbProviderRefreshDiscoveryProgress["status"] =
+			parsed.status === "complete" ? "complete" : "running";
 
-		throw new TmdbProviderRefreshDiscoveryError(
-			message,
-			getProgressSnapshot(),
-		);
+		return {
+			...buildInitialDiscoveryCheckpoint(endDate),
+			...parsed,
+			currentWindow: isDateWindow(parsed.currentWindow)
+				? { ...parsed.currentWindow }
+				: null,
+			currentWindowTotalPages:
+				typeof parsed.currentWindowTotalPages === "number"
+					? parsed.currentWindowTotalPages
+					: null,
+			currentPage:
+				typeof parsed.currentPage === "number" ? parsed.currentPage : null,
+			pendingWindows: parsed.pendingWindows.filter(isDateWindow).map((window) => ({
+				...window,
+			})),
+			lastSuccessfulWindow: isDateWindow(parsed.lastSuccessfulWindow)
+				? { ...parsed.lastSuccessfulWindow }
+				: null,
+			lastSuccessfulPage:
+				typeof parsed.lastSuccessfulPage === "number"
+					? parsed.lastSuccessfulPage
+					: null,
+			status,
+			reason: parsed.reason ?? "checkpoint-loaded",
+			attempt:
+				typeof parsed.attempt === "number" && parsed.attempt > 0
+					? parsed.attempt
+					: 1,
+			maxAttempts: TMDB_PROVIDER_DISCOVERY_MAX_ATTEMPTS,
+		};
+	} catch {
+		return buildInitialDiscoveryCheckpoint(endDate);
 	}
+}
 
-	const candidateRow = await env.DB.prepare(
+function snapshotDiscoveryCheckpoint(
+	checkpoint: TmdbProviderRefreshDiscoveryProgress,
+	reason: string,
+	attempt: number,
+	error?: string | null,
+): TmdbProviderRefreshDiscoveryProgress {
+	return {
+		...checkpoint,
+		reason,
+		attempt,
+		maxAttempts: TMDB_PROVIDER_DISCOVERY_MAX_ATTEMPTS,
+		currentWindow: cloneWindow(checkpoint.currentWindow),
+		pendingWindows: cloneWindows(checkpoint.pendingWindows),
+		lastSuccessfulWindow: cloneWindow(checkpoint.lastSuccessfulWindow),
+		error: error ?? null,
+	};
+}
+
+function logDiscoveryProgress(
+	jobRunId: string,
+	checkpoint: TmdbProviderRefreshDiscoveryProgress,
+	reason: string,
+) {
+	logEvent("tmdb-provider-refresh-discovery-progress", {
+		trigger: "candidate-discovery",
+		jobRunId,
+		...snapshotDiscoveryCheckpoint(checkpoint, reason, checkpoint.attempt),
+		pendingWindows: checkpoint.pendingWindows.length,
+	});
+}
+
+async function saveDiscoveryCheckpoint(
+	env: Env,
+	jobRunId: string,
+	checkpoint: TmdbProviderRefreshDiscoveryProgress,
+	candidateIds: number[] = [],
+) {
+	const statements = candidateIds.map((tmdbId) =>
+		env.DB.prepare(
+			`INSERT OR REPLACE INTO tmdb_us_flatrate_movies_staging (
+				tmdb_id,
+				load_run_id,
+				discovered_at
+			)
+			VALUES (?, ?, CURRENT_TIMESTAMP)`,
+		).bind(tmdbId, jobRunId),
+	);
+
+	statements.push(
+		env.DB.prepare(
+			`UPDATE import_job_runs
+			 SET last_progress_at = CURRENT_TIMESTAMP,
+			     result_json = ?,
+			     last_error = COALESCE(?, last_error)
+			 WHERE job_run_id = ?
+			   AND status IN ('running', 'queued')`,
+		).bind(JSON.stringify(checkpoint), checkpoint.error ?? null, jobRunId),
+	);
+
+	await env.DB.batch(statements);
+}
+
+async function countProviderRefreshCandidateRows(env: Env, jobRunId: string) {
+	const row = await env.DB.prepare(
 		`SELECT COUNT(*) AS candidateCount
 		 FROM tmdb_us_flatrate_movies_staging
 		 WHERE load_run_id = ?`,
@@ -350,17 +371,139 @@ async function loadUsFlatrateCandidateStaging(
 		.bind(jobRunId)
 		.first<{ candidateCount: number }>();
 
-	return {
-		candidateCount: candidateRow?.candidateCount ?? 0,
-		pagesRead,
-		rowsSeen,
-		totalPagesSeen,
-		windowsLoaded,
-		windowsSplit,
-		pendingWindows: pendingWindows.length,
-		stoppedWindow,
-		stopReason,
-	};
+	return row?.candidateCount ?? 0;
+}
+
+async function processDiscoveryChunk(
+	env: Env,
+	jobRunId: string,
+	checkpoint: TmdbProviderRefreshDiscoveryProgress,
+	attempt: number,
+) {
+	let pagesProcessed = 0;
+	let lastHeartbeatAtMs = 0;
+
+	async function maybeHeartbeat(reason: string, force = false) {
+		const nowMs = Date.now();
+
+		if (
+			!force &&
+			nowMs - lastHeartbeatAtMs <
+				TMDB_PROVIDER_DISCOVERY_PROGRESS_HEARTBEAT_MS
+		) {
+			return;
+		}
+
+		lastHeartbeatAtMs = nowMs;
+		await touchImportJobRunProgress(env, jobRunId, {
+			result: snapshotDiscoveryCheckpoint(checkpoint, reason, attempt),
+		});
+	}
+
+	await maybeHeartbeat("discovery-message-started", true);
+
+	while (pagesProcessed < TMDB_PROVIDER_DISCOVERY_PAGES_PER_QUEUE_MESSAGE) {
+		if (!checkpoint.currentWindow) {
+			const nextWindow = checkpoint.pendingWindows.shift();
+
+			if (!nextWindow) {
+				checkpoint.status = "complete";
+				checkpoint.reason = "discovery-complete";
+				await saveDiscoveryCheckpoint(
+					env,
+					jobRunId,
+					snapshotDiscoveryCheckpoint(checkpoint, "discovery-complete", attempt),
+				);
+				return { complete: true, checkpoint };
+			}
+
+			checkpoint.currentWindow = nextWindow;
+			checkpoint.currentWindowTotalPages = null;
+			checkpoint.currentPage = 1;
+			await maybeHeartbeat("window-started", true);
+		}
+
+		const currentWindow = checkpoint.currentWindow;
+		const currentPage = checkpoint.currentPage ?? 1;
+		const discoverPage = await getTmdbUsFlatrateDiscoverPage(
+			currentPage,
+			currentWindow.beginDate,
+			env,
+			currentWindow.endDate,
+			TMDB_PROVIDER_DISCOVER_RETRY_OPTIONS,
+		);
+
+		checkpoint.pagesRead += 1;
+		checkpoint.totalPagesSeen = Math.max(
+			checkpoint.totalPagesSeen ?? 0,
+			discoverPage.total_pages,
+		);
+		pagesProcessed += 1;
+
+		if (currentPage === 1 && discoverPage.total_pages > TMDB_DISCOVER_MAX_PAGE) {
+			const splitWindow = splitDateWindow(currentWindow);
+
+			if (!splitWindow) {
+				throw new TmdbProviderRefreshDiscoveryError(
+					"TMDB provider refresh Discover reached the TMDB page cap for a single-day window.",
+					snapshotDiscoveryCheckpoint(
+						checkpoint,
+						"single-day-page-cap-reached",
+						attempt,
+					),
+				);
+			}
+
+			checkpoint.windowsSplit += 1;
+			checkpoint.pendingWindows.unshift(splitWindow.right);
+			checkpoint.pendingWindows.unshift(splitWindow.left);
+			checkpoint.currentWindow = null;
+			checkpoint.currentWindowTotalPages = null;
+			checkpoint.currentPage = null;
+
+			const snapshot = snapshotDiscoveryCheckpoint(
+				checkpoint,
+				"window-split",
+				attempt,
+			);
+			logDiscoveryProgress(jobRunId, snapshot, "window-split");
+			await saveDiscoveryCheckpoint(env, jobRunId, snapshot);
+			continue;
+		}
+
+		if (currentPage === 1) {
+			checkpoint.currentWindowTotalPages = discoverPage.total_pages;
+			checkpoint.windowsLoaded += 1;
+			logDiscoveryProgress(jobRunId, checkpoint, "window-loaded");
+		}
+
+		const candidateIds = discoverPage.results.map((movie) => movie.id);
+		checkpoint.rowsSeen += discoverPage.results.length;
+		checkpoint.lastSuccessfulWindow = currentWindow;
+		checkpoint.lastSuccessfulPage = currentPage;
+
+		if (currentPage >= (checkpoint.currentWindowTotalPages ?? discoverPage.total_pages)) {
+			checkpoint.currentWindow = null;
+			checkpoint.currentWindowTotalPages = null;
+			checkpoint.currentPage = null;
+		} else {
+			checkpoint.currentPage = currentPage + 1;
+		}
+
+		const reason =
+			checkpoint.pagesRead > 0 && checkpoint.pagesRead % 50 === 0
+				? "page-batch-read"
+				: "page-read";
+		const snapshot = snapshotDiscoveryCheckpoint(checkpoint, reason, attempt);
+
+		if (reason === "page-batch-read") {
+			logDiscoveryProgress(jobRunId, snapshot, reason);
+		}
+
+		await saveDiscoveryCheckpoint(env, jobRunId, snapshot, candidateIds);
+	}
+
+	return { complete: false, checkpoint };
 }
 
 async function getProviderRefreshCandidateRows(env: Env, jobRunId: string) {
@@ -374,6 +517,325 @@ async function getProviderRefreshCandidateRows(env: Env, jobRunId: string) {
 		.all<TmdbProviderRefreshRow>();
 
 	return results;
+}
+
+async function queueProviderRefreshCandidateRows(
+	env: Env,
+	jobRunId: string,
+	trigger: ImportJobTrigger,
+	startedAt: string,
+	endDate: string,
+	discovery: TmdbProviderRefreshDiscoveryProgress,
+) {
+	const rows = await getProviderRefreshCandidateRows(env, jobRunId);
+	let queueMessages: TmdbProviderRefreshQueueMessage[] = [];
+	let rowsQueued = 0;
+	let messagesQueued = 0;
+	let messageNumber = 0;
+
+	async function flushQueueMessages() {
+		if (queueMessages.length === 0) {
+			return;
+		}
+
+		await env.TMDB_ENRICHMENT_QUEUE.sendBatch(
+			queueMessages.map((message) => ({ body: message })),
+		);
+
+		messagesQueued += queueMessages.length;
+		queueMessages = [];
+	}
+
+	for (
+		let index = 0;
+		index < rows.length;
+		index += TMDB_PROVIDER_REFRESH_IDS_PER_QUEUE_MESSAGE
+	) {
+		const tmdbIds = rows
+			.slice(index, index + TMDB_PROVIDER_REFRESH_IDS_PER_QUEUE_MESSAGE)
+			.map((row) => row.tmdb_id);
+		messageNumber += 1;
+
+		queueMessages.push({
+			kind: "tmdb-provider-refresh",
+			jobRunId,
+			messageId: `${jobRunId}-${String(messageNumber).padStart(6, "0")}`,
+			tmdbIds,
+		});
+		rowsQueued += tmdbIds.length;
+
+		if (
+			queueMessages.length >=
+			TMDB_PROVIDER_REFRESH_QUEUE_MESSAGES_PER_SEND_BATCH
+		) {
+			await flushQueueMessages();
+		}
+	}
+
+	await flushQueueMessages();
+
+	const endedAtMs = Date.now();
+	const endedAt = new Date(endedAtMs).toISOString();
+	const candidateCount = await countProviderRefreshCandidateRows(env, jobRunId);
+
+	await env.DB.prepare(
+		`DELETE FROM tmdb_us_flatrate_movies_staging
+		 WHERE load_run_id <> ?`,
+	)
+		.bind(jobRunId)
+		.run();
+
+	const result = {
+		trigger,
+		beginDate: TMDB_PROVIDER_REFRESH_BEGIN_DATE,
+		endDate,
+		candidateCount,
+		pagesRead: discovery.pagesRead,
+		rowsSeen: discovery.rowsSeen,
+		totalPagesSeen: discovery.totalPagesSeen,
+		windowsLoaded: discovery.windowsLoaded,
+		windowsSplit: discovery.windowsSplit,
+		pendingWindows: discovery.pendingWindows.length,
+		stoppedWindow: null,
+		stopReason: "end_of_windows",
+		selected: rows.length,
+		rowsQueued,
+		messagesQueued,
+		jobRunId,
+		startedAt,
+		endedAt,
+		durationMs: endedAtMs - parseStoredUtcTimestamp(startedAt),
+	};
+
+	if (rows.length === 0) {
+		await finishImportJobRun(env, jobRunId, {
+			status: "complete",
+			result,
+		});
+	} else {
+		await setImportJobRunQueueTotals(env, jobRunId, {
+			selected: rows.length,
+			queued: rowsQueued,
+			result,
+		});
+	}
+
+	logEvent("tmdb-provider-refresh-enqueue-end", result);
+
+	return result;
+}
+
+async function cancelStaleProviderRefreshRuns(env: Env) {
+	const { results } = await env.DB.prepare(
+		`SELECT job_run_id,
+		        status,
+		        selected_count,
+		        queued_count,
+		        processed_count,
+		        updated_count,
+		        error_count,
+		        provider_rows_inserted,
+		        started_at,
+		        last_progress_at
+		 FROM import_job_runs
+		 WHERE job_name = ?
+		   AND status IN ('queued', 'running')
+		   AND last_progress_at < datetime('now', '-' || ? || ' minutes')
+		 ORDER BY started_at`,
+	)
+		.bind(TMDB_PROVIDER_REFRESH_JOB_NAME, TMDB_PROVIDER_REFRESH_STALE_RUN_MINUTES)
+		.all<{
+			job_run_id: string;
+			status: string;
+			selected_count: number;
+			queued_count: number;
+			processed_count: number;
+			updated_count: number;
+			error_count: number;
+			provider_rows_inserted: number;
+			started_at: string;
+			last_progress_at: string;
+		}>();
+
+	for (const run of results) {
+		const lastError = `Cancelled stale ${TMDB_PROVIDER_REFRESH_JOB_NAME} run after more than ${TMDB_PROVIDER_REFRESH_STALE_RUN_MINUTES} minutes without progress.`;
+
+		await cancelImportJobRun(env, run.job_run_id, {
+			errors: 1,
+			result: {
+				jobRunId: run.job_run_id,
+				status: "cancelled",
+				reason: "stale_provider_refresh_run",
+				previousStatus: run.status,
+				selectedCount: run.selected_count,
+				queuedCount: run.queued_count,
+				processedCount: run.processed_count,
+				updatedCount: run.updated_count,
+				errorCount: run.error_count,
+				providerRowsInserted: run.provider_rows_inserted,
+				startedAt: run.started_at,
+				lastProgressAt: run.last_progress_at,
+				staleAfterMinutes: TMDB_PROVIDER_REFRESH_STALE_RUN_MINUTES,
+			},
+			lastError,
+		});
+
+		logEvent("tmdb-provider-refresh-stale-run-cancelled", {
+			jobRunId: run.job_run_id,
+			startedAt: run.started_at,
+			lastProgressAt: run.last_progress_at,
+			staleAfterMinutes: TMDB_PROVIDER_REFRESH_STALE_RUN_MINUTES,
+		});
+	}
+}
+
+async function sendProviderRefreshDiscoveryMessage(
+	env: Env,
+	message: TmdbProviderRefreshDiscoveryQueueMessage,
+	delaySeconds = 0,
+) {
+	if (delaySeconds > 0) {
+		await env.TMDB_ENRICHMENT_QUEUE.send(message, { delaySeconds });
+		return;
+	}
+
+	await env.TMDB_ENRICHMENT_QUEUE.send(message);
+}
+
+export async function processTmdbProviderRefreshDiscoveryMessage(
+	env: Env,
+	message: TmdbProviderRefreshDiscoveryQueueMessage,
+) {
+	const activeJobRun = await getImportJobRunById(env, message.jobRunId);
+
+	if (
+		!activeJobRun ||
+		!["running", "queued"].includes(activeJobRun.status) ||
+		activeJobRun.selected_count > 0
+	) {
+		logEvent("tmdb-provider-refresh-discovery-message-skipped", {
+			jobRunId: message.jobRunId,
+			messageId: message.messageId,
+			status: activeJobRun?.status ?? "missing",
+			selected: activeJobRun?.selected_count ?? 0,
+		});
+		return;
+	}
+
+	const attempt = Math.max(1, message.attempt || 1);
+	const checkpoint = parseDiscoveryCheckpoint(
+		activeJobRun.result_json,
+		message.endDate,
+	);
+
+	try {
+		const discovery = await processDiscoveryChunk(
+			env,
+			message.jobRunId,
+			{
+				...checkpoint,
+				attempt,
+				maxAttempts: TMDB_PROVIDER_DISCOVERY_MAX_ATTEMPTS,
+				error: null,
+			},
+			attempt,
+		);
+
+		if (discovery.complete) {
+			await queueProviderRefreshCandidateRows(
+				env,
+				message.jobRunId,
+				activeJobRun.trigger as ImportJobTrigger,
+				activeJobRun.started_at,
+				message.endDate,
+				discovery.checkpoint,
+			);
+			return;
+		}
+
+		await sendProviderRefreshDiscoveryMessage(env, {
+			kind: "tmdb-provider-refresh-discovery",
+			jobRunId: message.jobRunId,
+			messageId: `${message.jobRunId}-discovery-${String(
+				discovery.checkpoint.pagesRead + 1,
+			).padStart(6, "0")}`,
+			endDate: message.endDate,
+			attempt: 1,
+		});
+	} catch (error) {
+		const lastError =
+			error instanceof Error
+				? error.message
+				: "TMDB provider refresh Discover candidate build failed.";
+		const discoveryProgress =
+			error instanceof TmdbProviderRefreshDiscoveryError
+				? error.progress
+				: checkpoint;
+		const nextAttempt = attempt + 1;
+
+		if (attempt < TMDB_PROVIDER_DISCOVERY_MAX_ATTEMPTS) {
+			const retryCheckpoint = snapshotDiscoveryCheckpoint(
+				discoveryProgress,
+				"discovery-retry-scheduled",
+				nextAttempt,
+				lastError,
+			);
+
+			await saveDiscoveryCheckpoint(env, message.jobRunId, retryCheckpoint);
+			await sendProviderRefreshDiscoveryMessage(
+				env,
+				{
+					kind: "tmdb-provider-refresh-discovery",
+					jobRunId: message.jobRunId,
+					messageId: `${message.jobRunId}-discovery-retry-${String(
+						nextAttempt,
+					).padStart(2, "0")}`,
+					endDate: message.endDate,
+					attempt: nextAttempt,
+				},
+				TMDB_PROVIDER_DISCOVERY_RETRY_DELAY_SECONDS,
+			);
+
+			logEvent("tmdb-provider-refresh-discovery-retry-scheduled", {
+				jobRunId: message.jobRunId,
+				messageId: message.messageId,
+				attempt,
+				nextAttempt,
+				maxAttempts: TMDB_PROVIDER_DISCOVERY_MAX_ATTEMPTS,
+				error: lastError,
+			});
+			return;
+		}
+
+		const endedAtMs = Date.now();
+		const endedAt = new Date(endedAtMs).toISOString();
+		const result = {
+			jobRunId: message.jobRunId,
+			trigger: activeJobRun.trigger,
+			status: "cancelled",
+			reason: "tmdb_provider_refresh_discovery_failed_after_retries",
+			phase: discoveryProgress.phase,
+			discoveryProgress: snapshotDiscoveryCheckpoint(
+				discoveryProgress,
+				"discovery-failed-after-retries",
+				attempt,
+				lastError,
+			),
+			error: lastError,
+			startedAt: activeJobRun.started_at,
+			endedAt,
+			durationMs: endedAtMs - parseStoredUtcTimestamp(activeJobRun.started_at),
+		};
+
+		await finishImportJobRun(env, message.jobRunId, {
+			status: "cancelled",
+			errors: 1,
+			result,
+			lastError,
+		});
+
+		logEvent("tmdb-provider-refresh-cancelled", result);
+	}
 }
 
 export async function enqueueTmdbProviderRefreshJob(
@@ -450,6 +912,8 @@ export async function enqueueTmdbProviderRefreshJob(
 			});
 		}
 
+		await cancelStaleProviderRefreshRuns(env);
+
 		const activeProviderRun = await getActiveImportJobRun(
 			env,
 			TMDB_PROVIDER_REFRESH_JOB_NAME,
@@ -494,95 +958,36 @@ export async function enqueueTmdbProviderRefreshJob(
 			startedAt,
 		});
 
-		const discovery = await loadUsFlatrateCandidateStaging(
-			env,
-			jobRunId,
+		const checkpoint = buildInitialDiscoveryCheckpoint(
 			endDate,
+			"discovery-queued",
 		);
 
-		if (discovery.stopReason !== "end_of_windows") {
-			throw new Error(
-				`TMDB provider refresh Discover stopped before all windows finished: ${discovery.stopReason}`,
-			);
-		}
+		await saveDiscoveryCheckpoint(env, jobRunId, checkpoint);
+		await sendProviderRefreshDiscoveryMessage(env, {
+			kind: "tmdb-provider-refresh-discovery",
+			jobRunId,
+			messageId: `${jobRunId}-discovery-000001`,
+			endDate,
+			attempt: 1,
+		});
 
-		const rows = await getProviderRefreshCandidateRows(env, jobRunId);
-		let queueMessages: TmdbProviderRefreshQueueMessage[] = [];
-		let rowsQueued = 0;
-		let messagesQueued = 0;
-		let messageNumber = 0;
-
-		async function flushQueueMessages() {
-			if (queueMessages.length === 0) {
-				return;
-			}
-
-			await env.TMDB_ENRICHMENT_QUEUE.sendBatch(
-				queueMessages.map((message) => ({ body: message })),
-			);
-
-			messagesQueued += queueMessages.length;
-			queueMessages = [];
-		}
-
-		for (
-			let index = 0;
-			index < rows.length;
-			index += TMDB_PROVIDER_REFRESH_IDS_PER_QUEUE_MESSAGE
-		) {
-			const tmdbIds = rows
-				.slice(index, index + TMDB_PROVIDER_REFRESH_IDS_PER_QUEUE_MESSAGE)
-				.map((row) => row.tmdb_id);
-			messageNumber += 1;
-
-			queueMessages.push({
-				kind: "tmdb-provider-refresh",
-				jobRunId,
-				messageId: `${jobRunId}-${String(messageNumber).padStart(6, "0")}`,
-				tmdbIds,
-			});
-			rowsQueued += tmdbIds.length;
-
-			if (
-				queueMessages.length >=
-				TMDB_PROVIDER_REFRESH_QUEUE_MESSAGES_PER_SEND_BATCH
-			) {
-				await flushQueueMessages();
-			}
-		}
-
-		await flushQueueMessages();
-
-		const endedAtMs = Date.now();
-		const endedAt = new Date(endedAtMs).toISOString();
+		const queuedAtMs = Date.now();
+		const queuedAt = new Date(queuedAtMs).toISOString();
 		const result = {
 			trigger: options.trigger,
 			beginDate: TMDB_PROVIDER_REFRESH_BEGIN_DATE,
 			endDate,
-			...discovery,
-			selected: rows.length,
-			rowsQueued,
-			messagesQueued,
+			phase: "candidate_discovery",
+			discoveryQueued: true,
+			discoveryMessageId: `${jobRunId}-discovery-000001`,
 			jobRunId,
 			startedAt,
-			endedAt,
-			durationMs: endedAtMs - startedAtMs,
+			queuedAt,
+			durationMs: queuedAtMs - startedAtMs,
 		};
 
-		if (rows.length === 0) {
-			await finishImportJobRun(env, jobRunId, {
-				status: "complete",
-				result,
-			});
-		} else {
-			await setImportJobRunQueueTotals(env, jobRunId, {
-				selected: rows.length,
-				queued: rowsQueued,
-				result,
-			});
-		}
-
-		logEvent("tmdb-provider-refresh-enqueue-end", result);
+		logEvent("tmdb-provider-refresh-discovery-queued", result);
 
 		return result;
 	} catch (error) {

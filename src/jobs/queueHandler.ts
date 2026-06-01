@@ -12,7 +12,9 @@ import {
 	processTmdbNewMovieDetailsRows,
 } from "../imports/tmdbNewMovieDetails";
 import {
+	isTmdbProviderRefreshDiscoveryQueueMessage,
 	isTmdbProviderRefreshQueueMessage,
+	processTmdbProviderRefreshDiscoveryMessage,
 	processTmdbProviderRefreshRows,
 } from "../imports/tmdbProviderRefresh";
 import { logEvent } from "../shared/logging";
@@ -71,6 +73,12 @@ export async function handleQueue(
 					message.body.messageId,
 				);
 
+				message.ack();
+				continue;
+			}
+
+			if (isTmdbProviderRefreshDiscoveryQueueMessage(message.body)) {
+				await processTmdbProviderRefreshDiscoveryMessage(env, message.body);
 				message.ack();
 				continue;
 			}

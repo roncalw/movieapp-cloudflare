@@ -241,6 +241,30 @@ export async function updateImportJobRunProgress(
 		.run();
 }
 
+export async function touchImportJobRunProgress(
+	env: Env,
+	jobRunId: string,
+	progress: {
+		result?: unknown;
+		lastError?: string | null;
+	},
+) {
+	await env.DB.prepare(
+		`UPDATE import_job_runs
+		 SET last_progress_at = CURRENT_TIMESTAMP,
+		     result_json = COALESCE(?, result_json),
+		     last_error = COALESCE(?, last_error)
+		 WHERE job_run_id = ?
+		   AND status IN ('running', 'queued')`,
+	)
+		.bind(
+			progress.result === undefined ? null : JSON.stringify(progress.result),
+			progress.lastError ?? null,
+			jobRunId,
+		)
+		.run();
+}
+
 export async function finishImportJobRun(
 	env: Env,
 	jobRunId: string,
