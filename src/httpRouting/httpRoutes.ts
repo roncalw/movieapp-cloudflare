@@ -4,6 +4,10 @@ import {
 } from "../imports/imdbRatings";
 import { enqueueCacheWarmSearchJob } from "../cache/cacheWarmJob";
 import {
+	AppVersionRequestValidationError,
+	getCachedAppVersionResponse,
+} from "./appVersion";
+import {
 	checkMovieListPotentialLoadCounts,
 	recordMovieListCurrentCountSnapshot,
 } from "../imports/movieListLoadCounts";
@@ -197,6 +201,29 @@ export async function handleFetch(
 			}
 
 			return Response.json({ error: "Movie search failed." }, { status: 500 });
+		}
+	}
+
+	if (url.pathname === "/app-version/latest") {
+		try {
+			return await getCachedAppVersionResponse(request, env, url, ctx);
+		} catch (error) {
+			if (error instanceof AppVersionRequestValidationError) {
+				return Response.json({ error: error.message }, { status: 400 });
+			}
+
+			logEvent("app-version-endpoint-failed", {
+				error: error instanceof Error ? error.message : String(error),
+			});
+			console.error(
+				"App version lookup failed:",
+				error instanceof Error ? error.message : String(error),
+			);
+
+			return Response.json(
+				{ error: "App version lookup failed." },
+				{ status: 500 },
+			);
 		}
 	}
 

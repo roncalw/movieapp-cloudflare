@@ -16,6 +16,8 @@
 	"vars": {
 		"ALL_JOBS_PAUSED": "false",
 		"CACHE_WARM_JOB_PAUSED": "false",
+		"GOOGLE_PLAY_PACKAGE_NAME": "com.codefest.movieapp",
+		"GOOGLE_PLAY_TRACK": "production",
 		"IMDB_JOB_PAUSED": "false",
 		"JOB_NOTIFICATION_EMAIL_ENABLED": "true",
 		"JOB_NOTIFICATION_EMAIL_FROM": "movieapp-jobs@codefest.com",

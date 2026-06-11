@@ -23,6 +23,7 @@
     - [X] [Step 7: Load The IMDb Ratings Staging Table](#step-7-load-the-imdb-ratings-staging-table)
   - TMDB Setup And Load Into Staging
     - [ ] [Step 8: Add The TMDB API Key As A Secret](#step-8-add-the-tmdb-api-key-as-a-secret)
+    - [ ] [Step 8A: Add Google Play Developer API Credentials](#step-8a-add-google-play-developer-api-credentials)
     - [ ] [Step 9: Load The TMDB Staging Tables](#step-9-load-the-tmdb-staging-tables)
   - Final Movie List Build And Filter Checks
     - [ ] [Step 10: Build The Final Movie List Table](#step-10-build-the-final-movie-list-table)
@@ -2793,7 +2794,7 @@ So the local `.dev.vars` key, the deployed Cloudflare secret name, and the Worke
 <div><span class="ooo">[</span> X <span class="ooo">]</span> For local development, create this file:</div>
 
 ```text
-/Users/croncallo/repo/MovieApp-Cloudflare/.dev.vars
+/Users/croncallo/repo/movieapp-cloudflare/.dev.vars
 ```
 
 Important:
@@ -2894,6 +2895,767 @@ TypeScript still needs the Env type updated so the code is allowed to read env.T
 ```
 
 You need this in place before adding the TMDB loading code in Step 9.
+
+<a id="step-8a-add-google-play-developer-api-credentials"></a>
+## Step 8A: Add Google Play Developer API Credentials
+
+This step is for the Settings page update-check feature.
+
+The iOS side can read latest App Store version metadata from Apple's public lookup API.
+
+Android is different:
+
+```text
+The public Google Play listing is not a reliable version API.
+```
+
+The listing can load successfully in a browser and still not expose a dependable `versionName` value for the Worker to read. Do not build the app update check by scraping the public Play Store HTML.
+
+Use the official Google Play Developer API for Android update metadata.
+
+The Worker should use that API to read the latest production release information for:
+
+```text
+package name:
+  com.codefest.movieapp
+
+track:
+  production
+```
+
+The important Android comparison value is:
+
+```text
+versionCode
+```
+
+In Android, `versionCode` is the monotonic build number. It is the safest value for deciding whether an installed app is older than the Play Store release.
+
+The user-facing `versionName` is still useful for display, such as `3.3.1`, but the update decision should be:
+
+```text
+installed versionCode < latest production versionCode
+```
+
+### Step 8A-0: How The Pieces Fit Together
+
+There are three different Google things involved. Their names are similar, but they do different jobs:
+
+```text
+1. Google Play Console
+   Owns the app listing and release data for:
+   com.codefest.movieapp
+
+2. Google Cloud project: MovieApp Play API
+   Holds the machine credentials the Worker uses.
+
+3. Google API product: Google Play Android Developer API
+   The official API endpoint that can read Google Play release metadata.
+```
+
+The Cloudflare Worker needs the API enabled because the Android update check works like this:
+
+```text
+MovieApp Settings screen
+  -> calls Cloudflare /app-version/latest
+
+Cloudflare Worker
+  -> signs in as the Google service account
+  -> asks Google Play Android Developer API for the production release
+
+Google Play Android Developer API
+  -> checks that the API is enabled in the Google Cloud project
+  -> checks that the service account has Play Console access
+  -> returns Android release metadata such as versionCode
+
+Cloudflare Worker
+  -> returns latest Android versionCode to the app
+
+MovieApp Settings screen
+  -> compares installed versionCode to latest versionCode
+```
+
+Both gates are required:
+
+```text
+API enabled in Google Cloud project:
+  allows the project to call Google's Android Publisher API at all
+
+Service account invited in Play Console:
+  allows that machine identity to read this specific app's release data
+```
+
+If the service account exists but the API is not enabled, Google returns a 403 before release data is available.
+
+If the API is enabled but the service account is not invited to Play Console, Google can authenticate the request but still refuses access to the app's release data.
+
+That is why both setup steps are needed.
+
+### Step 8A-1: Create Or Choose A Google Cloud Project
+
+Open Google Cloud Console:
+
+```text
+https://console.cloud.google.com/
+```
+
+Use the Google account that owns or administers the Play Console app.
+
+Create a project or choose the existing project you want to use for MovieApp backend automation.
+
+Use a clear project name, for example:
+
+```text
+MovieApp Play API
+```
+
+### Step 8A-2: Enable The Google Play Android Developer API
+
+In Google Cloud Console, enable:
+
+```text
+Google Play Android Developer API
+```
+
+The API is also called the Android Publisher API in Google's REST documentation.
+
+Do this in the same Google Cloud project that will own the service account.
+
+For this setup, that project is:
+
+```text
+MovieApp Play API
+```
+
+Important:
+
+```text
+MovieApp Play API is our Google Cloud project.
+Google Play Android Developer API is Google's API product that must be enabled inside that project.
+```
+
+This is a required step. If it is skipped, the service account can still exist and the Play Console permissions can still look correct, but the Worker will receive a Google 403 error because the Android Publisher API is disabled for the project.
+
+Direct API page:
+
+```text
+https://console.cloud.google.com/apis/library/androidpublisher.googleapis.com?project=movieapp-play-api
+```
+
+Click:
+
+```text
+Enable
+```
+
+Do not click `Try this API` for the Worker setup. The Worker needs the API enabled for the project; it does not need a browser-based manual API test.
+
+### Step 8A-3: Create A Service Account
+
+In Google Cloud Console, go to:
+
+```text
+IAM & Admin -> Service Accounts
+```
+
+Create a service account.
+
+Suggested name:
+
+```text
+movieapp-play-version-reader
+```
+
+Suggested description:
+
+```text
+Reads MovieApp production release metadata for the Cloudflare Worker update-check endpoint.
+```
+
+Do not use your personal Google password.
+
+Do not put your personal Google login in Cloudflare.
+
+The Worker should authenticate with a service account key, not with a human account.
+
+### Step 8A-4: Create A JSON Key For The Service Account
+
+Open the service account.
+
+Create a key:
+
+```text
+Keys -> Add key -> Create new key -> JSON
+```
+
+Google will download a JSON file.
+
+Treat that file like a password.
+
+Do not commit it.
+
+Do not paste it into source code.
+
+Do not store it in this Markdown file.
+
+The JSON contains fields the Worker will need, especially:
+
+```text
+client_email
+private_key
+token_uri
+```
+
+### Step 8A-5: Grant The Service Account Access In Google Play Console
+
+Open Google Play Console:
+
+```text
+https://play.google.com/console/
+```
+
+Go to:
+
+```text
+Users and permissions
+```
+
+Invite the service account by its email address.
+
+The service account email will look similar to:
+
+```text
+movieapp-play-version-reader@your-project-id.iam.gserviceaccount.com
+```
+
+Grant access only to this app:
+
+```text
+MovieApp / com.codefest.movieapp
+```
+
+Use the narrowest permission that can read release information.
+
+If Play Console offers a dedicated read-only permission for app information or releases, use that.
+
+If the permission choices are grouped, choose read-only access that lets the service account view app information and release data. Do not grant admin, financial, or release-publishing permissions for this update-check endpoint.
+
+Plain meaning:
+
+```text
+The Worker only needs to read what version is currently published.
+It does not need to upload builds, edit releases, publish releases, or view revenue.
+```
+
+### Step 8A-6: Add Local Development Secrets
+
+For local Worker development, add the service-account values to:
+
+```text
+/Users/croncallo/repo/movieapp-cloudflare/.dev.vars
+```
+
+Recommended local variable names:
+
+```text
+GOOGLE_PLAY_PACKAGE_NAME=com.codefest.movieapp
+GOOGLE_PLAY_TRACK=production
+GOOGLE_PLAY_CLIENT_EMAIL=movieapp-play-version-reader@your-project-id.iam.gserviceaccount.com
+GOOGLE_PLAY_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+GOOGLE_PLAY_TOKEN_URI=https://oauth2.googleapis.com/token
+```
+
+Important private-key note:
+
+```text
+The JSON key's private_key value contains newline characters.
+Keep those newline escapes as \n when storing the value in .dev.vars or Cloudflare secrets.
+```
+
+Do not commit `.dev.vars`.
+
+This repo already ignores it.
+
+### Step 8A-7: Add Deployed Cloudflare Secrets
+
+For the deployed Worker, add the same sensitive values as Cloudflare secrets:
+
+```bash
+npx wrangler secret put GOOGLE_PLAY_CLIENT_EMAIL
+npx wrangler secret put GOOGLE_PLAY_PRIVATE_KEY
+npx wrangler secret put GOOGLE_PLAY_TOKEN_URI
+```
+
+Wrangler will prompt you to paste each value.
+
+The package name and track are not sensitive. They can be regular Worker vars in `wrangler.jsonc`:
+
+```jsonc
+"vars": {
+  "GOOGLE_PLAY_PACKAGE_NAME": "com.codefest.movieapp",
+  "GOOGLE_PLAY_TRACK": "production"
+}
+```
+
+It is also acceptable to store the package name and track as secrets if you want all Google Play settings managed the same way, but they do not need secret protection.
+
+### Step 8A-8: Add The Values To The Worker Env Type
+
+When the Worker code is added, update:
+
+```text
+/Users/croncallo/repo/movieapp-cloudflare/src/shared/types.ts
+```
+
+Add these fields to `Env`:
+
+```ts
+GOOGLE_PLAY_PACKAGE_NAME?: string;
+GOOGLE_PLAY_TRACK?: string;
+GOOGLE_PLAY_CLIENT_EMAIL?: string;
+GOOGLE_PLAY_PRIVATE_KEY?: string;
+GOOGLE_PLAY_TOKEN_URI?: string;
+```
+
+Use optional fields while the endpoint is being developed so local tests can cover missing-configuration errors cleanly.
+
+The endpoint should fail clearly when Android lookup is requested but the Google Play credentials are missing.
+
+### Step 8A-9: What The Worker Should Call
+
+The Worker should use the service account to request an OAuth access token with this scope:
+
+```text
+https://www.googleapis.com/auth/androidpublisher
+```
+
+Then it should call the Google Play Developer API release endpoint for the production track.
+
+Expected endpoint shape:
+
+```text
+GET https://androidpublisher.googleapis.com/androidpublisher/v3/applications/com.codefest.movieapp/tracks/production/releases
+```
+
+The Worker should read the production releases and choose the highest active `versionCode`.
+
+Google may return release version codes in either of these shapes:
+
+```json
+{
+  "name": "3.3.1",
+  "status": "completed",
+  "versionCodes": ["73"]
+}
+```
+
+or:
+
+```json
+{
+  "releaseName": "72 (3.2.7)",
+  "activeArtifacts": [
+    {
+      "versionCode": 72
+    }
+  ],
+  "releaseLifecycleState": "RELEASE_LIFECYCLE_STATE_PUBLISHED",
+  "track": "production"
+}
+```
+
+The Worker parser must support both shapes.
+
+Expected app-facing result shape:
+
+```json
+{
+  "android": {
+    "status": "ok",
+    "latestVersionCode": 73,
+    "latestVersionName": "3.3.1",
+    "track": "production",
+    "storeUrl": "https://play.google.com/store/apps/details?id=com.codefest.movieapp"
+  }
+}
+```
+
+If Google returns release metadata without a dependable display version, the endpoint should still return the authoritative `latestVersionCode`.
+
+In that case the app can display a fallback like:
+
+```text
+Latest Android build: 73
+```
+
+while still making the correct update decision from `versionCode`.
+
+### Step 8A-10: Verification Checklist
+
+Before wiring this into the React Native Settings screen, verify the Worker endpoint by itself.
+
+Expected checks:
+
+```text
+1. Local Worker returns iOS latest version from Apple lookup.
+2. Local Worker returns Android latest production versionCode from Google Play Developer API.
+3. Local Worker returns a clear configuration error if Google Play secrets are missing.
+4. Deployed Worker returns both iOS and Android metadata.
+5. Response cache headers cap Cloudflare edge caching at 24 hours.
+6. The endpoint does not write version metadata to D1.
+```
+
+Only after those pass should the React Native app be updated.
+
+### Step 8A-11: Completed Setup Record
+
+This section records the exact Google Play Developer API setup that was completed for the Android Settings update-check feature on June 10, 2026.
+
+The goal was:
+
+```text
+Let the Cloudflare Worker read the latest Android production release metadata
+without using a personal Google login and without scraping the public Play Store page.
+```
+
+The public Play Store page for `com.codefest.movieapp` can load in a browser, but it does not expose a dependable app version field for backend automation. That is why this setup uses the official Google Play Developer API instead.
+
+#### Google Cloud Project Created
+
+Google Cloud project:
+
+```text
+MovieApp Play API
+```
+
+Project id:
+
+```text
+movieapp-play-api
+```
+
+Parent resource:
+
+```text
+No organization
+```
+
+This is expected for a personal Google account.
+
+Important clarification:
+
+```text
+A Google Cloud Organization is not just a folder name.
+It is a real Google Cloud resource tied to Google Workspace or Cloud Identity
+and usually requires a verified business domain.
+```
+
+For this project, no Google Cloud Organization is required. The project under `No organization` is enough to create API credentials for the Play Developer API.
+
+#### Google Cloud Service Account Created
+
+Service account name:
+
+```text
+movieapp-play-version-reader
+```
+
+Service account email:
+
+```text
+movieapp-play-version-reader@movieapp-play-api.iam.gserviceaccount.com
+```
+
+Description:
+
+```text
+Reads MovieApp production release metadata for the Cloudflare Worker update-check endpoint.
+```
+
+Plain meaning:
+
+```text
+This service account is a machine identity.
+It is not a mailbox.
+It is not a human Google account.
+It exists so Cloudflare can authenticate to Google Play's API.
+```
+
+No broad Google Cloud role is needed for this service account. The useful permission is granted in Google Play Console, not by making the service account an Owner/Admin in Google Cloud.
+
+#### Google Play Android Developer API Enablement
+
+The Google Cloud project must have this API enabled:
+
+```text
+Google Play Android Developer API
+```
+
+Google also calls this the Android Publisher API.
+
+Direct API page:
+
+```text
+https://console.cloud.google.com/apis/library/androidpublisher.googleapis.com?project=movieapp-play-api
+```
+
+Make sure the selected Google Cloud project is:
+
+```text
+MovieApp Play API
+```
+
+If the Worker returns a 403 like this:
+
+```text
+Google Play Android Developer API has not been used in project ... before or it is disabled.
+```
+
+then the service account can authenticate, but the API is not enabled for the project yet.
+
+Fix:
+
+```text
+1. Open the Android Publisher API page.
+2. Confirm the selected project is MovieApp Play API.
+3. Click Enable.
+4. Wait a few minutes if Google says the API was enabled recently.
+5. Retry /app-version/latest.
+```
+
+#### JSON Key Created And Rotated
+
+A JSON key was created from:
+
+```text
+Google Cloud Console
+-> IAM & Admin
+-> Service Accounts
+-> movieapp-play-version-reader
+-> Keys
+-> Add key
+-> Create new key
+-> JSON
+```
+
+The first key was rotated because part of the private key was visible in a screenshot during setup.
+
+That rotation was the right response because:
+
+```text
+Private keys should never be treated as clean after screenshot/chat exposure.
+Rotating immediately is cheap and removes any doubt.
+```
+
+The replacement JSON key is the one that should be used.
+
+Do not commit the JSON key.
+
+Do not paste the JSON key into this guide.
+
+Do not screenshot the replacement private key.
+
+The only JSON fields the Worker needs are:
+
+```text
+client_email
+private_key
+token_uri
+```
+
+The JSON key does not contain these Worker-specific values:
+
+```text
+GOOGLE_PLAY_PACKAGE_NAME
+GOOGLE_PLAY_TRACK
+```
+
+Those are constants chosen by this Worker:
+
+```text
+GOOGLE_PLAY_PACKAGE_NAME=com.codefest.movieapp
+GOOGLE_PLAY_TRACK=production
+```
+
+#### Google Play Console Access Granted
+
+Google Play Console page used:
+
+```text
+Users and permissions
+```
+
+The service account was invited as a user:
+
+```text
+movieapp-play-version-reader@movieapp-play-api.iam.gserviceaccount.com
+```
+
+App selected:
+
+```text
+Movie Search: It's Movie Time!
+com.codefest.movieapp
+```
+
+Permissions granted:
+
+```text
+View app information (read-only)
+View app quality information (read-only)
+```
+
+The second permission was selected automatically by Play Console after choosing `View app information (read-only)`.
+
+Permissions intentionally not granted:
+
+```text
+Admin
+Edit and delete draft apps
+View financial data
+Manage orders and subscriptions
+Release to production
+Release apps to testing tracks
+Manage testing tracks and edit tester lists
+Manage store presence
+Reply to reviews
+Manage policy declarations
+Manage deep links
+```
+
+Reason:
+
+```text
+The Worker only needs to read release/version metadata.
+It must not be able to publish releases, edit store listings, manage orders,
+view financial data, or administer the Play Console account.
+```
+
+#### Local Worker Secret Validation
+
+Local file:
+
+```text
+/Users/croncallo/repo/movieapp-cloudflare/.dev.vars
+```
+
+The local `.dev.vars` file should contain:
+
+```text
+GOOGLE_PLAY_PACKAGE_NAME=com.codefest.movieapp
+GOOGLE_PLAY_TRACK=production
+GOOGLE_PLAY_CLIENT_EMAIL=movieapp-play-version-reader@movieapp-play-api.iam.gserviceaccount.com
+GOOGLE_PLAY_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+GOOGLE_PLAY_TOKEN_URI=https://oauth2.googleapis.com/token
+```
+
+Validation completed without printing secret values:
+
+```text
+GOOGLE_PLAY_PACKAGE_NAME exists and equals com.codefest.movieapp
+GOOGLE_PLAY_TRACK exists and equals production
+GOOGLE_PLAY_CLIENT_EMAIL exists and looks like a service-account email
+GOOGLE_PLAY_PRIVATE_KEY exists and has BEGIN/END PRIVATE KEY markers
+GOOGLE_PLAY_PRIVATE_KEY keeps escaped newline characters as \n
+GOOGLE_PLAY_TOKEN_URI exists and equals https://oauth2.googleapis.com/token
+```
+
+This repo ignores `.dev.vars`:
+
+```text
+.dev.vars*
+```
+
+So local secrets should not be committed.
+
+#### Deployed Cloudflare Secrets To Add
+
+For the deployed Worker, add the sensitive values as Cloudflare secrets:
+
+```bash
+cd /Users/croncallo/repo/movieapp-cloudflare
+npx wrangler secret put GOOGLE_PLAY_CLIENT_EMAIL
+npx wrangler secret put GOOGLE_PLAY_PRIVATE_KEY
+npx wrangler secret put GOOGLE_PLAY_TOKEN_URI
+```
+
+Use this mapping from the JSON key:
+
+```text
+GOOGLE_PLAY_CLIENT_EMAIL -> client_email
+GOOGLE_PLAY_PRIVATE_KEY  -> private_key
+GOOGLE_PLAY_TOKEN_URI    -> token_uri
+```
+
+The package name and track can be plain Worker vars because they are not secrets:
+
+```jsonc
+"vars": {
+  "GOOGLE_PLAY_PACKAGE_NAME": "com.codefest.movieapp",
+  "GOOGLE_PLAY_TRACK": "production"
+}
+```
+
+#### Screenshot Record
+
+The setup was confirmed through these browser screens:
+
+```text
+1. Google Cloud new project page:
+   - project name MovieApp Play API
+   - parent resource No organization
+
+2. Google Cloud Service Accounts list:
+   - project MovieApp Play API selected
+   - service account page opened
+
+3. Google Cloud Create service account page:
+   - service account name movieapp-play-version-reader
+   - generated service account email
+   - description entered
+
+4. Google Cloud Service Accounts list after creation:
+   - service account enabled
+   - service account email visible
+
+5. Google Play Console Users and permissions page:
+   - service account invited as a user
+
+6. Google Play Console app permission dialog:
+   - View app information (read-only) selected
+   - View app quality information (read-only) selected automatically
+   - release/admin/financial permissions left unchecked
+
+7. Google Play Console Users and permissions page after apply:
+   - 2 users shown
+   - service account active
+```
+
+The actual screenshot files are not stored in this repository yet.
+
+If screenshots are saved later, store them under:
+
+```text
+/Users/croncallo/repo/movieapp-cloudflare/.codex/assets/google-play-service-account/
+```
+
+Suggested filenames:
+
+```text
+01-google-cloud-new-project.png
+02-google-cloud-service-accounts-list.png
+03-google-cloud-create-service-account.png
+04-google-cloud-service-account-created.png
+05-play-console-invite-user.png
+06-play-console-app-permissions.png
+07-play-console-service-account-active.png
+```
+
+Then add them here using Markdown image tags, for example:
+
+```md
+![Google Cloud new project](assets/google-play-service-account/01-google-cloud-new-project.png)
+```
 
 <a id="phase-9-load-the-tmdb-movie-list-data-into-d1"></a>
 <a id="step-9-load-the-tmdb-movie-list-data-into-d1"></a>
