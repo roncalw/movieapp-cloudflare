@@ -31,6 +31,7 @@ import {
 	parseMovieListTmdbIdPath,
 	RequestValidationError,
 } from "./movieSearch";
+import { getPrivacyPolicyResponse } from "./privacyPolicy";
 import { rebuildMovieListItems } from "../imports/movieListBuild";
 import {
 	enqueueTmdbEnrichmentJob,
@@ -225,6 +226,13 @@ export async function handleFetch(
 				{ status: 500 },
 			);
 		}
+	}
+
+	if (
+		url.pathname === "/privacy" ||
+		url.pathname === "/privacy-policy"
+	) {
+		return getPrivacyPolicyResponse();
 	}
 
 	try {
