@@ -576,6 +576,119 @@ describe("MovieApp Worker", () => {
 		});
 	});
 
+	it("summarizes the latest scheduled main jobs in production order", async () => {
+		const mock = createMockEnv([
+			{
+				job_name: "cache-warm-search",
+				status: "complete_with_errors",
+				selected_count: 3024,
+				processed_count: 3024,
+				error_count: 1,
+				started_at: "2026-06-22 13:00:46",
+				ended_at: "2026-06-22 13:41:09",
+				duration_ms: 2422999,
+			},
+			{
+				job_name: "movie-list-build",
+				status: "complete",
+				selected_count: 599,
+				processed_count: 599,
+				error_count: 0,
+				started_at: "2026-06-22 12:00:45",
+				ended_at: "2026-06-22 12:01:32",
+				duration_ms: 46999,
+			},
+			{
+				job_name: "tmdb-provider-refresh",
+				status: "complete",
+				selected_count: 82511,
+				processed_count: 82511,
+				error_count: 0,
+				started_at: "2026-06-22 07:00:55",
+				ended_at: "2026-06-22 08:04:42",
+				duration_ms: 3827000,
+			},
+			{
+				job_name: "tmdb-new-movie-details",
+				status: "complete",
+				selected_count: 604,
+				processed_count: 604,
+				error_count: 0,
+				started_at: "2026-06-22 05:00:47",
+				ended_at: "2026-06-22 05:01:07",
+				duration_ms: 20000,
+			},
+			{
+				job_name: "tmdb-primary",
+				status: "complete",
+				selected_count: 677,
+				processed_count: 677,
+				error_count: 0,
+				started_at: "2026-06-22 03:00:46",
+				ended_at: "2026-06-22 03:00:58",
+				duration_ms: 12000,
+			},
+			{
+				job_name: "imdb-ratings",
+				status: "complete",
+				selected_count: 1683289,
+				processed_count: 1683289,
+				error_count: 0,
+				started_at: "2026-06-22 01:00:58",
+				ended_at: "2026-06-22 01:11:50",
+				duration_ms: 652000,
+			},
+		]);
+		const request = new IncomingRequest(
+			"http://example.com/admin/import/last-job-runs-summary",
+		);
+		const response = await worker.fetch(request, mock.env);
+		const body = (await response.json()) as Record<string, unknown>;
+
+		expect(response.status).toBe(200);
+		expect(Object.keys(body)).toEqual([
+			"IMDB",
+			"Primary",
+			"Primary Enhanced",
+			"Watch Providers",
+			"Movie Table",
+			"Cache Warming",
+		]);
+		expect(body.IMDB).toEqual({
+			Timing: {
+				Started_At: "SUNDAY - 6/21/2026 9:00:58 PM EDT",
+				Ended_At: "SUNDAY - 6/21/2026 9:11:50 PM EDT",
+				Duration: "10 minutes 52 seconds",
+			},
+			Status: "complete",
+			Work_Counts: {
+				Selected: 1683289,
+				Processed: 1683289,
+				Errors: 0,
+			},
+		});
+		expect(body["Watch Providers"]).toMatchObject({
+			Timing: {
+				Duration: "1 hour 3 minutes 47 seconds",
+			},
+		});
+		expect(body["Cache Warming"]).toEqual({
+			Timing: {
+				Started_At: "MONDAY - 6/22/2026 9:00:46 AM EDT",
+				Ended_At: "MONDAY - 6/22/2026 9:41:09 AM EDT",
+				Duration: "40 minutes 23 seconds",
+			},
+			Status: "complete_with_errors",
+			Work_Counts: {
+				Selected: 3024,
+				Processed: 3024,
+				Errors: 1,
+			},
+		});
+		expect(mock.getPreparedSql()).toContain("WHERE trigger = 'cron'");
+		expect(mock.getPreparedSql()).toContain("ROW_NUMBER() OVER");
+	});
+
 	it("requires POST for manual admin import endpoints", async () => {
 		const mock = createMockEnv([]);
 		const request = new IncomingRequest(

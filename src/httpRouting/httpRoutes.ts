@@ -52,6 +52,7 @@ import {
 import { sendJobNotificationTestEmail } from "../notifications/jobNotifications";
 import { logEvent } from "../shared/logging";
 import type { Env } from "../shared/types";
+import { getLastJobRunsSummary } from "./lastJobRunsSummary";
 
 type MovieRow = {
 	id: number;
@@ -455,6 +456,10 @@ export async function handleFetch(
 
 		const runs = await getRecentImportJobRuns(env, { jobName, limit });
 		return Response.json({ runs });
+	}
+
+	if (url.pathname === "/admin/import/last-job-runs-summary") {
+		return jsonResponse(await getLastJobRunsSummary(env));
 	}
 
 	if (url.pathname === "/admin/notifications/email-test-manual") {
