@@ -31,6 +31,12 @@ import {
 	parseMovieListTmdbIdPath,
 	RequestValidationError,
 } from "./movieSearch";
+import {
+	getCachedPersonFamilyResponse,
+	PersonFamilyRequestValidationError,
+	WikidataPersonFamilyUpstreamError,
+	WikidataPersonNotFoundError,
+} from "./personFamily";
 import { getPrivacyPolicyResponse } from "./privacyPolicy";
 import { rebuildMovieListItems } from "../imports/movieListBuild";
 import {
@@ -225,6 +231,36 @@ export async function handleFetch(
 			return Response.json(
 				{ error: "App version lookup failed." },
 				{ status: 500 },
+			);
+		}
+	}
+
+	if (url.pathname === "/people/family") {
+		try {
+			return await getCachedPersonFamilyResponse(request, url, ctx);
+		} catch (error) {
+			if (error instanceof PersonFamilyRequestValidationError) {
+				return Response.json({ error: error.message }, { status: 400 });
+			}
+
+			if (error instanceof WikidataPersonNotFoundError) {
+				return Response.json({ error: error.message }, { status: 404 });
+			}
+
+			logEvent("person-family-endpoint-failed", {
+				error: error instanceof Error ? error.message : String(error),
+			});
+			console.error(
+				"Person family lookup failed:",
+				error instanceof Error ? error.message : String(error),
+			);
+
+			return Response.json(
+				{ error: "Person family lookup failed." },
+				{
+					status:
+						error instanceof WikidataPersonFamilyUpstreamError ? 502 : 500,
+				},
 			);
 		}
 	}
