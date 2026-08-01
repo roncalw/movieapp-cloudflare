@@ -167,3 +167,6 @@ dist
 .wrangler/
 
 .codex/_rollback
+
+# Production D1 safety exports are local recovery artifacts, not source files.
+artifacts/original-language/*.sql

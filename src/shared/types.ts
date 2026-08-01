@@ -1,10 +1,17 @@
 export interface Env {
 	DB: D1Database;
 	CACHE_WARM_QUEUE: Queue<CacheWarmSearchQueueMessage>;
-	IMDB_RATING_QUEUE: Queue<ImdbRatingQueueMessage>;
+	IMDB_RATING_QUEUE: Queue<
+		ImdbRatingQueueMessage | ImdbRatingFinalizeQueueMessage
+	>;
+	TMDB_POPULARITY_QUEUE: Queue<
+		TmdbPopularityQueueMessage | TmdbPopularityFinalizeQueueMessage
+	>;
 	TMDB_ENRICHMENT_QUEUE: Queue<
 		| TmdbEnrichmentQueueMessage
 		| TmdbNewMovieDetailsQueueMessage
+		| TmdbOriginalLanguageBackfillQueueMessage
+		| TmdbOriginalLanguageResidualQueueMessage
 		| TmdbProviderRefreshDiscoveryQueueMessage
 		| TmdbProviderRefreshQueueMessage
 	>;
@@ -26,9 +33,12 @@ export interface Env {
 	CACHE_WARM_JOB_PAUSED?: string;
 	IMDB_JOB_PAUSED?: string;
 	TMDB_PRIMARY_JOB_PAUSED?: string;
+	TMDB_POPULARITY_JOB_PAUSED?: string;
 	TMDB_NEW_MOVIE_DETAILS_JOB_PAUSED?: string;
 	TMDB_ENRICH_JOB_PAUSED?: string;
 	MOVIE_LIST_JOB_PAUSED?: string;
+	PIPELINE_VALIDATION_JOB_PAUSED?: string;
+	ORIGINAL_LANGUAGE_SEARCH_ENABLED?: string;
 }
 
 export type ImdbRatingRow = {
@@ -42,6 +52,34 @@ export type ImdbRatingQueueMessage = {
 	jobRunId?: string;
 	messageId?: string;
 	rows: ImdbRatingRow[];
+};
+
+export type ImdbRatingFinalizeQueueMessage = {
+	kind: "imdb-ratings-finalize";
+	jobRunId: string;
+	messageId: string;
+	expectedRows: number;
+};
+
+export type TmdbPopularityRow = {
+	tmdb_id: number;
+	popularity: number;
+};
+
+export type TmdbPopularityQueueMessage = {
+	kind: "tmdb-popularity";
+	jobRunId: string;
+	messageId: string;
+	sourceExportDate: string;
+	rows: TmdbPopularityRow[];
+};
+
+export type TmdbPopularityFinalizeQueueMessage = {
+	kind: "tmdb-popularity-finalize";
+	jobRunId: string;
+	messageId: string;
+	sourceExportDate: string;
+	expectedRows: number;
 };
 
 export type TmdbEnrichmentQueueMessage = {
@@ -73,6 +111,21 @@ export type TmdbProviderRefreshDiscoveryQueueMessage = {
 	attempt: number;
 };
 
+export type TmdbOriginalLanguageBackfillQueueMessage = {
+	kind: "tmdb-original-language-backfill-discovery";
+	jobRunId: string;
+	messageId?: string;
+	endDate: string;
+	attempt: number;
+};
+
+export type TmdbOriginalLanguageResidualQueueMessage = {
+	kind: "tmdb-original-language-residual";
+	jobRunId: string;
+	messageId: string;
+	tmdbIds: number[];
+};
+
 export type CacheWarmSearchQueueMessage = {
 	kind: "cache-warm-search";
 	jobRunId: string;
@@ -87,7 +140,12 @@ export type CacheWarmSearchQueueMessage = {
 export type WorkerQueueMessage =
 	| CacheWarmSearchQueueMessage
 	| ImdbRatingQueueMessage
+	| ImdbRatingFinalizeQueueMessage
+	| TmdbPopularityQueueMessage
+	| TmdbPopularityFinalizeQueueMessage
 	| TmdbEnrichmentQueueMessage
 	| TmdbNewMovieDetailsQueueMessage
+	| TmdbOriginalLanguageBackfillQueueMessage
+	| TmdbOriginalLanguageResidualQueueMessage
 	| TmdbProviderRefreshDiscoveryQueueMessage
 	| TmdbProviderRefreshQueueMessage;

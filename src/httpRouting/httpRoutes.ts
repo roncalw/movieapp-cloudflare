@@ -20,17 +20,24 @@ import {
 	MOVIE_LIST_POTENTIAL_LOAD_CHECK_JOB_NAME,
 	TMDB_ENRICH_JOB_NAME,
 	TMDB_GENRE_LOOKUP_REFRESH_JOB_NAME,
+	TMDB_LANGUAGE_LOOKUP_REFRESH_JOB_NAME,
 	TMDB_NEW_MOVIE_DETAILS_JOB_NAME,
+	TMDB_ORIGINAL_LANGUAGE_BACKFILL_JOB_NAME,
+	TMDB_ORIGINAL_LANGUAGE_RESIDUAL_JOB_NAME,
 	TMDB_PRIMARY_JOB_NAME,
+	TMDB_POPULARITY_REFRESH_JOB_NAME,
 	TMDB_PROVIDER_REFRESH_JOB_NAME,
 	TMDB_WATCH_PROVIDER_LOOKUP_REFRESH_JOB_NAME,
+	WEEKLY_IMPORT_VALIDATION_JOB_NAME,
 } from "../jobs/importJobRuns";
+import { validateWeeklyImportPipeline } from "../jobs/weeklyImportValidation";
 import {
 	getCachedMovieSearchResponse,
 	getMovieListImdbRatingByTmdbId,
 	parseMovieListTmdbIdPath,
 	RequestValidationError,
 } from "./movieSearch";
+import { getCachedMovieLanguagesResponse } from "./movieLanguages";
 import {
 	getCachedPersonFamilyResponse,
 	PersonFamilyRequestValidationError,
@@ -45,6 +52,11 @@ import {
 } from "../imports/tmdbEnrichment";
 import { enqueueTmdbNewMovieDetailsJob } from "../imports/tmdbNewMovieDetails";
 import { enqueueTmdbProviderRefreshJob } from "../imports/tmdbProviderRefresh";
+import { enqueueTmdbPopularityRefresh } from "../imports/tmdbPopularity";
+import {
+	enqueueTmdbOriginalLanguageBackfill,
+} from "../imports/tmdbOriginalLanguageBackfill";
+import { enqueueTmdbOriginalLanguageResidual } from "../imports/tmdbOriginalLanguageResidual";
 import {
 	isIsoDate,
 	loadNewTmdbPrimaryRows,
@@ -53,6 +65,7 @@ import {
 } from "../imports/tmdbPrimary";
 import {
 	refreshTmdbGenreLookup,
+	refreshTmdbLanguageLookup,
 	refreshTmdbWatchProviderLookup,
 } from "../imports/tmdbLookupRefresh";
 import { sendJobNotificationTestEmail } from "../notifications/jobNotifications";
@@ -84,12 +97,17 @@ const MANUAL_MUTATION_PATHS = new Set([
 	"/admin/import/tmdb/enrich-all-manual",
 	"/admin/import/tmdb/new-movie-details-manual",
 	"/admin/import/tmdb/provider-refresh-manual",
+	"/admin/import/tmdb/popularity-refresh-manual",
 	"/admin/import/tmdb/genre-lookup-refresh-manual",
+	"/admin/import/tmdb/language-lookup-refresh-manual",
+	"/admin/import/tmdb/original-language-backfill-manual",
+	"/admin/import/tmdb/original-language-residual-manual",
 	"/admin/import/tmdb/watch-provider-lookup-refresh-manual",
 	"/admin/cache/search/warm-manual",
 	"/admin/import/movie-list/rebuild-manual",
 	"/admin/import/movie-list/potential-load-check",
 	"/admin/import/movie-list/current-count-snapshot",
+	"/admin/import/weekly-validation-manual",
 	"/admin/notifications/email-test-manual",
 ]);
 
@@ -210,6 +228,10 @@ export async function handleFetch(
 
 			return Response.json({ error: "Movie search failed." }, { status: 500 });
 		}
+	}
+
+	if (url.pathname === "/movies/languages") {
+		return getCachedMovieLanguagesResponse(request, env, ctx);
 	}
 
 	if (url.pathname === "/app-version/latest") {
@@ -522,6 +544,41 @@ export async function handleFetch(
 		}
 	}
 
+	if (url.pathname === "/admin/import/weekly-validation-manual") {
+		const allowedParams = new Set(["runDate"]);
+		for (const key of url.searchParams.keys()) {
+			if (!allowedParams.has(key)) {
+				return Response.json(
+					{
+						error:
+							"weekly-validation-manual only accepts the optional runDate query parameter.",
+					},
+					{ status: 400 },
+				);
+			}
+		}
+
+		const runDate = url.searchParams.get("runDate") ?? undefined;
+		if (runDate !== undefined && !isIsoDate(runDate)) {
+			return Response.json(
+				{ error: "runDate must use YYYY-MM-DD format." },
+				{ status: 400 },
+			);
+		}
+
+		try {
+			return Response.json(
+				await validateWeeklyImportPipeline(env, "manual", { runDate }),
+			);
+		} catch (error) {
+			return jobErrorResponse(
+				error,
+				WEEKLY_IMPORT_VALIDATION_JOB_NAME,
+				"/admin/import/job-runs?jobName=weekly-import-validation&limit=1",
+			);
+		}
+	}
+
 	if (url.pathname === "/admin/cache/search/warm-manual") {
 		const allowedParams = new Set(["genre", "genreId"]);
 		for (const key of url.searchParams.keys()) {
@@ -670,6 +727,46 @@ export async function handleFetch(
 		}
 	}
 
+	if (url.pathname === "/admin/import/tmdb/popularity-refresh-manual") {
+		const allowedParams = new Set(["sourceDate"]);
+
+		for (const key of url.searchParams.keys()) {
+			if (!allowedParams.has(key)) {
+				return Response.json(
+					{
+						error:
+							"popularity-refresh-manual only accepts the optional sourceDate query parameter.",
+					},
+					{ status: 400 },
+				);
+			}
+		}
+
+		const sourceDate = url.searchParams.get("sourceDate") ?? undefined;
+
+		if (sourceDate !== undefined && !isIsoDate(sourceDate)) {
+			return Response.json(
+				{ error: "sourceDate must use YYYY-MM-DD format." },
+				{ status: 400 },
+			);
+		}
+
+		try {
+			return Response.json(
+				await enqueueTmdbPopularityRefresh(env, {
+					trigger: "manual",
+					sourceDate,
+				}),
+			);
+		} catch (error) {
+			return jobErrorResponse(
+				error,
+				TMDB_POPULARITY_REFRESH_JOB_NAME,
+				"/admin/import/job-runs?jobName=tmdb-popularity-refresh&limit=1",
+			);
+		}
+	}
+
 	if (url.pathname === "/admin/import/tmdb/genre-lookup-refresh-manual") {
 		if (url.search !== "") {
 			return Response.json(
@@ -690,6 +787,90 @@ export async function handleFetch(
 				error,
 				TMDB_GENRE_LOOKUP_REFRESH_JOB_NAME,
 				"/admin/import/job-runs?jobName=tmdb-genre-lookup-refresh&limit=1",
+			);
+		}
+	}
+
+	if (url.pathname === "/admin/import/tmdb/language-lookup-refresh-manual") {
+		if (url.search !== "") {
+			return Response.json(
+				{
+					error:
+						"language-lookup-refresh-manual does not accept query parameters. It refreshes TMDB's original-language names.",
+				},
+				{ status: 400 },
+			);
+		}
+
+		try {
+			const result = await refreshTmdbLanguageLookup(env, "manual");
+
+			return Response.json(result);
+		} catch (error) {
+			return jobErrorResponse(
+				error,
+				TMDB_LANGUAGE_LOOKUP_REFRESH_JOB_NAME,
+				"/admin/import/job-runs?jobName=tmdb-language-lookup-refresh&limit=1",
+			);
+		}
+	}
+
+	if (
+		url.pathname ===
+		"/admin/import/tmdb/original-language-backfill-manual"
+	) {
+		if (url.search !== "") {
+			return Response.json(
+				{
+					error:
+						"original-language-backfill-manual does not accept query parameters. It safely fills only original_language for existing movie IDs.",
+				},
+				{ status: 400 },
+			);
+		}
+
+		try {
+			const result = await enqueueTmdbOriginalLanguageBackfill(
+				env,
+				"manual",
+			);
+
+			return Response.json(result);
+		} catch (error) {
+			return jobErrorResponse(
+				error,
+				TMDB_ORIGINAL_LANGUAGE_BACKFILL_JOB_NAME,
+				"/admin/import/job-runs?jobName=tmdb-original-language-backfill&limit=1",
+			);
+		}
+	}
+
+	if (
+		url.pathname ===
+		"/admin/import/tmdb/original-language-residual-manual"
+	) {
+		if (url.search !== "") {
+			return Response.json(
+				{
+					error:
+						"original-language-residual-manual does not accept query parameters. It fills only unresolved original_language values for existing movie IDs.",
+				},
+				{ status: 400 },
+			);
+		}
+
+		try {
+			const result = await enqueueTmdbOriginalLanguageResidual(
+				env,
+				"manual",
+			);
+
+			return Response.json(result);
+		} catch (error) {
+			return jobErrorResponse(
+				error,
+				TMDB_ORIGINAL_LANGUAGE_RESIDUAL_JOB_NAME,
+				"/admin/import/job-runs?jobName=tmdb-original-language-residual&limit=1",
 			);
 		}
 	}
@@ -719,8 +900,65 @@ export async function handleFetch(
 	}
 
 	if (url.pathname === "/admin/import/movie-list/rebuild-manual") {
+		const allowedParams = new Set([
+			"runDate",
+			"imdbRunId",
+			"popularityRunId",
+		]);
+		for (const key of url.searchParams.keys()) {
+			if (!allowedParams.has(key)) {
+				return Response.json(
+					{
+						error:
+							"rebuild-manual only accepts the optional runDate, imdbRunId, and popularityRunId parameters.",
+					},
+					{ status: 400 },
+				);
+			}
+		}
+
+		const dependencyRunDate = url.searchParams.get("runDate") ?? undefined;
+		const imdbRunId = url.searchParams.get("imdbRunId") ?? undefined;
+		const popularityRunId =
+			url.searchParams.get("popularityRunId") ?? undefined;
+		if (dependencyRunDate !== undefined && !isIsoDate(dependencyRunDate)) {
+			return Response.json(
+				{ error: "runDate must use YYYY-MM-DD format." },
+				{ status: 400 },
+			);
+		}
+
+		if (
+			imdbRunId !== undefined &&
+			(!imdbRunId.startsWith(`${IMDB_RATINGS_JOB_NAME}-`) ||
+				imdbRunId.length > 200)
+		) {
+			return Response.json(
+				{ error: "imdbRunId must identify an imdb-ratings job run." },
+				{ status: 400 },
+			);
+		}
+
+		if (
+			popularityRunId !== undefined &&
+			(!popularityRunId.startsWith(`${TMDB_POPULARITY_REFRESH_JOB_NAME}-`) ||
+				popularityRunId.length > 200)
+		) {
+			return Response.json(
+				{
+					error:
+						"popularityRunId must identify a tmdb-popularity-refresh job run.",
+				},
+				{ status: 400 },
+			);
+		}
+
 		try {
-			const result = await rebuildMovieListItems(env, "manual");
+			const result = await rebuildMovieListItems(env, "manual", {
+				dependencyRunDate,
+				imdbRunId,
+				popularityRunId,
+			});
 			return Response.json(result);
 		} catch (error) {
 			return jobErrorResponse(

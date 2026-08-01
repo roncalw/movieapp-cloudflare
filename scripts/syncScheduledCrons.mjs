@@ -5,7 +5,7 @@ const ROOT_DIR = resolve(new URL("..", import.meta.url).pathname);
 const WRANGLER_CONFIG_PATH = resolve(ROOT_DIR, "wrangler.jsonc");
 const OUTPUT_PATH = resolve(ROOT_DIR, "src/jobs/scheduledCronConfig.ts");
 
-const EXPECTED_CRON_COUNT = 6;
+const EXPECTED_CRON_COUNT = 8;
 
 function stripJsonComments(source) {
 	let output = "";
@@ -94,8 +94,10 @@ const [
 	tmdbPrimaryCron,
 	tmdbNewMovieDetailsCron,
 	tmdbEnrichmentCron,
+	tmdbPopularityCron,
 	movieListBuildCron,
 	cacheWarmAllGenresCron,
+	weeklyImportValidationCron,
 ] = crons.map(assertCron);
 
 const output = `// Generated from wrangler.jsonc by Wrangler's build command.
@@ -105,8 +107,10 @@ export const SCHEDULED_IMDB_CRON = ${JSON.stringify(imdbCron)};
 export const SCHEDULED_TMDB_PRIMARY_CRON = ${JSON.stringify(tmdbPrimaryCron)};
 export const SCHEDULED_TMDB_NEW_MOVIE_DETAILS_CRON = ${JSON.stringify(tmdbNewMovieDetailsCron)};
 export const SCHEDULED_TMDB_ENRICHMENT_CRON = ${JSON.stringify(tmdbEnrichmentCron)};
+export const SCHEDULED_TMDB_POPULARITY_CRON = ${JSON.stringify(tmdbPopularityCron)};
 export const SCHEDULED_MOVIE_LIST_BUILD_CRON = ${JSON.stringify(movieListBuildCron)};
 export const SCHEDULED_CACHE_WARM_ALL_GENRES_CRON = ${JSON.stringify(cacheWarmAllGenresCron)};
+export const SCHEDULED_WEEKLY_IMPORT_VALIDATION_CRON = ${JSON.stringify(weeklyImportValidationCron)};
 `;
 
 writeFileSync(OUTPUT_PATH, output, "utf8");

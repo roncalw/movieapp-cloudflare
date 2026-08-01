@@ -32,11 +32,16 @@ const JOB_NAME_TITLES: Record<string, string> = {
 	"movie-watch-providers-promote": "Movie Watch Providers Apply Step",
 	"tmdb-enrich": "TMDB Full Detail Enrichment Job",
 	"tmdb-genre-lookup-refresh": "TMDB Genre Lookup Refresh Job",
+	"tmdb-language-lookup-refresh": "TMDB Language Lookup Refresh Job",
 	"tmdb-new-movie-details": "TMDB New Movie Details Job",
+	"tmdb-original-language-backfill": "TMDB Original Language Backfill Job",
+	"tmdb-original-language-residual": "TMDB Original Language Residual Job",
 	"tmdb-primary": "TMDB Primary New Movies Job",
+	"tmdb-popularity-refresh": "TMDB Popularity Refresh Job",
 	"tmdb-provider-refresh": "TMDB Watch Provider Refresh Job",
 	"tmdb-watch-provider-lookup-refresh":
 		"TMDB Watch Provider Lookup Refresh Job",
+	"weekly-import-validation": "Weekly Import Validation",
 };
 
 function isNotificationDisabled(env: Env) {
@@ -45,6 +50,22 @@ function isNotificationDisabled(env: Env) {
 
 function getJobTitle(jobName: string) {
 	return JOB_NAME_TITLES[jobName] ?? jobName;
+}
+
+export function getEmailOutcomeLabel(status: string) {
+	if (status === "complete") {
+		return "SUCCESS";
+	}
+
+	if (["failed", "cancelled", "complete_with_errors"].includes(status)) {
+		return "FAILED";
+	}
+
+	if (status === "skipped") {
+		return "ACTION REQUIRED";
+	}
+
+	return status.toUpperCase();
 }
 
 function formatDateForRuntime(value: string | null) {
@@ -145,10 +166,42 @@ function getMonitorUrl(run: NotificationJobRunRow) {
 	return `https://movieapp-cloudflare.carlo-roncallo.workers.dev/admin/import/job-runs?jobName=${jobName}&limit=1`;
 }
 
+function getWeeklyValidationSummaryLines(run: NotificationJobRunRow) {
+	if (run.job_name !== "weekly-import-validation" || !run.result_json) {
+		return [];
+	}
+
+	try {
+		const result = JSON.parse(run.result_json) as {
+			pipelineDate?: unknown;
+			issues?: Array<{ message?: unknown }>;
+			reconciledRunCount?: unknown;
+		};
+		const issues = Array.isArray(result.issues) ? result.issues : [];
+		const lines = [
+			"",
+			`Pipeline date: ${typeof result.pipelineDate === "string" ? result.pipelineDate : "not recorded"}`,
+			`Validation issues: ${issues.length}`,
+			`Jobs changed from running to failed: ${typeof result.reconciledRunCount === "number" ? result.reconciledRunCount : 0}`,
+		];
+
+		for (const issue of issues) {
+			if (typeof issue.message === "string") {
+				lines.push(`- ${issue.message}`);
+			}
+		}
+
+		return lines;
+	} catch {
+		return [];
+	}
+}
+
 function buildEmailText(run: NotificationJobRunRow) {
 	const durationText = formatDurationMs(getDurationMs(run));
+	const outcomeLabel = getEmailOutcomeLabel(run.status);
 	const lines = [
-		"MovieApp job finished.",
+		`${outcomeLabel}: MovieApp job finished with status ${run.status}.`,
 		"",
 		`Job: ${getJobTitle(run.job_name)} (${run.job_name})`,
 		`Status: ${run.status}`,
@@ -166,6 +219,7 @@ function buildEmailText(run: NotificationJobRunRow) {
 		`Started at: ${run.started_at}`,
 		`Ended at: ${run.ended_at ?? "not recorded"}`,
 		`Last error: ${run.last_error ?? "none"}`,
+		...getWeeklyValidationSummaryLines(run),
 		"",
 		`Monitor: ${getMonitorUrl(run)}`,
 	];
@@ -316,7 +370,7 @@ export async function notifyImportJobRunCompletion(
 			{
 				from: config.from,
 				to: config.to,
-				subject: `[MovieApp] ${getJobTitle(run.job_name)} ${run.status} (${durationText})`,
+				subject: `[MovieApp] ${getEmailOutcomeLabel(run.status)}: ${getJobTitle(run.job_name)} (${run.status}, ${durationText})`,
 				text: buildEmailText(run),
 			},
 		);
@@ -353,6 +407,31 @@ export async function notifyImportJobRunCompletion(
 			error: notificationError,
 		});
 	}
+}
+
+export async function retryImportJobRunCompletionNotification(
+	env: Env,
+	jobRunId: string,
+) {
+	/*
+		A Worker can stop after claiming an email but before recording the SMTP
+		result, leaving notification_error set to "sending". The final pipeline
+		audit runs hours after the individual jobs, so it is safe for that audit to
+		clear an unfinished claim and retry. In the rare case that SMTP accepted the
+		first message but D1 did not record it, this favors a duplicate notification
+		over silently losing a failure notice.
+	*/
+	await env.DB.prepare(
+		`UPDATE import_job_runs
+		 SET notification_error = NULL
+		 WHERE job_run_id = ?
+		   AND ended_at IS NOT NULL
+		   AND notification_sent_at IS NULL`,
+	)
+		.bind(jobRunId)
+		.run();
+
+	await notifyImportJobRunCompletion(env, jobRunId);
 }
 
 export async function sendJobNotificationTestEmail(env: Env) {

@@ -292,7 +292,7 @@ const IncomingRequest = Request<unknown, IncomingRequestCfProperties>;
 		a live Cloudflare request
 		real D1 rows
 */
-function createMockEnv(rows: unknown[]) {
+function createMockEnv(rows: unknown[], envOverrides: Partial<Env> = {}) {
 	/*
 		This variable remembers the SQL string that the Worker sends to D1.
 
@@ -300,6 +300,8 @@ function createMockEnv(rows: unknown[]) {
 		That proves the Worker asked for the columns we expect.
 	*/
 	let preparedSql = "";
+	let preparedBindings: unknown[] = [];
+	let prepareCount = 0;
 
 	const env = {
 		DB: {
@@ -313,9 +315,11 @@ function createMockEnv(rows: unknown[]) {
 			*/
 			prepare(sql: string) {
 				preparedSql = sql;
+				prepareCount += 1;
 
 				return {
-					bind() {
+					bind(...bindings: unknown[]) {
+						preparedBindings = bindings;
 						return this;
 					},
 					/*
@@ -338,11 +342,15 @@ function createMockEnv(rows: unknown[]) {
 			},
 		},
 		ADMIN_IMPORT_TOKEN: "test-admin-token",
+		ORIGINAL_LANGUAGE_SEARCH_ENABLED: "true",
+		...envOverrides,
 	} as unknown as Env;
 
 	return {
 		env,
 		getPreparedSql: () => preparedSql,
+		getPreparedBindings: () => preparedBindings,
+		getPrepareCount: () => prepareCount,
 	};
 }
 
@@ -440,6 +448,7 @@ describe("MovieApp Worker", () => {
 				imdb_rating: 8.8,
 				imdb_vote_count: 9981,
 				popularity: 12.34,
+				original_language: "en",
 			},
 		];
 		const mock = createMockEnv(rows);
@@ -455,6 +464,7 @@ describe("MovieApp Worker", () => {
 					tmdb_id: 281979,
 					poster_path: "/ikb6cZI8RXUqcxApMJmIdimAJ1X.jpg",
 					imdb_rating: 8.8,
+					original_language: "en",
 				},
 			],
 			nextCursor: null,
@@ -467,6 +477,155 @@ describe("MovieApp Worker", () => {
 		expect(mock.getPreparedSql()).toContain(
 			"FROM movie_genres AS genre",
 		);
+		expect(mock.getPreparedSql()).toContain(
+			"INDEXED BY idx_movie_list_items_search_imdb_v2_cover",
+		);
+	});
+
+	it("uses a language-first covering index for adaptable language filtering", async () => {
+		const mock = createMockEnv([]);
+		const request = new IncomingRequest(
+			"http://language-filter.example/movies/search?originalLanguages=KO,en,ko&pageSize=20",
+		);
+		const response = await worker.fetch(request, mock.env);
+		const body = await response.json() as {
+			originalLanguages: string[];
+		};
+
+		expect(response.status).toBe(200);
+		expect(body.originalLanguages).toEqual(["en", "ko"]);
+		expect(mock.getPreparedSql()).toContain(
+			"INDEXED BY idx_movie_list_items_language_popularity_v2_cover",
+		);
+		expect(mock.getPreparedSql()).toContain(
+			"movie.original_language IN (?, ?)",
+		);
+		expect(mock.getPreparedBindings()).toContain("en");
+		expect(mock.getPreparedBindings()).toContain("ko");
+	});
+
+	it("keeps all-language search on its separate covering index", async () => {
+		const mock = createMockEnv([]);
+		const request = new IncomingRequest(
+			"http://all-languages.example/movies/search?pageSize=20",
+		);
+		const response = await worker.fetch(request, mock.env);
+
+		expect(response.status).toBe(200);
+		expect(mock.getPreparedSql()).toContain(
+			"INDEXED BY idx_movie_list_items_search_popularity_v2_cover",
+		);
+		expect(mock.getPreparedSql()).not.toContain(
+			"movie.original_language = ?",
+		);
+	});
+
+	it("uses the language-first IMDb index for one selected language", async () => {
+		const mock = createMockEnv([]);
+		const request = new IncomingRequest(
+			"http://language-imdb.example/movies/search?originalLanguages=ja&sort=imdb&pageSize=20",
+		);
+		const response = await worker.fetch(request, mock.env);
+
+		expect(response.status).toBe(200);
+		expect(mock.getPreparedSql()).toContain(
+			"INDEXED BY idx_movie_list_items_language_imdb_v2_cover",
+		);
+		expect(mock.getPreparedSql()).toContain("movie.original_language = ?");
+		expect(mock.getPreparedBindings()).toContain("ja");
+	});
+
+	it("keeps unfiltered search on a retained v2 index when language search is disabled", async () => {
+		const mock = createMockEnv([], {
+			ORIGINAL_LANGUAGE_SEARCH_ENABLED: "false",
+		});
+		const response = await worker.fetch(
+			new IncomingRequest(
+				"http://pre-index-deploy.example/movies/search?pageSize=20",
+			),
+			mock.env,
+		);
+
+		expect(response.status).toBe(200);
+		expect(mock.getPreparedSql()).toContain(
+			"INDEXED BY idx_movie_list_items_search_popularity_v2_cover",
+		);
+	});
+
+	it("rejects malformed original-language codes before querying D1", async () => {
+		const mock = createMockEnv([]);
+		const request = new IncomingRequest(
+			"http://invalid-language.example/movies/search?originalLanguages=english",
+		);
+		const response = await worker.fetch(request, mock.env);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error:
+				"originalLanguages must be a comma-separated list of two- or three-letter language codes.",
+		});
+		expect(mock.getPrepareCount()).toBe(0);
+	});
+
+	it("returns TMDB language codes with authoritative English names", async () => {
+		const mock = createMockEnv([
+			{
+				language_code: "en",
+				english_name: "English",
+				native_name: "English",
+			},
+			{
+				language_code: "ko",
+				english_name: "Korean",
+				native_name: "한국어/조선말",
+			},
+		]);
+		const request = new IncomingRequest(
+			"http://language-lookup.example/movies/languages",
+		);
+		const response = await worker.fetch(request, mock.env);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			languages: [
+				{ code: "en", englishName: "English", nativeName: "English" },
+				{
+					code: "ko",
+					englishName: "Korean",
+					nativeName: "한국어/조선말",
+				},
+			],
+		});
+		expect(mock.getPreparedSql()).toContain(
+			"FROM tmdb_original_language_lookup",
+		);
+	});
+
+	it("canonicalizes language order and case in the movie-search cache key", async () => {
+		const mock = createMockEnv([]);
+		const firstResponse = await worker.fetch(
+			new IncomingRequest(
+				"http://language-cache.example/movies/search?pageSize=20&originalLanguages=KO,en",
+			),
+			mock.env,
+		);
+		const secondResponse = await worker.fetch(
+			new IncomingRequest(
+				"http://language-cache.example/movies/search?originalLanguages=en,ko&pageSize=20",
+			),
+			mock.env,
+		);
+
+		expect(firstResponse.status).toBe(200);
+		expect(secondResponse.status).toBe(200);
+		expect(secondResponse.headers.get("x-movieapp-cache")).toBe("HIT");
+		/*
+			The first request performs one small cache-generation lookup plus the
+			movie search. The second request repeats only the generation lookup and
+			then serves the cached movie result, so the large search runs once.
+		*/
+		expect(mock.getPrepareCount()).toBe(3);
+		expect(mock.getPreparedSql()).toContain("FROM import_job_runs");
 	});
 
 	it("returns one MovieList IMDb rating by TMDB id", async () => {
@@ -579,6 +738,16 @@ describe("MovieApp Worker", () => {
 	it("summarizes the latest scheduled main jobs in production order", async () => {
 		const mock = createMockEnv([
 			{
+				job_name: "weekly-import-validation",
+				status: "complete",
+				selected_count: 10,
+				processed_count: 10,
+				error_count: 0,
+				started_at: "2026-06-22 15:00:46",
+				ended_at: "2026-06-22 15:00:48",
+				duration_ms: 2000,
+			},
+			{
 				job_name: "cache-warm-search",
 				status: "complete_with_errors",
 				selected_count: 3024,
@@ -651,8 +820,10 @@ describe("MovieApp Worker", () => {
 			"Primary",
 			"Primary Enhanced",
 			"Watch Providers",
+			"Popularity",
 			"Movie Table",
 			"Cache Warming",
+			"Final Validation",
 		]);
 		expect(body.IMDB).toEqual({
 			Timing: {
@@ -773,6 +944,18 @@ describe("MovieApp Worker", () => {
 			),
 			mock.env,
 		);
+		const languageResponse = await worker.fetch(
+			createManualAdminRequest(
+				"http://example.com/admin/import/tmdb/language-lookup-refresh-manual?language=en-US",
+			),
+			mock.env,
+		);
+		const backfillResponse = await worker.fetch(
+			createManualAdminRequest(
+				"http://example.com/admin/import/tmdb/original-language-backfill-manual?limit=20",
+			),
+			mock.env,
+		);
 
 		expect(genreResponse.status).toBe(400);
 		expect(await genreResponse.json()).toEqual({
@@ -784,6 +967,72 @@ describe("MovieApp Worker", () => {
 			error:
 				"watch-provider-lookup-refresh-manual does not accept query parameters. It refreshes the US TMDB watch-provider lookup table.",
 		});
+		expect(languageResponse.status).toBe(400);
+		expect(await languageResponse.json()).toEqual({
+			error:
+				"language-lookup-refresh-manual does not accept query parameters. It refreshes TMDB's original-language names.",
+		});
+		expect(backfillResponse.status).toBe(400);
+		expect(await backfillResponse.json()).toEqual({
+			error:
+				"original-language-backfill-manual does not accept query parameters. It safely fills only original_language for existing movie IDs.",
+		});
+	});
+
+	it("rejects malformed popularity source dates before starting an import", async () => {
+		const mock = createMockEnv([]);
+		const request = createManualAdminRequest(
+			"http://example.com/admin/import/tmdb/popularity-refresh-manual?sourceDate=07-31-2026",
+		);
+		const response = await worker.fetch(request, mock.env);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: "sourceDate must use YYYY-MM-DD format.",
+		});
+	});
+
+	it("rejects a Movie List popularity override that is not a popularity job ID", async () => {
+		const mock = createMockEnv([]);
+		const request = createManualAdminRequest(
+			"http://example.com/admin/import/movie-list/rebuild-manual?runDate=2026-07-27&popularityRunId=imdb-ratings-cron-123",
+		);
+		const response = await worker.fetch(request, mock.env);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error:
+				"popularityRunId must identify a tmdb-popularity-refresh job run.",
+		});
+	});
+
+	it("rejects a Movie List IMDb override that is not an IMDb job ID", async () => {
+		const mock = createMockEnv([]);
+		const request = createManualAdminRequest(
+			"http://example.com/admin/import/movie-list/rebuild-manual?runDate=2026-07-27&imdbRunId=tmdb-primary-cron-123",
+		);
+		const response = await worker.fetch(request, mock.env);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: "imdbRunId must identify an imdb-ratings job run.",
+		});
+	});
+
+	it("rejects an invalid weekly validation date before querying job status", async () => {
+		const mock = createMockEnv([]);
+		const response = await worker.fetch(
+			createManualAdminRequest(
+				"http://example.com/admin/import/weekly-validation-manual?runDate=July-27",
+			),
+			mock.env,
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: "runDate must use YYYY-MM-DD format.",
+		});
+		expect(mock.getPrepareCount()).toBe(0);
 	});
 
 	it("requires an explicit limit on the limited TMDB primary manual endpoint", async () => {

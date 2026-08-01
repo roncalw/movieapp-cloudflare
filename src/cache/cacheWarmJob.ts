@@ -17,6 +17,7 @@ import {
 } from "./cacheWarmTypes";
 
 const CACHE_WARM_MESSAGES_PER_SEND_BATCH = 100;
+const DEFAULT_CACHE_WARM_ORIGINAL_LANGUAGE = "en";
 
 type EnqueueCacheWarmSearchOptions = {
 	trigger: CacheWarmTrigger;
@@ -41,6 +42,16 @@ function selectGenres(options: EnqueueCacheWarmSearchOptions) {
 	return CACHE_WARM_GENRES;
 }
 
+export function addDefaultOriginalLanguageToCacheWarmUrl(url: string) {
+	const cacheWarmUrl = new URL(url);
+	cacheWarmUrl.searchParams.set(
+		"originalLanguages",
+		DEFAULT_CACHE_WARM_ORIGINAL_LANGUAGE,
+	);
+	cacheWarmUrl.searchParams.sort();
+	return cacheWarmUrl.toString();
+}
+
 function buildQueueMessages(
 	jobRunId: string,
 	genres: CacheWarmGenreConfig[],
@@ -58,7 +69,7 @@ function buildQueueMessages(
 				genreKey: genre.key,
 				genreLabel: genre.label,
 				entryName: entry.name,
-				url: entry.url,
+				url: addDefaultOriginalLanguageToCacheWarmUrl(entry.url),
 				maxPages: CACHE_WARM_SEARCH_PAGE_LIMIT,
 			});
 		}

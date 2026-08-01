@@ -1,5 +1,5 @@
 /**
- * Human-readable summary of the six main weekly production jobs.
+ * Human-readable summary of the weekly production jobs and their final audit.
  *
  * The detailed /admin/import/job-runs endpoint is intentionally exhaustive. It
  * includes helper jobs, promotion steps, manual runs, and every database field.
@@ -15,7 +15,9 @@ import {
 	MOVIE_LIST_BUILD_JOB_NAME,
 	TMDB_NEW_MOVIE_DETAILS_JOB_NAME,
 	TMDB_PRIMARY_JOB_NAME,
+	TMDB_POPULARITY_REFRESH_JOB_NAME,
 	TMDB_PROVIDER_REFRESH_JOB_NAME,
+	WEEKLY_IMPORT_VALIDATION_JOB_NAME,
 } from "../jobs/importJobRuns";
 import { CACHE_WARM_SEARCH_JOB_NAME } from "../cache/cacheWarmTypes";
 import type { Env } from "../shared/types";
@@ -56,10 +58,18 @@ const MAIN_JOBS = [
 		responseName: "Watch Providers",
 		databaseName: TMDB_PROVIDER_REFRESH_JOB_NAME,
 	},
+	{
+		responseName: "Popularity",
+		databaseName: TMDB_POPULARITY_REFRESH_JOB_NAME,
+	},
 	{ responseName: "Movie Table", databaseName: MOVIE_LIST_BUILD_JOB_NAME },
 	{
 		responseName: "Cache Warming",
 		databaseName: CACHE_WARM_SEARCH_JOB_NAME,
+	},
+	{
+		responseName: "Final Validation",
+		databaseName: WEEKLY_IMPORT_VALIDATION_JOB_NAME,
 	},
 ] as const;
 

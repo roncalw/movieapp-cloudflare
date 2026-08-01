@@ -17,6 +17,7 @@ import {
 	createImportJobRunId,
 	finishImportJobRun,
 	getActiveImportJobRun,
+	getActiveImportJobRunForDate,
 	getImportJobRunById,
 	recordImportJobQueueMessageCompletion,
 	setImportJobRunQueueTotals,
@@ -61,7 +62,23 @@ type TmdbProviderRefreshStats = {
 	updated: number;
 	errors: number;
 	providerRowsInserted: number;
+	tmdbIDNotFoundSkippedCount: number;
 };
+
+export function classifyProviderLookupOutcome(
+	providerIds: number[] | null,
+	error: unknown,
+) {
+	if (providerIds !== null) {
+		return { kind: "providers" as const, providerIds };
+	}
+
+	if (isTerminalTmdbEnrichmentError(error)) {
+		return { kind: "movie_unavailable" as const };
+	}
+
+	return { kind: "retryable_error" as const, error };
+}
 
 type TmdbProviderRefreshDiscoveryProgress = {
 	phase: "candidate_discovery";
@@ -882,6 +899,7 @@ export async function enqueueTmdbProviderRefreshJob(
 				jobName: TMDB_PRIMARY_JOB_NAME,
 				resultJsonPath: "$.rowsInserted",
 				greaterThan: 0,
+				runDate: startedAt.slice(0, 10),
 			});
 		const dependencyRequirements: ImportJobDependencyRequirement[] = [
 			{ jobName: TMDB_PRIMARY_JOB_NAME },
@@ -899,6 +917,7 @@ export async function enqueueTmdbProviderRefreshJob(
 		const dependencies = await checkImportJobDependencies(
 			env,
 			dependencyRequirements,
+			startedAt.slice(0, 10),
 		);
 
 		if (!dependencies.ok) {
@@ -914,13 +933,16 @@ export async function enqueueTmdbProviderRefreshJob(
 
 		await cancelStaleProviderRefreshRuns(env);
 
-		const activeProviderRun = await getActiveImportJobRun(
+		const runDate = startedAt.slice(0, 10);
+		const activeProviderRun = await getActiveImportJobRunForDate(
 			env,
 			TMDB_PROVIDER_REFRESH_JOB_NAME,
+			runDate,
 		);
-		const activeEnrichmentRun = await getActiveImportJobRun(
+		const activeEnrichmentRun = await getActiveImportJobRunForDate(
 			env,
 			TMDB_ENRICH_JOB_NAME,
+			runDate,
 		);
 		const activeRun = activeProviderRun ?? activeEnrichmentRun;
 
@@ -1049,6 +1071,7 @@ export async function processTmdbProviderRefreshRows(
 	let updated = 0;
 	let errors = 0;
 	let providerRowsInserted = 0;
+	let tmdbIDNotFoundSkippedCount = 0;
 	let lastError: string | null = null;
 	let pendingStatements: D1PreparedStatement[] = [];
 	let pendingStatementMovies = 0;
@@ -1070,6 +1093,7 @@ export async function processTmdbProviderRefreshRows(
 			updated: 0,
 			errors: 0,
 			providerRowsInserted: 0,
+			tmdbIDNotFoundSkippedCount: 0,
 		};
 	}
 
@@ -1124,7 +1148,8 @@ export async function processTmdbProviderRefreshRows(
 		);
 		const retryableErrorResult = providerResults.find(
 			(result) =>
-				result.error && !isTerminalTmdbEnrichmentError(result.error),
+				classifyProviderLookupOutcome(result.providerIds, result.error).kind ===
+				"retryable_error",
 		);
 
 		if (retryableErrorResult?.error) {
@@ -1169,50 +1194,44 @@ export async function processTmdbProviderRefreshRows(
 				updated,
 				errors: errors + 1,
 				providerRowsInserted,
+				tmdbIDNotFoundSkippedCount,
 			};
 		}
 
 		for (const result of providerResults) {
-			if (result.providerIds) {
+			const outcome = classifyProviderLookupOutcome(
+				result.providerIds,
+				result.error,
+			);
+
+			if (outcome.kind === "providers") {
 				pendingStatements.push(
 					...buildProviderRefreshStatements(
 						result.row.tmdb_id,
-						result.providerIds,
+						outcome.providerIds,
 						env,
 						jobRunId,
 					),
 				);
 				pendingStatementMovies += 1;
 				updated += 1;
-				providerRowsInserted += result.providerIds.length;
+				providerRowsInserted += outcome.providerIds.length;
 
 				if (pendingStatementMovies > TMDB_PROVIDER_REFRESH_D1_BATCH_MOVIES) {
 					await flushStatements();
 				}
-			} else {
-				errors += 1;
-				lastError =
-					result.error instanceof Error
-						? result.error.message
-						: String(result.error);
+			} else if (outcome.kind === "movie_unavailable") {
+				// A missing TMDB provider resource is an accepted result. The full
+				// refresh promotion rebuilds the live US provider table from this
+				// run, so inserting no provider rows removes any obsolete providers.
+				updated += 1;
+				tmdbIDNotFoundSkippedCount += 1;
 
-				if (isTerminalTmdbEnrichmentError(result.error)) {
-					pendingStatements.push(
-						...buildProviderRefreshStatements(
-							result.row.tmdb_id,
-							[],
-							env,
-							jobRunId,
-						),
-					);
-					pendingStatementMovies += 1;
-				}
-
-				logEvent("tmdb-provider-refresh-row-error", {
+				logEvent("tmdb-provider-refresh-movie-unavailable", {
 					trigger,
 					jobRunId,
 					tmdbId: result.row.tmdb_id,
-					error: lastError,
+					outcome: "accepted_no_provider_rows",
 				});
 			}
 
@@ -1225,6 +1244,7 @@ export async function processTmdbProviderRefreshRows(
 		updated,
 		errors,
 		providerRowsInserted,
+		tmdbIDNotFoundSkippedCount,
 	};
 
 	await recordImportJobQueueMessageCompletion(env, {

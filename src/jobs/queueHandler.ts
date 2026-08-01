@@ -2,7 +2,11 @@ import {
 	isCacheWarmSearchQueueMessage,
 	processCacheWarmSearchMessage,
 } from "../cache/cacheWarmQueue";
-import { insertImdbRatingQueueRows } from "../imports/imdbRatings";
+import {
+	finalizeImdbRatingRun,
+	insertImdbRatingQueueRows,
+	isImdbRatingFinalizeQueueMessage,
+} from "../imports/imdbRatings";
 import {
 	isTmdbEnrichmentQueueMessage,
 	processTmdbEnrichmentRows,
@@ -12,20 +16,104 @@ import {
 	processTmdbNewMovieDetailsRows,
 } from "../imports/tmdbNewMovieDetails";
 import {
+	isTmdbOriginalLanguageBackfillQueueMessage,
+	processTmdbOriginalLanguageBackfillMessage,
+} from "../imports/tmdbOriginalLanguageBackfill";
+import {
+	isTmdbOriginalLanguageResidualQueueMessage,
+	processTmdbOriginalLanguageResidualMessage,
+} from "../imports/tmdbOriginalLanguageResidual";
+import {
 	isTmdbProviderRefreshDiscoveryQueueMessage,
 	isTmdbProviderRefreshQueueMessage,
 	processTmdbProviderRefreshDiscoveryMessage,
 	processTmdbProviderRefreshRows,
 } from "../imports/tmdbProviderRefresh";
+import {
+	finalizeTmdbPopularityRun,
+	isTmdbPopularityFinalizeQueueMessage,
+	isTmdbPopularityQueueMessage,
+	processTmdbPopularityRows,
+} from "../imports/tmdbPopularity";
 import { logEvent } from "../shared/logging";
 import type { Env, WorkerQueueMessage } from "../shared/types";
+import { failActiveImportJobRun } from "./importJobRuns";
+
+export const IMPORT_DEAD_LETTER_QUEUE_NAME =
+	"movieapp-import-dead-letter-queue";
+
+async function handleDeadLetterQueue(
+	batch: MessageBatch<WorkerQueueMessage>,
+	env: Env,
+) {
+	for (const message of batch.messages) {
+		const jobRunId = message.body.jobRunId;
+		const messageId = message.body.messageId ?? message.id;
+
+		if (!jobRunId) {
+			logEvent("queue-dead-letter-job-run-missing", {
+				queue: batch.queue,
+				messageId,
+				errorCount: 1,
+			});
+			message.ack();
+			continue;
+		}
+
+		const reason = `Queue message ${messageId} exhausted all delivery retries and entered ${IMPORT_DEAD_LETTER_QUEUE_NAME}.`;
+		const changed = await failActiveImportJobRun(env, jobRunId, reason);
+
+		logEvent("queue-message-dead-lettered", {
+			queue: batch.queue,
+			kind: message.body.kind ?? "imdb-ratings",
+			jobRunId,
+			messageId,
+			jobStatusChangedToFailed: changed > 0,
+			errorCount: 1,
+		});
+		message.ack();
+	}
+}
 
 export async function handleQueue(
 	batch: MessageBatch<WorkerQueueMessage>,
 	env: Env,
 ) {
+	if (batch.queue === IMPORT_DEAD_LETTER_QUEUE_NAME) {
+		await handleDeadLetterQueue(batch, env);
+		return;
+	}
+
 	for (const message of batch.messages) {
 		try {
+			if (isImdbRatingFinalizeQueueMessage(message.body)) {
+				const result = await finalizeImdbRatingRun(env, message.body);
+
+				if (result.pending) {
+					message.retry({ delaySeconds: 300 });
+				} else {
+					message.ack();
+				}
+				continue;
+			}
+
+			if (isTmdbPopularityQueueMessage(message.body)) {
+				await processTmdbPopularityRows(env, message.body);
+				message.ack();
+				continue;
+			}
+
+			if (isTmdbPopularityFinalizeQueueMessage(message.body)) {
+				const result = await finalizeTmdbPopularityRun(env, message.body);
+
+				if (result.pending) {
+					message.retry({ delaySeconds: 300 });
+				} else {
+					message.ack();
+				}
+				continue;
+			}
+
 			if (isCacheWarmSearchQueueMessage(message.body)) {
 				await processCacheWarmSearchMessage(env, message.body);
 				message.ack();
@@ -58,6 +146,24 @@ export async function handleQueue(
 					message.body.messageId,
 				);
 
+				message.ack();
+				continue;
+			}
+
+			if (isTmdbOriginalLanguageBackfillQueueMessage(message.body)) {
+				await processTmdbOriginalLanguageBackfillMessage(
+					env,
+					message.body,
+				);
+				message.ack();
+				continue;
+			}
+
+			if (isTmdbOriginalLanguageResidualQueueMessage(message.body)) {
+				await processTmdbOriginalLanguageResidualMessage(
+					env,
+					message.body,
+				);
 				message.ack();
 				continue;
 			}

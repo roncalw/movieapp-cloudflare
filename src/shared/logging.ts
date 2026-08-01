@@ -9,10 +9,15 @@ const JOB_NAME_TITLES: Record<string, string> = {
 	"movie-watch-providers-promote": "Movie Watch Providers Apply Step",
 	"tmdb-enrich": "TMDB Full Detail Enrichment Job",
 	"tmdb-genre-lookup-refresh": "TMDB Genre Lookup Refresh Job",
+	"tmdb-language-lookup-refresh": "TMDB Language Lookup Refresh Job",
 	"tmdb-new-movie-details": "TMDB New Movie Details Job",
+	"tmdb-original-language-backfill": "TMDB Original Language Backfill Job",
+	"tmdb-original-language-residual": "TMDB Original Language Residual Job",
 	"tmdb-primary": "TMDB Primary New Movies Job",
+	"tmdb-popularity-refresh": "TMDB Popularity Refresh Job",
 	"tmdb-provider-refresh": "TMDB Watch Provider Refresh Job",
 	"tmdb-watch-provider-lookup-refresh": "TMDB Watch Provider Lookup Refresh Job",
+	"weekly-import-validation": "Weekly Import Validation",
 };
 
 const EVENT_TITLE_OVERRIDES: Record<string, string> = {

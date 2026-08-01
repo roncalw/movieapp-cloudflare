@@ -26,8 +26,11 @@
 		"JOB_SMTP_PORT": "465",
 		"JOB_SMTP_USERNAME": "movieapp-jobs@codefest.com",
 		"MOVIE_LIST_JOB_PAUSED": "false",
+		"ORIGINAL_LANGUAGE_SEARCH_ENABLED": "true",
+		"PIPELINE_VALIDATION_JOB_PAUSED": "false",
 		"TMDB_ENRICH_JOB_PAUSED": "false",
 		"TMDB_NEW_MOVIE_DETAILS_JOB_PAUSED": "false",
+		"TMDB_POPULARITY_JOB_PAUSED": "false",
 		"TMDB_PRIMARY_JOB_PAUSED": "false"
 	},
 	"upload_source_maps": true,
@@ -88,6 +91,10 @@
 				"queue": "movieapp-tmdb-enrichment-queue"
 			},
 			{
+				"binding": "TMDB_POPULARITY_QUEUE",
+				"queue": "movieapp-tmdb-popularity-import-queue"
+			},
+			{
 				"binding": "CACHE_WARM_QUEUE",
 				"queue": "movieapp-cache-warm-queue"
 			}
@@ -97,18 +104,36 @@
 				"queue": "movieapp-imdb-rating-import-queue",
 				"max_batch_size": 100,
 				"max_batch_timeout": 10,
-				"max_retries": 5
+				"max_retries": 10,
+				"dead_letter_queue": "movieapp-import-dead-letter-queue"
 			},
 			{
 				"queue": "movieapp-tmdb-enrichment-queue",
 				"max_batch_size": 1,
 				"max_batch_timeout": 10,
 				"max_retries": 5,
+				"dead_letter_queue": "movieapp-import-dead-letter-queue",
 				"max_concurrency": 1
+			},
+			{
+				"queue": "movieapp-tmdb-popularity-import-queue",
+				"max_batch_size": 100,
+				"max_batch_timeout": 10,
+				"max_retries": 10,
+				"dead_letter_queue": "movieapp-import-dead-letter-queue",
+				"max_concurrency": 5
 			},
 			{
 				"queue": "movieapp-cache-warm-queue",
 				"max_batch_size": 1,
+				"max_batch_timeout": 10,
+				"max_retries": 5,
+				"dead_letter_queue": "movieapp-import-dead-letter-queue",
+				"max_concurrency": 1
+			},
+			{
+				"queue": "movieapp-import-dead-letter-queue",
+				"max_batch_size": 10,
 				"max_batch_timeout": 10,
 				"max_retries": 5,
 				"max_concurrency": 1
@@ -127,41 +152,40 @@
 				| 1:00 AM UTC
 				minute 0
 			*/
-			// Saturday
-				// IMDb Ratings Staging 
-					// 9:00 PM EDT
-						// 01:00 UTC Sunday
-			"0 1 * * 2",
+			// Weekly pipeline date: Sunday UTC.
+				// IMDb Ratings Staging
+					// 01:00 UTC Sunday (9:00 PM EDT Saturday)
+			"0 1 * * 1",
 			//============================================
-			// Saturday
-				// TMDB Primary Staging 
-					// 11:00 PM EDT
-						// 03:00 UTC Sunday
-			"0 3 * * 2",
+			// TMDB Primary Staging
+				// 03:00 UTC Sunday (11:00 PM EDT Saturday)
+			"0 3 * * 1",
 			//============================================
-			// Sunday
-				// TMDB New Movie Details Staging 
-					// 1:00 AM EDT
-						// 05:00 UTC Sunday
-			"0 5 * * 2",
+			// TMDB New Movie Details Staging
+				// 05:00 UTC Sunday (1:00 AM EDT Sunday)
+			"0 5 * * 1",
 			//============================================
-			// Sunday
-				// TMDB Watch Providers Staging 
-					// 3:00 AM EDT
-						// 07:00 UTC Sunday
-			"0 7 * * 2",
+			// TMDB Watch Providers Staging
+				// 07:00 UTC Sunday (3:00 AM EDT Sunday)
+			"0 7 * * 1",
 			//============================================
-			// Sunday
-				// Movie List Production 
-					// 8:00 AM EDT
-						// 12:00 UTC Sunday
-			"0 12 * * 2",
+			// TMDB Popularity File Staging
+				// 09:00 UTC Sunday (5:00 AM EDT Sunday)
+			"0 9 * * 1",
 			//============================================
-			// Sunday
-				// Search Cache Warm All Genres
-					// 9:00 AM EDT
-						// 13:00 UTC Sunday
-			"0 13 * * 2"
+			// Movie List Production
+				// 12:00 UTC Sunday (8:00 AM EDT Sunday)
+			"0 12 * * 1",
+			//============================================
+			// Search Cache Warm All Genres
+				// 13:00 UTC Sunday (9:00 AM EDT Sunday)
+			"0 13 * * 1",
+			//============================================
+			// Final weekly import validation
+				// 15:00 UTC Sunday (11:00 AM EDT Sunday). This is two
+				// hours after cache warming begins, so the validator can
+				// detect any job that never reached a terminal status.
+			"0 15 * * 1"
 		]
 	}
 	/**

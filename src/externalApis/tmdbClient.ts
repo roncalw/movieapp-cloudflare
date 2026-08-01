@@ -6,6 +6,7 @@ export type TmdbDiscoverResult = {
 	poster_path?: string | null;
 	release_date?: string;
 	popularity?: number;
+	original_language?: string | null;
 	genre_ids?: unknown;
 	adult?: boolean;
 };
@@ -75,6 +76,14 @@ export type TmdbWatchProviderLookupItem = {
 	display_priority?: unknown;
 };
 
+export type TmdbLanguageLookupResponse = TmdbLanguageLookupItem[];
+
+export type TmdbLanguageLookupItem = {
+	iso_639_1?: unknown;
+	english_name?: unknown;
+	name?: unknown;
+};
+
 const TMDB_MAX_REQUESTS_PER_SECOND = 35;
 const TMDB_DEFAULT_MAX_ATTEMPTS = 6;
 const TMDB_RETRY_DELAY_MS = 3000;
@@ -84,6 +93,7 @@ const tmdbRequestTimestamps: number[] = [];
 export type TmdbFetchRetryOptions = {
 	maxAttempts?: number;
 	retryDelayMs?: number;
+	retryNotFound?: boolean;
 };
 
 function sleep(ms: number) {
@@ -121,6 +131,7 @@ async function fetchTmdbJson<T>(
 	const maxAttempts =
 		retryOptions.maxAttempts ?? TMDB_DEFAULT_MAX_ATTEMPTS;
 	const retryDelayMs = retryOptions.retryDelayMs ?? TMDB_RETRY_DELAY_MS;
+	const retryNotFound = retryOptions.retryNotFound ?? true;
 
 	for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
 		await waitForTmdbRequestSlot();
@@ -138,7 +149,7 @@ async function fetchTmdbJson<T>(
 		});
 
 		const shouldRetry =
-			response.status === 404 ||
+			(response.status === 404 && retryNotFound) ||
 			response.status === 429 ||
 			response.status >= 500;
 
@@ -174,6 +185,7 @@ export async function getTmdbDiscoverPage(
 	beginDate: string,
 	env: Env,
 	endDate?: string,
+	retryOptions?: TmdbFetchRetryOptions,
 ) {
 	const url = new URL("https://api.themoviedb.org/3/discover/movie");
 	url.searchParams.set("page", String(page));
@@ -187,7 +199,7 @@ export async function getTmdbDiscoverPage(
 		url.searchParams.set("primary_release_date.lte", endDate);
 	}
 
-	return fetchTmdbJson<TmdbDiscoverPage>(url, env);
+	return fetchTmdbJson<TmdbDiscoverPage>(url, env, retryOptions);
 }
 
 export async function getTmdbUsFlatrateDiscoverPage(
@@ -223,12 +235,30 @@ export async function getTmdbMovieDetails(tmdbId: number, env: Env) {
 	return fetchTmdbJson<TmdbMovieDetails>(url, env);
 }
 
+export async function getTmdbMovieOriginalLanguage(
+	tmdbId: number,
+	env: Env,
+) {
+	const url = new URL(`https://api.themoviedb.org/3/movie/${tmdbId}`);
+
+	return fetchTmdbJson<{
+		id: number;
+		original_language?: string | null;
+	}>(url, env, {
+		maxAttempts: 6,
+		retryDelayMs: 2000,
+		retryNotFound: false,
+	});
+}
+
 export async function getTmdbMovieWatchProviders(tmdbId: number, env: Env) {
 	const url = new URL(
 		`https://api.themoviedb.org/3/movie/${tmdbId}/watch/providers`,
 	);
 
-	return fetchTmdbJson<TmdbWatchProviderResponse>(url, env);
+	return fetchTmdbJson<TmdbWatchProviderResponse>(url, env, {
+		retryNotFound: false,
+	});
 }
 
 export async function getTmdbMovieGenreLookup(language: string, env: Env) {
@@ -248,6 +278,12 @@ export async function getTmdbMovieWatchProviderLookup(
 	url.searchParams.set("watch_region", region);
 
 	return fetchTmdbJson<TmdbWatchProviderLookupResponse>(url, env);
+}
+
+export async function getTmdbLanguageLookup(env: Env) {
+	const url = new URL("https://api.themoviedb.org/3/configuration/languages");
+
+	return fetchTmdbJson<TmdbLanguageLookupResponse>(url, env);
 }
 
 export function getUsCertification(details: TmdbMovieDetails) {

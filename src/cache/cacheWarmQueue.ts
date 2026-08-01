@@ -18,6 +18,13 @@ type CacheWarmRequestResult = {
 	status: string;
 };
 
+const CACHE_WARM_CONFIRMATION_MAX_ATTEMPTS = 3;
+const CACHE_WARM_CONFIRMATION_DELAY_MS = 250;
+
+function wait(ms: number) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export function isCacheWarmSearchQueueMessage(
 	body: WorkerQueueMessage,
 ): body is CacheWarmSearchQueueMessage {
@@ -94,7 +101,7 @@ function recordCacheStatus(
 	}
 }
 
-async function warmCachePage(
+export async function warmCachePage(
 	url: string,
 	stats: CacheWarmSearchStats,
 ) {
@@ -110,15 +117,33 @@ async function warmCachePage(
 		return firstResult;
 	}
 
-	const retryResult = await requestCacheUrl(url);
-	stats.retryRequestCount += 1;
-	recordCacheStatus(stats, retryResult, true);
+	for (
+		let confirmationAttempt = 1;
+		confirmationAttempt <= CACHE_WARM_CONFIRMATION_MAX_ATTEMPTS;
+		confirmationAttempt += 1
+	) {
+		if (confirmationAttempt > 1) {
+			// Cache API writes can finish just after the response is returned. This
+			// short delay is used only after an immediate confirmation also misses.
+			await wait(CACHE_WARM_CONFIRMATION_DELAY_MS * (confirmationAttempt - 1));
+		}
 
-	if (retryResult.httpStatus >= 400) {
-		throw new Error(`Cache warm retry failed: ${retryResult.httpStatus}`);
+		const retryResult = await requestCacheUrl(url);
+		stats.retryRequestCount += 1;
+		recordCacheStatus(stats, retryResult, true);
+
+		if (retryResult.httpStatus >= 400) {
+			throw new Error(`Cache warm retry failed: ${retryResult.httpStatus}`);
+		}
+
+		if (retryResult.status === "HIT") {
+			return retryResult;
+		}
 	}
 
-	return retryResult;
+	throw new Error(
+		`Cache warm confirmation did not reach HIT after ${CACHE_WARM_CONFIRMATION_MAX_ATTEMPTS} attempts.`,
+	);
 }
 
 export async function processCacheWarmSearchMessage(

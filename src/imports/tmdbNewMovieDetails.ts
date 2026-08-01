@@ -14,7 +14,7 @@ import {
 	createImportJobRun,
 	createImportJobRunId,
 	finishImportJobRun,
-	getActiveImportJobRun,
+	getActiveImportJobRunForDate,
 	getImportJobRunById,
 	recordImportJobQueueMessageCompletion,
 	setImportJobRunQueueTotals,
@@ -156,9 +156,11 @@ export async function enqueueTmdbNewMovieDetailsJob(
 	}
 
 	try {
-		const dependencies = await checkImportJobDependencies(env, [
-			{ jobName: TMDB_PRIMARY_JOB_NAME },
-		]);
+		const dependencies = await checkImportJobDependencies(
+			env,
+			[{ jobName: TMDB_PRIMARY_JOB_NAME }],
+			startedAt.slice(0, 10),
+		);
 
 		if (!dependencies.ok) {
 			return finishSkippedDependencyRun(env, {
@@ -171,10 +173,19 @@ export async function enqueueTmdbNewMovieDetailsJob(
 			});
 		}
 
+		const runDate = startedAt.slice(0, 10);
 		const activeRuns = await Promise.all([
-			getActiveImportJobRun(env, TMDB_NEW_MOVIE_DETAILS_JOB_NAME),
-			getActiveImportJobRun(env, TMDB_ENRICH_JOB_NAME),
-			getActiveImportJobRun(env, TMDB_PROVIDER_REFRESH_JOB_NAME),
+			getActiveImportJobRunForDate(
+				env,
+				TMDB_NEW_MOVIE_DETAILS_JOB_NAME,
+				runDate,
+			),
+			getActiveImportJobRunForDate(env, TMDB_ENRICH_JOB_NAME, runDate),
+			getActiveImportJobRunForDate(
+				env,
+				TMDB_PROVIDER_REFRESH_JOB_NAME,
+				runDate,
+			),
 		]);
 		const activeRun = activeRuns.find(Boolean);
 

@@ -22,6 +22,15 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 export const TMDB_PRIMARY_STANDARD_LIMIT = 2000000;
 export const TMDB_PRIMARY_MAX_REFRESH_AGE_DAYS = 28;
 
+export function normalizeOriginalLanguage(value: unknown) {
+	if (typeof value !== "string") {
+		return null;
+	}
+
+	const normalized = value.trim().toLowerCase();
+	return /^[a-z]{2,3}$/.test(normalized) ? normalized : null;
+}
+
 function todayIsoDate(nowMs = Date.now()) {
 	return new Date(nowMs).toISOString().slice(0, 10);
 }
@@ -209,6 +218,9 @@ function buildTmdbPrimaryStatements(
 	loadRunId: string,
 ) {
 	const tmdbId = discoverResult.id;
+	const originalLanguage = normalizeOriginalLanguage(
+		discoverResult.original_language,
+	);
 	const genreIds = Array.isArray(discoverResult.genre_ids)
 		? [...new Set(discoverResult.genre_ids.filter((genreId) => typeof genreId === "number"))]
 		: [];
@@ -235,14 +247,16 @@ function buildTmdbPrimaryStatements(
 				release_date,
 				us_certification,
 				popularity,
+				original_language,
 				imported_at
 			)
-			VALUES (?, NULL, ?, ?, ?, NULL, ?, CURRENT_TIMESTAMP)
+			VALUES (?, NULL, ?, ?, ?, NULL, ?, ?, CURRENT_TIMESTAMP)
 			ON CONFLICT(tmdb_id) DO UPDATE SET
 				title = excluded.title,
 				poster_path = excluded.poster_path,
 				release_date = excluded.release_date,
 				popularity = excluded.popularity,
+				original_language = excluded.original_language,
 				imported_at = CURRENT_TIMESTAMP`,
 		).bind(
 			tmdbId,
@@ -250,6 +264,7 @@ function buildTmdbPrimaryStatements(
 			discoverResult.poster_path ?? null,
 			discoverResult.release_date ?? null,
 			discoverResult.popularity ?? 0,
+			originalLanguage,
 		),
 		env.DB.prepare("DELETE FROM movie_genres_staging WHERE tmdb_id = ?").bind(
 			tmdbId,

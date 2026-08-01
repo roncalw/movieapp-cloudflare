@@ -1,9 +1,11 @@
 import type { Env } from "../shared/types";
+import { MOVIE_LIST_BUILD_JOB_NAME } from "../jobs/importJobRuns";
 
 type MovieSearchListItem = {
 	tmdb_id: number;
 	poster_path: string;
 	imdb_rating: number | null;
+	original_language: string | null;
 };
 
 type MovieListImdbRatingRow = {
@@ -25,6 +27,34 @@ export class RequestValidationError extends Error {}
 
 const MOVIE_SEARCH_CACHE_SECONDS = 60 * 60 * 24 * 7;
 const MOVIE_SEARCH_STALE_SECONDS = 60 * 60 * 24;
+const MOVIE_SEARCH_CACHE_GENERATION_PARAM = "__movieListBuild";
+
+type MovieSearchCacheGenerationRow = {
+	job_run_id: string;
+};
+
+async function getMovieSearchCacheGeneration(env: Env) {
+	/*
+		Each successful movie-list build receives a unique job-run ID. Adding that
+		ID to the internal cache key means a newly completed build immediately gets
+		a fresh set of cached search results. The caller's public URL is unchanged,
+		and the large movie_list_items table is queried only when the new cache key
+		misses. A request that hits the cache performs only this small indexed lookup
+		in the job-history table.
+	*/
+	const row = await env.DB.prepare(
+		`SELECT job_run_id
+		 FROM import_job_runs
+		 WHERE job_name = ?
+		   AND status = 'complete'
+		 ORDER BY started_at DESC
+		 LIMIT 1`,
+	)
+		.bind(MOVIE_LIST_BUILD_JOB_NAME)
+		.first<MovieSearchCacheGenerationRow>();
+
+	return row?.job_run_id ?? "before-first-complete-build";
+}
 
 function isIsoDate(value: string) {
 	return /^\d{4}-\d{2}-\d{2}$/.test(value);
@@ -209,6 +239,24 @@ function parseStringListParam(value: string | null) {
 	];
 }
 
+export function parseOriginalLanguagesParam(value: string | null) {
+	const originalLanguages = parseStringListParam(value)
+		.map((languageCode) => languageCode.toLowerCase())
+		.sort();
+
+	if (
+		originalLanguages.some(
+			(languageCode) => !/^[a-z]{2,3}$/.test(languageCode),
+		)
+	) {
+		throw new RequestValidationError(
+			"originalLanguages must be a comma-separated list of two- or three-letter language codes.",
+		);
+	}
+
+	return [...new Set(originalLanguages)];
+}
+
 function parseWatchMonetizationTypesParam(value: string | null) {
 	const monetizationTypes = parseStringListParam(value);
 
@@ -309,6 +357,11 @@ async function searchMovieListItems(env: Env, url: URL) {
 	const certifications = parseStringListParam(
 		url.searchParams.get("certifications"),
 	);
+	const originalLanguages = parseOriginalLanguagesParam(
+		url.searchParams.get("originalLanguages"),
+	);
+	const originalLanguageSearchEnabled =
+		env.ORIGINAL_LANGUAGE_SEARCH_ENABLED === "true";
 	const { beginDate, endDate, datePreset, endDatePreset } =
 		getMovieSearchDateRange(url);
 	const cursor = decodeMovieSearchCursor(url.searchParams.get("cursor"), sort);
@@ -333,17 +386,28 @@ async function searchMovieListItems(env: Env, url: URL) {
 		);
 	}
 
+	if (originalLanguages.length > 0 && !originalLanguageSearchEnabled) {
+		throw new RequestValidationError(
+			"Original-language search is not available yet.",
+		);
+	}
+
 	const movieIndexHint =
-		sort === "popularity"
-			? " INDEXED BY idx_movie_list_items_search_popularity_date_cover"
-			: " INDEXED BY idx_movie_list_items_search_imdb_date_cover";
+		originalLanguages.length > 0
+			? sort === "popularity"
+				? " INDEXED BY idx_movie_list_items_language_popularity_v2_cover"
+				: " INDEXED BY idx_movie_list_items_language_imdb_v2_cover"
+			: sort === "popularity"
+				? " INDEXED BY idx_movie_list_items_search_popularity_v2_cover"
+				: " INDEXED BY idx_movie_list_items_search_imdb_v2_cover";
 	const sqlParts = [
 		`SELECT
 		    movie.tmdb_id,
 		    movie.poster_path,
 		    movie.imdb_rating,
 		    movie.imdb_vote_count,
-		    movie.popularity
+		    movie.popularity,
+		    movie.original_language
 		  FROM movie_list_items AS movie${movieIndexHint}
 		  WHERE movie.release_date >= ?
 		    AND movie.release_date <= ?`,
@@ -400,6 +464,15 @@ async function searchMovieListItems(env: Env, url: URL) {
 		const placeholders = certifications.map(() => "?").join(", ");
 		sqlParts.push(`AND movie.us_certification IN (${placeholders})`);
 		bindings.push(...certifications);
+	}
+
+	if (originalLanguages.length === 1) {
+		sqlParts.push("AND movie.original_language = ?");
+		bindings.push(originalLanguages[0]);
+	} else if (originalLanguages.length > 1) {
+		const placeholders = originalLanguages.map(() => "?").join(", ");
+		sqlParts.push(`AND movie.original_language IN (${placeholders})`);
+		bindings.push(...originalLanguages);
 	}
 
 	if (cursor !== null) {
@@ -482,6 +555,7 @@ async function searchMovieListItems(env: Env, url: URL) {
 		endDate,
 		datePreset,
 		endDatePreset,
+		originalLanguages,
 	};
 }
 
@@ -500,7 +574,26 @@ export async function getCachedMovieSearchResponse(
 	url: URL,
 	ctx?: ExecutionContext,
 ) {
-	const cacheKey = new Request(url.toString(), request);
+	const searchUrl = new URL(url.toString());
+	const originalLanguages = parseOriginalLanguagesParam(
+		searchUrl.searchParams.get("originalLanguages"),
+	);
+
+	if (originalLanguages.length > 0) {
+		searchUrl.searchParams.set("originalLanguages", originalLanguages.join(","));
+	} else {
+		searchUrl.searchParams.delete("originalLanguages");
+	}
+
+	searchUrl.searchParams.sort();
+	const cacheGeneration = await getMovieSearchCacheGeneration(env);
+	const cacheUrl = new URL(searchUrl.toString());
+	cacheUrl.searchParams.set(
+		MOVIE_SEARCH_CACHE_GENERATION_PARAM,
+		cacheGeneration,
+	);
+	cacheUrl.searchParams.sort();
+	const cacheKey = new Request(cacheUrl.toString(), request);
 	const cache = caches.default;
 	const cachedResponse = await cache.match(cacheKey).catch(() => undefined);
 
@@ -515,7 +608,7 @@ export async function getCachedMovieSearchResponse(
 		});
 	}
 
-	const result = await searchMovieListItems(env, url);
+	const result = await searchMovieListItems(env, searchUrl);
 	const response = Response.json(result, {
 		headers: movieSearchCacheHeaders("MISS"),
 	});

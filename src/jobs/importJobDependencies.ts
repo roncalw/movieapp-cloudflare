@@ -1,7 +1,6 @@
 import {
 	createImportJobRun,
 	finishImportJobRun,
-	getActiveImportJobRun,
 	type ImportJobRunRow,
 	type ImportJobTrigger,
 } from "./importJobRuns";
@@ -77,12 +76,45 @@ export async function getLatestImportJobRun(env: Env, jobName: string) {
 		.first<ImportJobRunRow>();
 }
 
+export async function getLatestImportJobRunForDate(
+	env: Env,
+	jobName: string,
+	runDate: string,
+) {
+	return env.DB.prepare(
+		`SELECT job_run_id,
+		        job_name,
+		        status,
+		        trigger,
+		        selected_count,
+		        queued_count,
+		        processed_count,
+		        updated_count,
+		        error_count,
+		        provider_rows_inserted,
+		        started_at,
+		        last_progress_at,
+		        ended_at,
+		        last_error,
+		        result_json
+		 FROM import_job_runs
+		 WHERE job_name = ?
+		   AND started_at >= ? || ' 00:00:00'
+		   AND started_at < datetime(? || ' 00:00:00', '+1 day')
+		 ORDER BY started_at DESC
+		 LIMIT 1`,
+	)
+		.bind(jobName, runDate, runDate)
+		.first<ImportJobRunRow>();
+}
+
 export async function getLatestCleanImportJobRunWithResultJsonNumberGreaterThan(
 	env: Env,
 	options: {
 		jobName: string;
 		resultJsonPath: string;
 		greaterThan: number;
+		runDate: string;
 	},
 ) {
 	return env.DB.prepare(
@@ -103,6 +135,8 @@ export async function getLatestCleanImportJobRunWithResultJsonNumberGreaterThan(
 		        result_json
 		 FROM import_job_runs
 		 WHERE job_name = ?
+		   AND started_at >= ? || ' 00:00:00'
+		   AND started_at < datetime(? || ' 00:00:00', '+1 day')
 		   AND status = 'complete'
 		   AND error_count = 0
 		   AND ended_at IS NOT NULL
@@ -113,33 +147,42 @@ export async function getLatestCleanImportJobRunWithResultJsonNumberGreaterThan(
 		 ORDER BY ended_at DESC
 		 LIMIT 1`,
 	)
-		.bind(options.jobName, options.resultJsonPath, options.greaterThan)
+		.bind(
+			options.jobName,
+			options.runDate,
+			options.runDate,
+			options.resultJsonPath,
+			options.greaterThan,
+		)
 		.first<ImportJobRunRow>();
 }
 
 export async function checkImportJobDependencies(
 	env: Env,
 	requirements: ImportJobDependencyRequirement[],
+	runDate: string,
 ): Promise<ImportJobDependencyCheck> {
 	const blockers: ImportJobDependencyBlocker[] = [];
 	const runs: Record<string, ImportJobRunRow> = {};
 
 	for (const requirement of requirements) {
-		const activeRun = await getActiveImportJobRun(env, requirement.jobName);
+		const latestRun = await getLatestImportJobRunForDate(
+			env,
+			requirement.jobName,
+			runDate,
+		);
 
-		if (activeRun) {
+		if (latestRun && ["queued", "running"].includes(latestRun.status)) {
 			blockers.push({
 				jobName: requirement.jobName,
 				reason: "dependency_job_active",
-				jobRunId: activeRun.job_run_id,
-				status: activeRun.status,
-				errorCount: activeRun.error_count,
-				endedAt: activeRun.ended_at,
+				jobRunId: latestRun.job_run_id,
+				status: latestRun.status,
+				errorCount: latestRun.error_count,
+				endedAt: latestRun.ended_at,
 			});
 			continue;
 		}
-
-		const latestRun = await getLatestImportJobRun(env, requirement.jobName);
 
 		if (!isCompleteWithoutErrors(latestRun)) {
 			blockers.push({

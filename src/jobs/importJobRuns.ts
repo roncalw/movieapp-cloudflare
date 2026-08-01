@@ -49,8 +49,15 @@ export type ImportJobTrigger = "manual" | "cron";
 export const TMDB_ENRICH_JOB_NAME = "tmdb-enrich";
 export const TMDB_NEW_MOVIE_DETAILS_JOB_NAME = "tmdb-new-movie-details";
 export const TMDB_PROVIDER_REFRESH_JOB_NAME = "tmdb-provider-refresh";
+export const TMDB_POPULARITY_REFRESH_JOB_NAME = "tmdb-popularity-refresh";
 export const TMDB_GENRE_LOOKUP_REFRESH_JOB_NAME =
 	"tmdb-genre-lookup-refresh";
+export const TMDB_LANGUAGE_LOOKUP_REFRESH_JOB_NAME =
+	"tmdb-language-lookup-refresh";
+export const TMDB_ORIGINAL_LANGUAGE_BACKFILL_JOB_NAME =
+	"tmdb-original-language-backfill";
+export const TMDB_ORIGINAL_LANGUAGE_RESIDUAL_JOB_NAME =
+	"tmdb-original-language-residual";
 export const TMDB_WATCH_PROVIDER_LOOKUP_REFRESH_JOB_NAME =
 	"tmdb-watch-provider-lookup-refresh";
 export const TMDB_PRIMARY_JOB_NAME = "tmdb-primary";
@@ -63,6 +70,8 @@ export const MOVIE_LIST_CURRENT_COUNT_SNAPSHOT_JOB_NAME =
 export const MOVIE_GENRES_PROMOTE_JOB_NAME = "movie-genres-promote";
 export const MOVIE_WATCH_PROVIDERS_PROMOTE_JOB_NAME =
 	"movie-watch-providers-promote";
+export const WEEKLY_IMPORT_VALIDATION_JOB_NAME =
+	"weekly-import-validation";
 
 export function createImportJobRunId(
 	jobName: string,
@@ -350,6 +359,38 @@ export async function cancelImportJobRun(
 		.run();
 
 	await notifyImportJobRunCompletion(env, jobRunId);
+}
+
+export async function failActiveImportJobRun(
+	env: Env,
+	jobRunId: string,
+	reason: string,
+) {
+	const updateResult = await env.DB.prepare(
+		`UPDATE import_job_runs
+		 SET status = 'failed',
+		     error_count = CASE WHEN error_count > 0 THEN error_count ELSE 1 END,
+		     last_progress_at = CURRENT_TIMESTAMP,
+		     ended_at = CURRENT_TIMESTAMP,
+		     last_error = ?,
+		     result_json = json_set(
+		       COALESCE(result_json, '{}'),
+		       '$.terminalFailureReason',
+		       ?,
+		       '$.terminalFailureRecordedAt',
+		       CURRENT_TIMESTAMP
+		     )
+		 WHERE job_run_id = ?
+		   AND status IN ('queued', 'running')`,
+	)
+		.bind(reason, reason, jobRunId)
+		.run();
+
+	if (updateResult.meta.changes > 0) {
+		await notifyImportJobRunCompletion(env, jobRunId);
+	}
+
+	return updateResult.meta.changes;
 }
 
 export async function getImportJobRunById(env: Env, jobRunId: string) {
@@ -740,5 +781,40 @@ export async function getActiveImportJobRun(env: Env, jobName: string) {
 		 LIMIT 1`,
 	)
 		.bind(jobName)
+		.first<ImportJobRunRow>();
+}
+
+export async function getActiveImportJobRunForDate(
+	env: Env,
+	jobName: string,
+	runDate: string,
+) {
+	return env.DB.prepare(
+		`SELECT job_run_id,
+		        job_name,
+		        status,
+		        trigger,
+		        selected_count,
+		        queued_count,
+		        processed_count,
+		        updated_count,
+		        error_count,
+		        provider_rows_inserted,
+		        started_at,
+		        last_progress_at,
+		        ended_at,
+		        last_error,
+		        result_json,
+		        notification_sent_at,
+		        notification_error
+		 FROM import_job_runs
+		 WHERE job_name = ?
+		   AND status IN ('queued', 'running')
+		   AND started_at >= ? || ' 00:00:00'
+		   AND started_at < datetime(? || ' 00:00:00', '+1 day')
+		 ORDER BY started_at DESC
+		 LIMIT 1`,
+	)
+		.bind(jobName, runDate, runDate)
 		.first<ImportJobRunRow>();
 }
