@@ -119,6 +119,13 @@ async function runScheduledTmdbPopularityRefresh(
 async function runScheduledMovieListBuild(env: Env, scheduledTime: number) {
 	return rebuildMovieListItems(env, "cron", {
 		dependencyRunDate: new Date(scheduledTime).toISOString().slice(0, 10),
+		/*
+			Popularity can differ for most of the catalog each week. The scheduled
+			invocation prepares the safe source data, then hands that large phase to
+			bounded queue ranges so no single Cron invocation can hit Cloudflare's
+			15-minute wall-time limit.
+		*/
+		queuePopularitySync: true,
 	});
 }
 

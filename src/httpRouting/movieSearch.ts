@@ -6,11 +6,17 @@ type MovieSearchListItem = {
 	poster_path: string;
 	imdb_rating: number | null;
 	original_language: string | null;
+	available_with_subscription: number | boolean;
 };
 
 type MovieListImdbRatingRow = {
 	tmdb_id: number;
 	imdb_rating: number | null;
+};
+
+type MovieCardDataRow = {
+	imdb_rating: number | null;
+	available_with_subscription: number | boolean;
 };
 
 type MovieSearchSort = "popularity" | "imdb";
@@ -28,6 +34,8 @@ export class RequestValidationError extends Error {}
 const MOVIE_SEARCH_CACHE_SECONDS = 60 * 60 * 24 * 7;
 const MOVIE_SEARCH_STALE_SECONDS = 60 * 60 * 24;
 const MOVIE_SEARCH_CACHE_GENERATION_PARAM = "__movieListBuild";
+const MOVIE_SEARCH_RESPONSE_VERSION_PARAM = "__responseVersion";
+const MOVIE_SEARCH_RESPONSE_VERSION = "subscription-availability-v1";
 
 type MovieSearchCacheGenerationRow = {
 	job_run_id: string;
@@ -97,6 +105,22 @@ export function parseMovieListTmdbIdPath(pathname: string) {
 	return tmdbId;
 }
 
+export function parseMovieCardDataTmdbIdPath(pathname: string) {
+	const match = pathname.match(/^\/movies\/(\d+)\/card-data$/);
+
+	if (!match) {
+		return null;
+	}
+
+	const tmdbId = Number(match[1]);
+
+	if (!Number.isSafeInteger(tmdbId) || tmdbId < 1) {
+		throw new RequestValidationError("tmdbId must be a positive integer.");
+	}
+
+	return tmdbId;
+}
+
 export async function getMovieListImdbRatingByTmdbId(env: Env, tmdbId: number) {
 	const row = await env.DB.prepare(
 		`SELECT
@@ -111,6 +135,38 @@ export async function getMovieListImdbRatingByTmdbId(env: Env, tmdbId: number) {
 	return {
 		tmdb_id: tmdbId,
 		imdb_rating: row?.imdb_rating ?? null,
+	};
+}
+
+export async function getMovieCardDataByTmdbId(env: Env, tmdbId: number) {
+	/*
+		This query always returns one answer, even when the movie is absent from
+		movie_list_items. That lets the app distinguish "no IMDb rating" from a
+		failed HTTP request. The provider check reads the existing US-flatrate
+		rows; it does not change or import provider data.
+	*/
+	const row = await env.DB.prepare(
+		`SELECT
+		    (SELECT imdb_rating
+		     FROM movie_list_items
+		     WHERE tmdb_id = ?
+		     LIMIT 1) AS imdb_rating,
+		    EXISTS (
+		      SELECT 1
+		      FROM movie_watch_providers
+		      WHERE tmdb_id = ?
+		        AND region = 'US'
+		    ) AS available_with_subscription`,
+	)
+		.bind(tmdbId, tmdbId)
+		.first<MovieCardDataRow>();
+
+	return {
+		tmdb_id: tmdbId,
+		imdb_rating: row?.imdb_rating ?? null,
+		available_with_subscription:
+			row?.available_with_subscription === true ||
+			row?.available_with_subscription === 1,
 	};
 }
 
@@ -400,6 +456,15 @@ async function searchMovieListItems(env: Env, url: URL) {
 			: sort === "popularity"
 				? " INDEXED BY idx_movie_list_items_search_popularity_v2_cover"
 				: " INDEXED BY idx_movie_list_items_search_imdb_v2_cover";
+	const availableWithSubscriptionSql =
+		providerIds.length > 0 || watchMonetizationTypes.includes("flatrate")
+			? "1"
+			: `EXISTS (
+		        SELECT 1
+		        FROM movie_watch_providers AS subscription_provider
+		        WHERE subscription_provider.tmdb_id = movie.tmdb_id
+		          AND subscription_provider.region = 'US'
+		      )`;
 	const sqlParts = [
 		`SELECT
 		    movie.tmdb_id,
@@ -407,7 +472,8 @@ async function searchMovieListItems(env: Env, url: URL) {
 		    movie.imdb_rating,
 		    movie.imdb_vote_count,
 		    movie.popularity,
-		    movie.original_language
+		    movie.original_language,
+		    ${availableWithSubscriptionSql} AS available_with_subscription
 		  FROM movie_list_items AS movie${movieIndexHint}
 		  WHERE movie.release_date >= ?
 		    AND movie.release_date <= ?`,
@@ -542,8 +608,12 @@ async function searchMovieListItems(env: Env, url: URL) {
 			? encodeMovieSearchCursor(lastRow, sort)
 			: null;
 	const movies = pageRows.map(
-		({ imdb_vote_count: _imdbVoteCount, popularity: _popularity, ...movie }) =>
-			movie,
+		({ imdb_vote_count: _imdbVoteCount, popularity: _popularity, ...movie }) => ({
+			...movie,
+			available_with_subscription:
+				movie.available_with_subscription === true ||
+				movie.available_with_subscription === 1,
+		}),
 	);
 
 	return {
@@ -591,6 +661,17 @@ export async function getCachedMovieSearchResponse(
 	cacheUrl.searchParams.set(
 		MOVIE_SEARCH_CACHE_GENERATION_PARAM,
 		cacheGeneration,
+	);
+	/*
+		A cache entry stores the complete JSON response. When that response gains a
+		new field, an entry saved by the previous Worker cannot supply it. Including
+		this internal format version makes the first request after deployment miss
+		the old entry and save the complete new response. This does not change the
+		public request URL or the weekly cache-job order.
+	*/
+	cacheUrl.searchParams.set(
+		MOVIE_SEARCH_RESPONSE_VERSION_PARAM,
+		MOVIE_SEARCH_RESPONSE_VERSION,
 	);
 	cacheUrl.searchParams.sort();
 	const cacheKey = new Request(cacheUrl.toString(), request);

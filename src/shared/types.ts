@@ -5,7 +5,13 @@ export interface Env {
 		ImdbRatingQueueMessage | ImdbRatingFinalizeQueueMessage
 	>;
 	TMDB_POPULARITY_QUEUE: Queue<
-		TmdbPopularityQueueMessage | TmdbPopularityFinalizeQueueMessage
+		| TmdbPopularityQueueMessage
+		| TmdbPopularityFinalizeQueueMessage
+	>;
+	MOVIE_LIST_BUILD_QUEUE: Queue<
+		| MovieListPopularitySyncQueueMessage
+		| MovieListBuildCleanupQueueMessage
+		| MovieListBuildFinalizeQueueMessage
 	>;
 	TMDB_ENRICHMENT_QUEUE: Queue<
 		| TmdbEnrichmentQueueMessage
@@ -82,6 +88,83 @@ export type TmdbPopularityFinalizeQueueMessage = {
 	expectedRows: number;
 };
 
+export type MovieListBuildQueueContext = {
+	trigger: "manual" | "cron";
+	lockOwner: string;
+	dependencyRunDate: string;
+	startedAt: string;
+	lastSuccessfulBuildEndedAt: string | null;
+	upsertedRows: number;
+	imdbSourceJobRunId: string;
+	imdbSourceMode: "legacy-time-window" | "run-separated";
+	imdbSourceStartedAt: string;
+	imdbSourceEndedAt: string;
+	imdbRunWasExplicit: boolean;
+	imdbSync: {
+		candidateRows: number;
+		updatedRows: number;
+		remainingRows: number;
+		lastTmdbId: number;
+	};
+	popularitySourceJobRunId: string;
+	popularitySourceStartedAt: string;
+	popularitySourceEndedAt: string;
+	popularityRunWasExplicit: boolean;
+	popularityCandidateRows: number;
+	popularityMaxTmdbId?: number;
+	baseSelectedRows: number;
+	baseUpdatedRows: number;
+	readiness: {
+		tmdbRows: number;
+		imdbRows: number;
+		tmdbRowsMissingEnrichment: number;
+		tmdbTerminalErrorRows: number;
+		movieListCandidateRows: number;
+	};
+	genrePromotion: unknown;
+	watchProviderPromotion: unknown;
+	imdbCleanupPreviousRunId?: string | null;
+	imdbCleanupCandidateRows?: number;
+	imdbCleanupSkipped?: boolean;
+	imdbCleanupSkipReason?: string;
+	popularityCleanupPreviousRunId?: string | null;
+	popularityCleanupCandidateRows?: number;
+};
+
+export type MovieListPopularitySyncQueueMessage = {
+	kind: "movie-list-popularity-sync";
+	jobRunId: string;
+	messageId: string;
+	lockOwner: string;
+	popularityRunId: string;
+	firstTmdbIdExclusive: number;
+	lastTmdbIdInclusive: number;
+};
+
+export type MovieListBuildCleanupQueueMessage = {
+	kind: "movie-list-build-cleanup";
+	jobRunId: string;
+	messageId: string;
+	lockOwner: string;
+	stage: "imdb-cleanup" | "popularity-cleanup";
+	selectedRunId: string;
+	previousAppliedRunId: string | null;
+	lowerImdbIdInclusive?: string | null;
+	upperImdbIdExclusive?: string | null;
+	firstTmdbIdExclusive?: number;
+	lastTmdbIdInclusive?: number;
+};
+
+export type MovieListBuildFinalizeQueueMessage = {
+	kind: "movie-list-build-finalize";
+	jobRunId: string;
+	messageId: string;
+	stage: "popularity-sync" | "imdb-cleanup" | "popularity-cleanup";
+	expectedMessageCount: number;
+	finalizerCheckCount?: number;
+	context: MovieListBuildQueueContext;
+};
+
 export type TmdbEnrichmentQueueMessage = {
 	kind: "tmdb-enrichment";
 	jobRunId: string;
@@ -143,6 +226,9 @@ export type WorkerQueueMessage =
 	| ImdbRatingFinalizeQueueMessage
 	| TmdbPopularityQueueMessage
 	| TmdbPopularityFinalizeQueueMessage
+	| MovieListPopularitySyncQueueMessage
+	| MovieListBuildCleanupQueueMessage
+	| MovieListBuildFinalizeQueueMessage
 	| TmdbEnrichmentQueueMessage
 	| TmdbNewMovieDetailsQueueMessage
 	| TmdbOriginalLanguageBackfillQueueMessage

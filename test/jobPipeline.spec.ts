@@ -216,6 +216,53 @@ describe("weekly import job safety", () => {
 		expect(preparedSql.join("\n")).toContain("SET status = 'failed'");
 	});
 
+	it("releases the Movie List lock when one of its queue messages exhausts all retries", async () => {
+		const preparedSql: string[] = [];
+		const acknowledge = vi.fn();
+		const env = {
+			JOB_NOTIFICATION_EMAIL_ENABLED: "false",
+			DB: {
+				prepare(sql: string) {
+					preparedSql.push(sql);
+					return {
+						bind() {
+							return this;
+						},
+						async run() {
+							return { meta: { changes: 1 } };
+						},
+					};
+				},
+			},
+		} as unknown as Env;
+		const batch = {
+			queue: IMPORT_DEAD_LETTER_QUEUE_NAME,
+			messages: [
+				{
+					id: "dead-letter-message-2",
+					body: {
+						kind: "movie-list-popularity-sync",
+						jobRunId: "movie-list-build-cron-current",
+						messageId: "movie-list-popularity-message-99",
+						lockOwner: "cron-lock-owner",
+						popularityRunId: "tmdb-popularity-refresh-cron-current",
+						firstTmdbIdExclusive: 0,
+						lastTmdbIdInclusive: 10_000,
+					},
+					ack: acknowledge,
+				},
+			],
+		} as unknown as MessageBatch<never>;
+
+		await handleQueue(batch, env);
+
+		expect(acknowledge).toHaveBeenCalledOnce();
+		expect(preparedSql.join("\n")).toContain("SET status = 'failed'");
+		expect(preparedSql.join("\n")).toContain(
+			"DELETE FROM import_job_locks",
+		);
+	});
+
 	it("keeps the former IMDb snapshot unchanged during run-separated imports", async () => {
 		type FakeStatement = {
 			sql: string;

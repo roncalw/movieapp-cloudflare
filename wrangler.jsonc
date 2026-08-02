@@ -95,6 +95,10 @@
 				"queue": "movieapp-tmdb-popularity-import-queue"
 			},
 			{
+				"binding": "MOVIE_LIST_BUILD_QUEUE",
+				"queue": "movieapp-movie-list-build-queue"
+			},
+			{
 				"binding": "CACHE_WARM_QUEUE",
 				"queue": "movieapp-cache-warm-queue"
 			}
@@ -118,6 +122,14 @@
 			{
 				"queue": "movieapp-tmdb-popularity-import-queue",
 				"max_batch_size": 100,
+				"max_batch_timeout": 10,
+				"max_retries": 10,
+				"dead_letter_queue": "movieapp-import-dead-letter-queue",
+				"max_concurrency": 5
+			},
+			{
+				"queue": "movieapp-movie-list-build-queue",
+				"max_batch_size": 1,
 				"max_batch_timeout": 10,
 				"max_retries": 10,
 				"dead_letter_queue": "movieapp-import-dead-letter-queue",

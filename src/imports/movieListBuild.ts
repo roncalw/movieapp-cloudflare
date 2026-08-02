@@ -34,6 +34,7 @@ import {
 } from "../jobs/importJobDependencies";
 import type { Env } from "../shared/types";
 import { logEvent } from "../shared/logging";
+import { enqueueMovieListPopularityQueueWork } from "./movieListBuildQueue";
 
 type MovieListBuildReadiness = {
 	tmdbRows: number;
@@ -800,6 +801,7 @@ export async function rebuildMovieListItems(
 		dependencyRunDate?: string;
 		imdbRunId?: string;
 		popularityRunId?: string;
+		queuePopularitySync?: boolean;
 	} = {},
 ) {
 	const startedAtMs = Date.now();
@@ -847,6 +849,7 @@ export async function rebuildMovieListItems(
 	let trackedUpsertedRows = 0;
 	let trackedImdbUpdatedRows = 0;
 	let trackedPopularityUpdatedRows = 0;
+	let releaseLockOnExit = true;
 
 	try {
 		logEvent("movie-list-build-start", {
@@ -1159,6 +1162,49 @@ export async function rebuildMovieListItems(
 			},
 		);
 
+		if (options.queuePopularitySync) {
+			const popularityCandidateRows =
+				await getMovieListPopularityDifferenceCount(env, popularityRun);
+			const queuedResult = await enqueueMovieListPopularityQueueWork(
+				env,
+				jobRunId,
+				{
+					trigger,
+					lockOwner,
+					dependencyRunDate,
+					startedAt,
+					lastSuccessfulBuildEndedAt,
+					upsertedRows,
+					imdbSourceJobRunId: imdbRun.job_run_id,
+					imdbSourceMode: imdbSource.mode,
+					imdbSourceStartedAt: imdbRun.started_at,
+					imdbSourceEndedAt: imdbRun.ended_at,
+					imdbRunWasExplicit: options.imdbRunId !== undefined,
+					imdbSync,
+					popularitySourceJobRunId: popularityRun.job_run_id,
+					popularitySourceStartedAt: popularityRun.started_at,
+					popularitySourceEndedAt: popularityRun.ended_at,
+					popularityRunWasExplicit:
+						options.popularityRunId !== undefined,
+					popularityCandidateRows,
+					baseSelectedRows:
+						readiness.movieListCandidateRows + imdbSync.candidateRows,
+					baseUpdatedRows: upsertedRows + imdbSync.updatedRows,
+					readiness,
+					genrePromotion,
+					watchProviderPromotion,
+				},
+			);
+
+			/*
+				The queue finalizer owns this lock from this point forward. Releasing it
+				here would allow another Movie List build to start while range messages
+				are still changing production rows.
+			*/
+			releaseLockOnExit = false;
+			return queuedResult;
+		}
+
 		const popularitySync = await synchronizeMovieListPopularityValues(
 			env,
 			jobRunId,
@@ -1289,6 +1335,8 @@ export async function rebuildMovieListItems(
 
 		throw error;
 	} finally {
-		await releaseImportJobLock(env, MOVIE_LIST_BUILD_JOB_NAME, lockOwner);
+		if (releaseLockOnExit) {
+			await releaseImportJobLock(env, MOVIE_LIST_BUILD_JOB_NAME, lockOwner);
+		}
 	}
 }

@@ -32,8 +32,10 @@ import {
 } from "../jobs/importJobRuns";
 import { validateWeeklyImportPipeline } from "../jobs/weeklyImportValidation";
 import {
+	getMovieCardDataByTmdbId,
 	getCachedMovieSearchResponse,
 	getMovieListImdbRatingByTmdbId,
+	parseMovieCardDataTmdbIdPath,
 	parseMovieListTmdbIdPath,
 	RequestValidationError,
 } from "./movieSearch";
@@ -295,6 +297,21 @@ export async function handleFetch(
 	}
 
 	try {
+		const movieCardDataTmdbId = parseMovieCardDataTmdbIdPath(url.pathname);
+
+		if (movieCardDataTmdbId !== null) {
+			if (url.search !== "") {
+				return Response.json(
+					{ error: "This endpoint does not accept query parameters." },
+					{ status: 400 },
+				);
+			}
+
+			return Response.json(
+				await getMovieCardDataByTmdbId(env, movieCardDataTmdbId),
+			);
+		}
+
 		const movieListRatingTmdbId = parseMovieListTmdbIdPath(url.pathname);
 
 		if (movieListRatingTmdbId !== null) {
@@ -315,7 +332,11 @@ export async function handleFetch(
 		}
 
 		return Response.json(
-			{ error: "Movie IMDb rating lookup failed." },
+			{
+				error: url.pathname.endsWith("/imdb-rating")
+					? "Movie IMDb rating lookup failed."
+					: "Movie card data lookup failed.",
+			},
 			{ status: 500 },
 		);
 	}
@@ -958,6 +979,7 @@ export async function handleFetch(
 				dependencyRunDate,
 				imdbRunId,
 				popularityRunId,
+				queuePopularitySync: true,
 			});
 			return Response.json(result);
 		} catch (error) {

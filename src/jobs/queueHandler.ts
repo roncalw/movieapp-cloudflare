@@ -35,9 +35,22 @@ import {
 	isTmdbPopularityQueueMessage,
 	processTmdbPopularityRows,
 } from "../imports/tmdbPopularity";
+import {
+	finalizeMovieListBuildQueuePhase,
+	isMovieListBuildCleanupQueueMessage,
+	isMovieListBuildFinalizeQueueMessage,
+	isMovieListPopularitySyncQueueMessage,
+	processMovieListBuildCleanupMessage,
+	processMovieListPopularitySyncMessage,
+	recordMovieListQueueError,
+} from "../imports/movieListBuildQueue";
 import { logEvent } from "../shared/logging";
 import type { Env, WorkerQueueMessage } from "../shared/types";
-import { failActiveImportJobRun } from "./importJobRuns";
+import { releaseImportJobLock } from "./importJobLocks";
+import {
+	failActiveImportJobRun,
+	MOVIE_LIST_BUILD_JOB_NAME,
+} from "./importJobRuns";
 
 export const IMPORT_DEAD_LETTER_QUEUE_NAME =
 	"movieapp-import-dead-letter-queue";
@@ -62,6 +75,23 @@ async function handleDeadLetterQueue(
 
 		const reason = `Queue message ${messageId} exhausted all delivery retries and entered ${IMPORT_DEAD_LETTER_QUEUE_NAME}.`;
 		const changed = await failActiveImportJobRun(env, jobRunId, reason);
+		const movieListLockOwner = isMovieListPopularitySyncQueueMessage(
+			message.body,
+		)
+			? message.body.lockOwner
+			: isMovieListBuildCleanupQueueMessage(message.body)
+				? message.body.lockOwner
+				: isMovieListBuildFinalizeQueueMessage(message.body)
+					? message.body.context.lockOwner
+					: null;
+
+		if (movieListLockOwner) {
+			await releaseImportJobLock(
+				env,
+				MOVIE_LIST_BUILD_JOB_NAME,
+				movieListLockOwner,
+			);
+		}
 
 		logEvent("queue-message-dead-lettered", {
 			queue: batch.queue,
@@ -86,6 +116,53 @@ export async function handleQueue(
 
 	for (const message of batch.messages) {
 		try {
+			if (isMovieListPopularitySyncQueueMessage(message.body)) {
+				await processMovieListPopularitySyncMessage(env, message.body);
+				message.ack();
+				continue;
+			}
+
+			if (isMovieListBuildCleanupQueueMessage(message.body)) {
+				await processMovieListBuildCleanupMessage(env, message.body);
+				message.ack();
+				continue;
+			}
+
+			if (isMovieListBuildFinalizeQueueMessage(message.body)) {
+				const result = await finalizeMovieListBuildQueuePhase(
+					env,
+					message.body,
+				);
+
+				if (result.pending) {
+					/*
+						Waiting for other messages is normal, not a failed delivery. Send a
+						fresh delayed check and acknowledge this one so ordinary waiting does
+						not consume the queue's ten error retries.
+					*/
+					const finalizerCheckCount =
+						(message.body.finalizerCheckCount ?? 0) + 1;
+
+					if (finalizerCheckCount > 60) {
+						throw new Error(
+							`Movie List ${message.body.stage} finalizer waited for incomplete ranges for more than 30 minutes.`,
+						);
+					}
+
+					await env.MOVIE_LIST_BUILD_QUEUE.send(
+						{
+							...message.body,
+							finalizerCheckCount,
+						},
+						{ delaySeconds: 30 },
+					);
+					message.ack();
+				} else {
+					message.ack();
+				}
+				continue;
+			}
+
 			if (isImdbRatingFinalizeQueueMessage(message.body)) {
 				const result = await finalizeImdbRatingRun(env, message.body);
 
@@ -197,6 +274,25 @@ export async function handleQueue(
 			);
 			message.ack();
 		} catch (error) {
+			if (
+				isMovieListPopularitySyncQueueMessage(message.body) ||
+				isMovieListBuildCleanupQueueMessage(message.body) ||
+				isMovieListBuildFinalizeQueueMessage(message.body)
+			) {
+				try {
+					await recordMovieListQueueError(env, message.body, error);
+				} catch (recordError) {
+					logEvent("movie-list-queue-error-record-failed", {
+						jobRunId: message.body.jobRunId,
+						messageId: message.body.messageId,
+						error:
+							recordError instanceof Error
+								? recordError.message
+								: String(recordError),
+					});
+				}
+			}
+
 			logEvent("queue-message-failed", {
 				kind: message.body.kind ?? "imdb-ratings",
 				jobRunId: message.body.jobRunId ?? "missing",
