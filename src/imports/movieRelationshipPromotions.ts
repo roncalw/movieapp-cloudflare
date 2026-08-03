@@ -9,6 +9,7 @@ import {
 } from "../jobs/importJobRuns";
 import type { Env } from "../shared/types";
 import { logEvent } from "../shared/logging";
+import { STREAMS_WITH_ADS_PROVIDER_ID } from "../shared/watchProviderAvailability";
 
 type PendingGenrePromotionCounts = {
 	pendingMovieCount: number;
@@ -18,8 +19,12 @@ type PendingGenrePromotionCounts = {
 type PendingProviderPromotionCounts = {
 	pendingMovieCount: number;
 	pendingProviderCount: number;
+	pendingAvailabilityRelationshipCount: number;
+	adsSupportedMovieCount: number;
 	fullRefreshPendingMovieCount: number;
 	fullRefreshPendingProviderCount: number;
+	fullRefreshPendingAvailabilityRelationshipCount: number;
+	fullRefreshAdsSupportedMovieCount: number;
 };
 
 type LatestProviderRefreshRun = {
@@ -51,9 +56,13 @@ async function getPendingProviderPromotionCounts(
 	const row = await env.DB.prepare(
 		`SELECT
 		    COUNT(DISTINCT tmdb_id) AS pendingMovieCount,
-		    COUNT(provider_id) AS pendingProviderCount,
+		    COUNT(CASE WHEN provider_id <> ${STREAMS_WITH_ADS_PROVIDER_ID} THEN provider_id END) AS pendingProviderCount,
+		    COUNT(provider_id) AS pendingAvailabilityRelationshipCount,
+		    COUNT(CASE WHEN provider_id = ${STREAMS_WITH_ADS_PROVIDER_ID} THEN 1 END) AS adsSupportedMovieCount,
 		    COUNT(DISTINCT CASE WHEN is_full_refresh = 1 THEN tmdb_id END) AS fullRefreshPendingMovieCount,
-		    COUNT(CASE WHEN is_full_refresh = 1 THEN provider_id END) AS fullRefreshPendingProviderCount
+		    COUNT(CASE WHEN is_full_refresh = 1 AND provider_id <> ${STREAMS_WITH_ADS_PROVIDER_ID} THEN provider_id END) AS fullRefreshPendingProviderCount,
+		    COUNT(CASE WHEN is_full_refresh = 1 THEN provider_id END) AS fullRefreshPendingAvailabilityRelationshipCount,
+		    COUNT(CASE WHEN is_full_refresh = 1 AND provider_id = ${STREAMS_WITH_ADS_PROVIDER_ID} THEN 1 END) AS fullRefreshAdsSupportedMovieCount
 		 FROM movie_watch_providers_staging
 		 WHERE promoted_at IS NULL
 		   AND region = 'US'`,
@@ -62,8 +71,15 @@ async function getPendingProviderPromotionCounts(
 	return {
 		pendingMovieCount: row?.pendingMovieCount ?? 0,
 		pendingProviderCount: row?.pendingProviderCount ?? 0,
+		pendingAvailabilityRelationshipCount:
+			row?.pendingAvailabilityRelationshipCount ?? 0,
+		adsSupportedMovieCount: row?.adsSupportedMovieCount ?? 0,
 		fullRefreshPendingMovieCount: row?.fullRefreshPendingMovieCount ?? 0,
 		fullRefreshPendingProviderCount: row?.fullRefreshPendingProviderCount ?? 0,
+		fullRefreshPendingAvailabilityRelationshipCount:
+			row?.fullRefreshPendingAvailabilityRelationshipCount ?? 0,
+		fullRefreshAdsSupportedMovieCount:
+			row?.fullRefreshAdsSupportedMovieCount ?? 0,
 	};
 }
 
@@ -248,13 +264,14 @@ export async function promotePendingMovieWatchProviders(
 				env.DB.prepare(
 					`DELETE FROM movie_watch_providers
 					 WHERE region = 'US'
+					   AND provider_id <> ?
 					   AND tmdb_id IN (
 					     SELECT DISTINCT tmdb_id
 					     FROM movie_watch_providers_staging
 					     WHERE promoted_at IS NULL
 					       AND region = 'US'
-					   )`,
-				),
+					 )`,
+				).bind(STREAMS_WITH_ADS_PROVIDER_ID),
 				env.DB.prepare(
 					`INSERT OR REPLACE INTO movie_watch_providers (
 						tmdb_id,
@@ -293,7 +310,7 @@ export async function promotePendingMovieWatchProviders(
 			status: "complete",
 			selected: counts.pendingMovieCount,
 			processed: counts.pendingMovieCount,
-			updated: counts.pendingProviderCount,
+			updated: counts.pendingAvailabilityRelationshipCount,
 			result,
 		});
 

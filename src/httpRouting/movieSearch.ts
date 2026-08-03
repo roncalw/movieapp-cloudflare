@@ -1,5 +1,6 @@
 import type { Env } from "../shared/types";
 import { MOVIE_LIST_BUILD_JOB_NAME } from "../jobs/importJobRuns";
+import { STREAMS_WITH_ADS_PROVIDER_ID } from "../shared/watchProviderAvailability";
 
 type MovieSearchListItem = {
 	tmdb_id: number;
@@ -7,6 +8,7 @@ type MovieSearchListItem = {
 	imdb_rating: number | null;
 	original_language: string | null;
 	available_with_subscription: number | boolean;
+	available_without_rent_or_purchase: number | boolean;
 };
 
 type MovieListImdbRatingRow = {
@@ -17,6 +19,7 @@ type MovieListImdbRatingRow = {
 type MovieCardDataRow = {
 	imdb_rating: number | null;
 	available_with_subscription: number | boolean;
+	available_without_rent_or_purchase: number | boolean;
 };
 
 type MovieSearchSort = "popularity" | "imdb";
@@ -35,7 +38,7 @@ const MOVIE_SEARCH_CACHE_SECONDS = 60 * 60 * 24 * 7;
 const MOVIE_SEARCH_STALE_SECONDS = 60 * 60 * 24;
 const MOVIE_SEARCH_CACHE_GENERATION_PARAM = "__movieListBuild";
 const MOVIE_SEARCH_RESPONSE_VERSION_PARAM = "__responseVersion";
-const MOVIE_SEARCH_RESPONSE_VERSION = "subscription-availability-v1";
+const MOVIE_SEARCH_RESPONSE_VERSION = "subscription-or-ads-availability-v2";
 
 type MovieSearchCacheGenerationRow = {
 	job_run_id: string;
@@ -156,9 +159,16 @@ export async function getMovieCardDataByTmdbId(env: Env, tmdbId: number) {
 		      FROM movie_watch_providers
 		      WHERE tmdb_id = ?
 		        AND region = 'US'
-		    ) AS available_with_subscription`,
+		        AND provider_id <> ?
+		    ) AS available_with_subscription,
+		    EXISTS (
+		      SELECT 1
+		      FROM movie_watch_providers
+		      WHERE tmdb_id = ?
+		        AND region = 'US'
+		    ) AS available_without_rent_or_purchase`,
 	)
-		.bind(tmdbId, tmdbId)
+		.bind(tmdbId, tmdbId, STREAMS_WITH_ADS_PROVIDER_ID, tmdbId)
 		.first<MovieCardDataRow>();
 
 	return {
@@ -167,6 +177,9 @@ export async function getMovieCardDataByTmdbId(env: Env, tmdbId: number) {
 		available_with_subscription:
 			row?.available_with_subscription === true ||
 			row?.available_with_subscription === 1,
+		available_without_rent_or_purchase:
+			row?.available_without_rent_or_purchase === true ||
+			row?.available_without_rent_or_purchase === 1,
 	};
 }
 
@@ -407,6 +420,12 @@ async function searchMovieListItems(env: Env, url: URL) {
 		url.searchParams.get("providerIds"),
 		"providerIds",
 	);
+
+	if (providerIds.some((providerId) => providerId <= 0)) {
+		throw new RequestValidationError(
+			"providerIds must contain positive TMDb provider IDs.",
+		);
+	}
 	const watchMonetizationTypes = parseWatchMonetizationTypesParam(
 		url.searchParams.get("watchMonetizationTypes"),
 	);
@@ -462,8 +481,18 @@ async function searchMovieListItems(env: Env, url: URL) {
 			: `EXISTS (
 		        SELECT 1
 		        FROM movie_watch_providers AS subscription_provider
-		        WHERE subscription_provider.tmdb_id = movie.tmdb_id
-		          AND subscription_provider.region = 'US'
+			        WHERE subscription_provider.tmdb_id = movie.tmdb_id
+			          AND subscription_provider.region = 'US'
+			          AND subscription_provider.provider_id <> ${STREAMS_WITH_ADS_PROVIDER_ID}
+			      )`;
+	const availableWithoutRentOrPurchaseSql =
+		providerIds.length > 0 || watchMonetizationTypes.includes("flatrate")
+			? "1"
+			: `EXISTS (
+		        SELECT 1
+		        FROM movie_watch_providers AS viewing_option
+		        WHERE viewing_option.tmdb_id = movie.tmdb_id
+		          AND viewing_option.region = 'US'
 		      )`;
 	const sqlParts = [
 		`SELECT
@@ -473,7 +502,8 @@ async function searchMovieListItems(env: Env, url: URL) {
 		    movie.imdb_vote_count,
 		    movie.popularity,
 		    movie.original_language,
-		    ${availableWithSubscriptionSql} AS available_with_subscription
+		    ${availableWithSubscriptionSql} AS available_with_subscription,
+		    ${availableWithoutRentOrPurchaseSql} AS available_without_rent_or_purchase
 		  FROM movie_list_items AS movie${movieIndexHint}
 		  WHERE movie.release_date >= ?
 		    AND movie.release_date <= ?`,
@@ -522,6 +552,7 @@ async function searchMovieListItems(env: Env, url: URL) {
 			   FROM movie_watch_providers AS provider
 			   WHERE provider.tmdb_id = movie.tmdb_id
 			     AND provider.region = 'US'
+			     AND provider.provider_id <> ${STREAMS_WITH_ADS_PROVIDER_ID}
 			 )`,
 		);
 	}
@@ -613,6 +644,9 @@ async function searchMovieListItems(env: Env, url: URL) {
 			available_with_subscription:
 				movie.available_with_subscription === true ||
 				movie.available_with_subscription === 1,
+			available_without_rent_or_purchase:
+				movie.available_without_rent_or_purchase === true ||
+				movie.available_without_rent_or_purchase === 1,
 		}),
 	);
 

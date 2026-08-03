@@ -1,5 +1,10 @@
 # Ad-Supported Availability and Shopping-Bag Badge Plan
 
+> Implementation status: Worker code, database index, API contract, cache
+> version, and automated tests were implemented and deployed on August 2,
+> 2026. The production provider refresh and downstream promotion are recorded
+> in the MovieApp implementation document when they finish.
+
 ## Introduction
 
 The shopping-bag badge currently means that MovieApp found no US subscription
@@ -21,7 +26,8 @@ The implementation will not add a monetization column to
 `movie_watch_providers`, and it will not add a new provider table. It will use
 the existing staging and live provider relationship tables.
 
-No production code or database schema is changed by this document.
+This document began as the approved design and now also describes the behavior
+implemented in the Worker repository.
 
 ## 1. Decision Summary
 

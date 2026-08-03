@@ -8,6 +8,7 @@ import {
 } from "../jobs/importJobRuns";
 import type { Env } from "../shared/types";
 import { logEvent } from "../shared/logging";
+import { STREAMS_WITH_ADS_PROVIDER_ID } from "../shared/watchProviderAvailability";
 
 const MOVIE_LIST_LOAD_DEFAULT_THRESHOLD = 1.0;
 const MOVIE_LIST_LOAD_DEFAULT_WATCH_PROVIDER_THRESHOLD = 10.0;
@@ -23,6 +24,9 @@ type MovieListLoadCounts = {
 	genrePerMovieCount: number;
 	watchProviderCount: number;
 	watchProviderPerMovieCount: number;
+	adsSupportedMovieCount: number;
+	totalAvailabilityRelationshipCount: number;
+	availabilityPerMovieCount: number;
 };
 
 type MovieListLoadCountRow = {
@@ -137,14 +141,34 @@ async function getMovieListCurrentCounts(env: Env): Promise<MovieListLoadCounts>
 		    COUNT(popularity) AS popularityCount,
 		    (SELECT COUNT(*) FROM movie_genres) AS genreCount,
 		    (SELECT COUNT(DISTINCT tmdb_id) FROM movie_genres) AS genrePerMovieCount,
-		    (SELECT COUNT(*) FROM movie_watch_providers WHERE region = 'US') AS watchProviderCount,
+		    (SELECT COUNT(*)
+		     FROM movie_watch_providers
+		     WHERE region = 'US'
+		       AND provider_id <> ?) AS watchProviderCount,
 		    (
 		      SELECT COUNT(DISTINCT tmdb_id)
 		      FROM movie_watch_providers
 		      WHERE region = 'US'
-		    ) AS watchProviderPerMovieCount
+		        AND provider_id <> ?
+		    ) AS watchProviderPerMovieCount,
+		    (SELECT COUNT(*)
+		     FROM movie_watch_providers
+		     WHERE region = 'US'
+		       AND provider_id = ?) AS adsSupportedMovieCount,
+		    (SELECT COUNT(*)
+		     FROM movie_watch_providers
+		     WHERE region = 'US') AS totalAvailabilityRelationshipCount,
+		    (SELECT COUNT(DISTINCT tmdb_id)
+		     FROM movie_watch_providers
+		     WHERE region = 'US') AS availabilityPerMovieCount
 		 FROM movie_list_items`,
-	).first<MovieListLoadCounts>();
+	)
+		.bind(
+			STREAMS_WITH_ADS_PROVIDER_ID,
+			STREAMS_WITH_ADS_PROVIDER_ID,
+			STREAMS_WITH_ADS_PROVIDER_ID,
+		)
+		.first<MovieListLoadCounts>();
 
 	return {
 		count: row?.count ?? 0,
@@ -157,6 +181,10 @@ async function getMovieListCurrentCounts(env: Env): Promise<MovieListLoadCounts>
 		genrePerMovieCount: row?.genrePerMovieCount ?? 0,
 		watchProviderCount: row?.watchProviderCount ?? 0,
 		watchProviderPerMovieCount: row?.watchProviderPerMovieCount ?? 0,
+		adsSupportedMovieCount: row?.adsSupportedMovieCount ?? 0,
+		totalAvailabilityRelationshipCount:
+			row?.totalAvailabilityRelationshipCount ?? 0,
+		availabilityPerMovieCount: row?.availabilityPerMovieCount ?? 0,
 	};
 }
 
@@ -199,15 +227,41 @@ async function getMovieListPotentialLoadCounts(
 			     FROM movie_watch_providers_staging
 			     WHERE region = 'US'
 			       AND provider_id IS NOT NULL
+			       AND provider_id <> ?
 			   ) AS watchProviderCount,
 			   (
 			     SELECT COUNT(DISTINCT tmdb_id)
 			     FROM movie_watch_providers_staging
 			     WHERE region = 'US'
 			       AND provider_id IS NOT NULL
-			   ) AS watchProviderPerMovieCount
+			       AND provider_id <> ?
+			   ) AS watchProviderPerMovieCount,
+			   (
+			     SELECT COUNT(*)
+			     FROM movie_watch_providers_staging
+			     WHERE region = 'US'
+			       AND provider_id = ?
+			   ) AS adsSupportedMovieCount,
+			   (
+			     SELECT COUNT(*)
+			     FROM movie_watch_providers_staging
+			     WHERE region = 'US'
+			       AND provider_id IS NOT NULL
+			   ) AS totalAvailabilityRelationshipCount,
+			   (
+			     SELECT COUNT(DISTINCT tmdb_id)
+			     FROM movie_watch_providers_staging
+			     WHERE region = 'US'
+			       AND provider_id IS NOT NULL
+			   ) AS availabilityPerMovieCount
 			 FROM movie_list_source`,
-	).first<MovieListLoadCounts>();
+	)
+		.bind(
+			STREAMS_WITH_ADS_PROVIDER_ID,
+			STREAMS_WITH_ADS_PROVIDER_ID,
+			STREAMS_WITH_ADS_PROVIDER_ID,
+		)
+		.first<MovieListLoadCounts>();
 
 	return {
 		count: row?.count ?? 0,
@@ -220,6 +274,10 @@ async function getMovieListPotentialLoadCounts(
 		genrePerMovieCount: row?.genrePerMovieCount ?? 0,
 		watchProviderCount: row?.watchProviderCount ?? 0,
 		watchProviderPerMovieCount: row?.watchProviderPerMovieCount ?? 0,
+		adsSupportedMovieCount: row?.adsSupportedMovieCount ?? 0,
+		totalAvailabilityRelationshipCount:
+			row?.totalAvailabilityRelationshipCount ?? 0,
+		availabilityPerMovieCount: row?.availabilityPerMovieCount ?? 0,
 	};
 }
 

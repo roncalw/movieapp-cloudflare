@@ -1,10 +1,12 @@
 import {
 	getTmdbMovieWatchProviders,
+	getTmdbUsAdsDiscoverPage,
 	getTmdbUsFlatrateDiscoverPage,
 	getUsFlatrateProviderIdsFromWatchProviders,
 	isTerminalTmdbEnrichmentError,
 	TMDB_DISCOVER_MAX_PAGE,
 	type TmdbFetchRetryOptions,
+	type TmdbWatchMonetizationType,
 } from "../externalApis/tmdbClient";
 import {
 	acquireImportJobLock,
@@ -35,6 +37,7 @@ import {
 	type ImportJobDependencyRequirement,
 } from "../jobs/importJobDependencies";
 import { logEvent } from "../shared/logging";
+import { STREAMS_WITH_ADS_PROVIDER_ID } from "../shared/watchProviderAvailability";
 import type {
 	Env,
 	TmdbProviderRefreshDiscoveryQueueMessage,
@@ -82,6 +85,7 @@ export function classifyProviderLookupOutcome(
 
 type TmdbProviderRefreshDiscoveryProgress = {
 	phase: "candidate_discovery";
+	monetizationType: TmdbWatchMonetizationType;
 	beginDate: string;
 	endDate: string;
 	currentWindow: TmdbDateWindow | null;
@@ -100,6 +104,15 @@ type TmdbProviderRefreshDiscoveryProgress = {
 	status: "running" | "complete";
 	reason: string;
 	error?: string | null;
+	flatrateDiscovery: TmdbProviderRefreshDiscoverySummary | null;
+};
+
+type TmdbProviderRefreshDiscoverySummary = {
+	pagesRead: number;
+	rowsSeen: number;
+	totalPagesSeen: number | null;
+	windowsLoaded: number;
+	windowsSplit: number;
 };
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -215,9 +228,12 @@ function buildProviderRefreshStatements(
 function buildInitialDiscoveryCheckpoint(
 	endDate: string,
 	reason = "discovery-queued",
+	monetizationType: TmdbWatchMonetizationType = "flatrate",
+	flatrateDiscovery: TmdbProviderRefreshDiscoverySummary | null = null,
 ): TmdbProviderRefreshDiscoveryProgress {
 	return {
 		phase: "candidate_discovery",
+		monetizationType,
 		status: "running",
 		reason,
 		beginDate: TMDB_PROVIDER_REFRESH_BEGIN_DATE,
@@ -238,6 +254,19 @@ function buildInitialDiscoveryCheckpoint(
 		attempt: 1,
 		maxAttempts: TMDB_PROVIDER_DISCOVERY_MAX_ATTEMPTS,
 		error: null,
+		flatrateDiscovery,
+	};
+}
+
+function summarizeDiscovery(
+	checkpoint: TmdbProviderRefreshDiscoveryProgress,
+): TmdbProviderRefreshDiscoverySummary {
+	return {
+		pagesRead: checkpoint.pagesRead,
+		rowsSeen: checkpoint.rowsSeen,
+		totalPagesSeen: checkpoint.totalPagesSeen,
+		windowsLoaded: checkpoint.windowsLoaded,
+		windowsSplit: checkpoint.windowsSplit,
 	};
 }
 
@@ -281,9 +310,16 @@ function parseDiscoveryCheckpoint(
 
 		const status: TmdbProviderRefreshDiscoveryProgress["status"] =
 			parsed.status === "complete" ? "complete" : "running";
+		const monetizationType: TmdbWatchMonetizationType =
+			parsed.monetizationType === "ads" ? "ads" : "flatrate";
 
 		return {
-			...buildInitialDiscoveryCheckpoint(endDate),
+			...buildInitialDiscoveryCheckpoint(
+				endDate,
+				"checkpoint-loaded",
+				monetizationType,
+				parsed.flatrateDiscovery ?? null,
+			),
 			...parsed,
 			currentWindow: isDateWindow(parsed.currentWindow)
 				? { ...parsed.currentWindow }
@@ -311,6 +347,7 @@ function parseDiscoveryCheckpoint(
 					? parsed.attempt
 					: 1,
 			maxAttempts: TMDB_PROVIDER_DISCOVERY_MAX_ATTEMPTS,
+			flatrateDiscovery: parsed.flatrateDiscovery ?? null,
 		};
 	} catch {
 		return buildInitialDiscoveryCheckpoint(endDate);
@@ -354,16 +391,31 @@ async function saveDiscoveryCheckpoint(
 	checkpoint: TmdbProviderRefreshDiscoveryProgress,
 	candidateIds: number[] = [],
 ) {
-	const statements = candidateIds.map((tmdbId) =>
-		env.DB.prepare(
+	const statements = candidateIds.map((tmdbId) => {
+		if (checkpoint.monetizationType === "ads") {
+			return env.DB.prepare(
+				`INSERT OR REPLACE INTO movie_watch_providers_staging (
+					tmdb_id,
+					provider_id,
+					region,
+					load_run_id,
+					is_full_refresh,
+					staged_at,
+					promoted_at
+				)
+				VALUES (?, ?, 'US', ?, 1, CURRENT_TIMESTAMP, NULL)`,
+			).bind(tmdbId, STREAMS_WITH_ADS_PROVIDER_ID, jobRunId);
+		}
+
+		return env.DB.prepare(
 			`INSERT OR REPLACE INTO tmdb_us_flatrate_movies_staging (
 				tmdb_id,
 				load_run_id,
 				discovered_at
 			)
 			VALUES (?, ?, CURRENT_TIMESTAMP)`,
-		).bind(tmdbId, jobRunId),
-	);
+		).bind(tmdbId, jobRunId);
+	});
 
 	statements.push(
 		env.DB.prepare(
@@ -389,6 +441,21 @@ async function countProviderRefreshCandidateRows(env: Env, jobRunId: string) {
 		.first<{ candidateCount: number }>();
 
 	return row?.candidateCount ?? 0;
+}
+
+async function countAdsMarkerRows(env: Env, jobRunId: string) {
+	const row = await env.DB.prepare(
+		`SELECT COUNT(*) AS markerCount
+		 FROM movie_watch_providers_staging
+		 WHERE load_run_id = ?
+		   AND region = 'US'
+		   AND provider_id = ?
+		   AND is_full_refresh = 1`,
+	)
+		.bind(jobRunId, STREAMS_WITH_ADS_PROVIDER_ID)
+		.first<{ markerCount: number }>();
+
+	return row?.markerCount ?? 0;
 }
 
 async function processDiscoveryChunk(
@@ -442,7 +509,11 @@ async function processDiscoveryChunk(
 
 		const currentWindow = checkpoint.currentWindow;
 		const currentPage = checkpoint.currentPage ?? 1;
-		const discoverPage = await getTmdbUsFlatrateDiscoverPage(
+		const getDiscoverPage =
+			checkpoint.monetizationType === "ads"
+				? getTmdbUsAdsDiscoverPage
+				: getTmdbUsFlatrateDiscoverPage;
+		const discoverPage = await getDiscoverPage(
 			currentPage,
 			currentWindow.beginDate,
 			env,
@@ -545,6 +616,7 @@ async function queueProviderRefreshCandidateRows(
 	discovery: TmdbProviderRefreshDiscoveryProgress,
 ) {
 	const rows = await getProviderRefreshCandidateRows(env, jobRunId);
+	const adsMarkerCount = await countAdsMarkerRows(env, jobRunId);
 	let queueMessages: TmdbProviderRefreshQueueMessage[] = [];
 	let rowsQueued = 0;
 	let messagesQueued = 0;
@@ -561,6 +633,29 @@ async function queueProviderRefreshCandidateRows(
 
 		messagesQueued += queueMessages.length;
 		queueMessages = [];
+	}
+
+	if (adsMarkerCount > 0) {
+		/*
+			Ads markers are written while Discover pages are read, so they do not
+			have their own per-movie queue messages. This one idempotent accounting
+			record includes those staged rows in the parent job's final totals without
+			pretending that a second per-movie provider lookup occurred.
+		*/
+		await recordImportJobQueueMessageCompletion(env, {
+			jobRunId,
+			messageId: `${jobRunId}-ads-marker-summary`,
+			jobName: TMDB_PROVIDER_REFRESH_JOB_NAME,
+			queueName: TMDB_ENRICHMENT_QUEUE_NAME,
+			stats: {
+				processed: 0,
+				updated: 0,
+				errors: 0,
+				providerRowsInserted: adsMarkerCount,
+				tmdbIDNotFoundSkippedCount: 0,
+			},
+			lastError: null,
+		});
 	}
 
 	for (
@@ -602,16 +697,29 @@ async function queueProviderRefreshCandidateRows(
 		.bind(jobRunId)
 		.run();
 
+	const adsDiscovery = summarizeDiscovery(discovery);
+	const flatrateDiscovery = discovery.flatrateDiscovery ?? {
+		pagesRead: 0,
+		rowsSeen: 0,
+		totalPagesSeen: null,
+		windowsLoaded: 0,
+		windowsSplit: 0,
+	};
 	const result = {
 		trigger,
 		beginDate: TMDB_PROVIDER_REFRESH_BEGIN_DATE,
 		endDate,
 		candidateCount,
-		pagesRead: discovery.pagesRead,
-		rowsSeen: discovery.rowsSeen,
-		totalPagesSeen: discovery.totalPagesSeen,
-		windowsLoaded: discovery.windowsLoaded,
-		windowsSplit: discovery.windowsSplit,
+		flatrateCandidateCount: candidateCount,
+		adsSupportedMovieCount: adsMarkerCount,
+		flatrateDiscovery,
+		adsDiscovery,
+		pagesRead: flatrateDiscovery.pagesRead + adsDiscovery.pagesRead,
+		rowsSeen: flatrateDiscovery.rowsSeen + adsDiscovery.rowsSeen,
+		windowsLoaded:
+			flatrateDiscovery.windowsLoaded + adsDiscovery.windowsLoaded,
+		windowsSplit:
+			flatrateDiscovery.windowsSplit + adsDiscovery.windowsSplit,
 		pendingWindows: discovery.pendingWindows.length,
 		stoppedWindow: null,
 		stopReason: "end_of_windows",
@@ -627,6 +735,7 @@ async function queueProviderRefreshCandidateRows(
 	if (rows.length === 0) {
 		await finishImportJobRun(env, jobRunId, {
 			status: "complete",
+			providerRowsInserted: adsMarkerCount,
 			result,
 		});
 	} else {
@@ -759,6 +868,25 @@ export async function processTmdbProviderRefreshDiscoveryMessage(
 		);
 
 		if (discovery.complete) {
+			if (discovery.checkpoint.monetizationType === "flatrate") {
+				const adsCheckpoint = buildInitialDiscoveryCheckpoint(
+					message.endDate,
+					"ads-discovery-started",
+					"ads",
+					summarizeDiscovery(discovery.checkpoint),
+				);
+
+				await saveDiscoveryCheckpoint(env, message.jobRunId, adsCheckpoint);
+				await sendProviderRefreshDiscoveryMessage(env, {
+					kind: "tmdb-provider-refresh-discovery",
+					jobRunId: message.jobRunId,
+					messageId: `${message.jobRunId}-ads-discovery-000001`,
+					endDate: message.endDate,
+					attempt: 1,
+				});
+				return;
+			}
+
 			await queueProviderRefreshCandidateRows(
 				env,
 				message.jobRunId,
@@ -773,7 +901,7 @@ export async function processTmdbProviderRefreshDiscoveryMessage(
 		await sendProviderRefreshDiscoveryMessage(env, {
 			kind: "tmdb-provider-refresh-discovery",
 			jobRunId: message.jobRunId,
-			messageId: `${message.jobRunId}-discovery-${String(
+			messageId: `${message.jobRunId}-${discovery.checkpoint.monetizationType}-discovery-${String(
 				discovery.checkpoint.pagesRead + 1,
 			).padStart(6, "0")}`,
 			endDate: message.endDate,

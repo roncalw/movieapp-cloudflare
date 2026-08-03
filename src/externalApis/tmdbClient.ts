@@ -11,6 +11,8 @@ export type TmdbDiscoverResult = {
 	adult?: boolean;
 };
 
+export type TmdbWatchMonetizationType = "flatrate" | "ads";
+
 type TmdbDiscoverPage = {
 	page: number;
 	total_pages: number;
@@ -209,12 +211,47 @@ export async function getTmdbUsFlatrateDiscoverPage(
 	endDate?: string,
 	retryOptions?: TmdbFetchRetryOptions,
 ) {
+	return getTmdbUsWatchMonetizationDiscoverPage(
+		"flatrate",
+		page,
+		beginDate,
+		env,
+		endDate,
+		retryOptions,
+	);
+}
+
+export async function getTmdbUsAdsDiscoverPage(
+	page: number,
+	beginDate: string,
+	env: Env,
+	endDate?: string,
+	retryOptions?: TmdbFetchRetryOptions,
+) {
+	return getTmdbUsWatchMonetizationDiscoverPage(
+		"ads",
+		page,
+		beginDate,
+		env,
+		endDate,
+		retryOptions,
+	);
+}
+
+async function getTmdbUsWatchMonetizationDiscoverPage(
+	monetizationType: TmdbWatchMonetizationType,
+	page: number,
+	beginDate: string,
+	env: Env,
+	endDate?: string,
+	retryOptions?: TmdbFetchRetryOptions,
+) {
 	const url = new URL("https://api.themoviedb.org/3/discover/movie");
 	url.searchParams.set("page", String(page));
 	url.searchParams.set("sort_by", "popularity.desc");
 	url.searchParams.set("primary_release_date.gte", beginDate);
 	url.searchParams.set("watch_region", "US");
-	url.searchParams.set("with_watch_monetization_types", "flatrate");
+	url.searchParams.set("with_watch_monetization_types", monetizationType);
 	url.searchParams.set("include_adult", "false");
 	url.searchParams.set("include_video", "false");
 

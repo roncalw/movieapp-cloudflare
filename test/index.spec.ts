@@ -450,6 +450,7 @@ describe("MovieApp Worker", () => {
 				popularity: 12.34,
 				original_language: "en",
 				available_with_subscription: 1,
+				available_without_rent_or_purchase: 1,
 			},
 		];
 		const mock = createMockEnv(rows);
@@ -467,6 +468,7 @@ describe("MovieApp Worker", () => {
 					imdb_rating: 8.8,
 					original_language: "en",
 					available_with_subscription: true,
+					available_without_rent_or_purchase: true,
 				},
 			],
 			nextCursor: null,
@@ -504,7 +506,13 @@ describe("MovieApp Worker", () => {
 			"subscription_provider.region = 'US'",
 		);
 		expect(mock.getPreparedSql()).toContain(
+			"subscription_provider.provider_id <> -1",
+		);
+		expect(mock.getPreparedSql()).toContain(
 			"AS available_with_subscription",
+		);
+		expect(mock.getPreparedSql()).toContain(
+			"AS available_without_rent_or_purchase",
 		);
 	});
 
@@ -654,7 +662,7 @@ describe("MovieApp Worker", () => {
 		expect(mock.getPreparedSql()).toContain("FROM import_job_runs");
 	});
 
-	it("does not reuse an Advanced Search response saved before subscription availability existed", async () => {
+	it("does not reuse an Advanced Search response saved before ads availability existed", async () => {
 		const publicUrl =
 			"http://response-version-cache.example/movies/search?pageSize=20";
 		const oldCacheUrl = new URL(publicUrl);
@@ -687,6 +695,7 @@ describe("MovieApp Worker", () => {
 				popularity: 500,
 				original_language: "en",
 				available_with_subscription: 0,
+				available_without_rent_or_purchase: 1,
 			},
 		]);
 		const response = await worker.fetch(
@@ -697,6 +706,7 @@ describe("MovieApp Worker", () => {
 			movies: Array<{
 				poster_path: string;
 				available_with_subscription: boolean;
+				available_without_rent_or_purchase: boolean;
 			}>;
 		};
 
@@ -704,6 +714,7 @@ describe("MovieApp Worker", () => {
 		expect(body.movies[0]).toMatchObject({
 			poster_path: "/current-result.jpg",
 			available_with_subscription: false,
+			available_without_rent_or_purchase: true,
 		});
 		expect(mock.getPreparedSql()).toContain("AS available_with_subscription");
 	});
@@ -743,11 +754,12 @@ describe("MovieApp Worker", () => {
 		});
 	});
 
-	it("returns IMDb rating and subscription availability as movie card data", async () => {
+	it("returns IMDb rating and subscription-or-ads availability as movie card data", async () => {
 		const mock = createMockEnv([
 			{
 				imdb_rating: 8.8,
 				available_with_subscription: 1,
+				available_without_rent_or_purchase: 1,
 			},
 		]);
 		const request = new IncomingRequest(
@@ -760,18 +772,21 @@ describe("MovieApp Worker", () => {
 			tmdb_id: 281979,
 			imdb_rating: 8.8,
 			available_with_subscription: true,
+			available_without_rent_or_purchase: true,
 		});
 		expect(mock.getPreparedSql()).toContain("FROM movie_list_items");
 		expect(mock.getPreparedSql()).toContain("FROM movie_watch_providers");
 		expect(mock.getPreparedSql()).toContain("region = 'US'");
-		expect(mock.getPreparedBindings()).toEqual([281979, 281979]);
+		expect(mock.getPreparedSql()).toContain("provider_id <> ?");
+		expect(mock.getPreparedBindings()).toEqual([281979, 281979, -1, 281979]);
 	});
 
-	it("returns a confirmed no-subscription answer when no provider row exists", async () => {
+	it("returns a confirmed rent-or-purchase answer when no viewing-option row exists", async () => {
 		const mock = createMockEnv([
 			{
 				imdb_rating: null,
 				available_with_subscription: 0,
+				available_without_rent_or_purchase: 0,
 			},
 		]);
 		const request = new IncomingRequest(
@@ -784,6 +799,29 @@ describe("MovieApp Worker", () => {
 			tmdb_id: 999999,
 			imdb_rating: null,
 			available_with_subscription: false,
+			available_without_rent_or_purchase: false,
+		});
+	});
+
+	it("keeps ads-only availability separate from subscription availability", async () => {
+		const mock = createMockEnv([
+			{
+				imdb_rating: 6.8,
+				available_with_subscription: 0,
+				available_without_rent_or_purchase: 1,
+			},
+		]);
+		const response = await worker.fetch(
+			new IncomingRequest("http://example.com/movies/123456/card-data"),
+			mock.env,
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			tmdb_id: 123456,
+			imdb_rating: 6.8,
+			available_with_subscription: false,
+			available_without_rent_or_purchase: true,
 		});
 	});
 
@@ -817,6 +855,7 @@ describe("MovieApp Worker", () => {
 			"FROM movie_watch_providers AS provider",
 		);
 		expect(mock.getPreparedSql()).toContain("provider.region = 'US'");
+		expect(mock.getPreparedSql()).toContain("provider.provider_id <> -1");
 		expect(mock.getPreparedSql()).not.toContain("provider.provider_id IN");
 		expect(mock.getPreparedSql()).toContain(
 			"1 AS available_with_subscription",
@@ -824,6 +863,21 @@ describe("MovieApp Worker", () => {
 		expect(mock.getPreparedSql()).not.toContain(
 			"movie_watch_providers AS subscription_provider",
 		);
+	});
+
+	it("does not allow the internal ads marker to be selected as a streamer", async () => {
+		const mock = createMockEnv([]);
+		const response = await worker.fetch(
+			new IncomingRequest(
+				"http://example.com/movies/search?pageSize=20&providerIds=-1",
+			),
+			mock.env,
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: "providerIds must contain positive TMDb provider IDs.",
+		});
 	});
 
 	it("parses import job result_json for monitor responses", async () => {

@@ -20,6 +20,7 @@ import {
 	type TmdbMovieDetails,
 } from "../externalApis/tmdbClient";
 import { logEvent } from "../shared/logging";
+import { STREAMS_WITH_ADS_PROVIDER_ID } from "../shared/watchProviderAvailability";
 import type {
 	Env,
 	TmdbEnrichmentQueueMessage,
@@ -77,8 +78,9 @@ function buildTmdbEnrichmentStatements(
 			env.DB.prepare(
 				`DELETE FROM movie_watch_providers_staging
 				 WHERE tmdb_id = ?
-				   AND region = ?`,
-			).bind(tmdbId, "US"),
+				   AND region = ?
+				   AND (provider_id IS NULL OR provider_id <> ?)`,
+			).bind(tmdbId, "US", STREAMS_WITH_ADS_PROVIDER_ID),
 		];
 
 	if (providerIds.length === 0) {

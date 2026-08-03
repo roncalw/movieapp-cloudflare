@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getTmdbMovieWatchProviders } from "../src/externalApis/tmdbClient";
+import {
+	getTmdbMovieWatchProviders,
+	getTmdbUsAdsDiscoverPage,
+} from "../src/externalApis/tmdbClient";
 import { checkImportJobDependencies } from "../src/jobs/importJobDependencies";
 import type { ImportJobRunRow } from "../src/jobs/importJobRuns";
 import { getEmailOutcomeLabel } from "../src/notifications/jobNotifications";
@@ -109,6 +112,29 @@ describe("weekly import job safety", () => {
 			"TMDB request failed: 404 Not Found",
 		);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("discovers US ad-supported movies without making per-movie provider requests", async () => {
+		const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			Response.json({ page: 1, total_pages: 1, results: [{ id: 123456 }] }),
+		);
+		const env = { TMDB_API_KEY: "test-key" } as Env;
+
+		const result = await getTmdbUsAdsDiscoverPage(
+			1,
+			"2020-01-01",
+			env,
+			"2026-08-02",
+		);
+
+		expect(result.results).toEqual([{ id: 123456 }]);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		const requestedUrl = new URL(String(fetchMock.mock.calls[0][0]));
+		expect(requestedUrl.pathname).toBe("/3/discover/movie");
+		expect(requestedUrl.searchParams.get("watch_region")).toBe("US");
+		expect(
+			requestedUrl.searchParams.get("with_watch_monetization_types"),
+		).toBe("ads");
 	});
 
 	it("flags an incomplete running job and its mismatched work count", () => {
