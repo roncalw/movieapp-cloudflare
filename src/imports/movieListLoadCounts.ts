@@ -192,7 +192,28 @@ async function getMovieListPotentialLoadCounts(
 	env: Env,
 ): Promise<MovieListLoadCounts> {
 	const row = await env.DB.prepare(
-		`WITH movie_list_source AS (
+		`WITH latest_completed_provider_refresh AS (
+		   SELECT job_run_id
+		   FROM import_job_runs
+		   WHERE job_name = 'tmdb-provider-refresh'
+		     AND status = 'complete'
+		     AND error_count = 0
+		     AND ended_at IS NOT NULL
+		   ORDER BY started_at DESC, job_run_id DESC
+		   LIMIT 1
+		 ),
+		 potential_watch_providers AS (
+		   SELECT tmdb_id, provider_id
+		   FROM movie_watch_providers_staging
+		   WHERE region = 'US'
+		     AND provider_id IS NOT NULL
+		     AND is_full_refresh = 1
+		     AND load_run_id = (
+		       SELECT job_run_id
+		       FROM latest_completed_provider_refresh
+		     )
+		 ),
+		 movie_list_source AS (
 		   SELECT
 		     tmdb.tmdb_id,
 		     tmdb.title,
@@ -224,35 +245,26 @@ async function getMovieListPotentialLoadCounts(
 			   ) AS genrePerMovieCount,
 			   (
 			     SELECT COUNT(*)
-			     FROM movie_watch_providers_staging
-			     WHERE region = 'US'
-			       AND provider_id IS NOT NULL
-			       AND provider_id <> ?
+			     FROM potential_watch_providers
+			     WHERE provider_id <> ?
 			   ) AS watchProviderCount,
 			   (
 			     SELECT COUNT(DISTINCT tmdb_id)
-			     FROM movie_watch_providers_staging
-			     WHERE region = 'US'
-			       AND provider_id IS NOT NULL
-			       AND provider_id <> ?
+			     FROM potential_watch_providers
+			     WHERE provider_id <> ?
 			   ) AS watchProviderPerMovieCount,
 			   (
 			     SELECT COUNT(*)
-			     FROM movie_watch_providers_staging
-			     WHERE region = 'US'
-			       AND provider_id = ?
+			     FROM potential_watch_providers
+			     WHERE provider_id = ?
 			   ) AS adsSupportedMovieCount,
 			   (
 			     SELECT COUNT(*)
-			     FROM movie_watch_providers_staging
-			     WHERE region = 'US'
-			       AND provider_id IS NOT NULL
+			     FROM potential_watch_providers
 			   ) AS totalAvailabilityRelationshipCount,
 			   (
 			     SELECT COUNT(DISTINCT tmdb_id)
-			     FROM movie_watch_providers_staging
-			     WHERE region = 'US'
-			       AND provider_id IS NOT NULL
+			     FROM potential_watch_providers
 			   ) AS availabilityPerMovieCount
 			 FROM movie_list_source`,
 	)
