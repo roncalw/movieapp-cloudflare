@@ -16,6 +16,7 @@ const JOB_NAME_TITLES: Record<string, string> = {
 	"tmdb-primary": "TMDB Primary New Movies Job",
 	"tmdb-popularity-refresh": "TMDB Popularity Refresh Job",
 	"tmdb-provider-refresh": "TMDB Watch Provider Refresh Job",
+	"provider-availability-validation": "Provider Availability Refresh",
 	"tmdb-watch-provider-lookup-refresh": "TMDB Watch Provider Lookup Refresh Job",
 	"weekly-import-validation": "Weekly Import Validation",
 };

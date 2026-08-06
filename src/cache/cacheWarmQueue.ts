@@ -4,6 +4,7 @@ import type {
 } from "../shared/types";
 import { logEvent } from "../shared/logging";
 import { recordCacheWarmSearchProgress } from "./cacheWarmJobRuns";
+import { finalizeProviderAvailabilityCycleForCacheRun } from "../jobs/providerAvailabilityCycle";
 import {
 	CACHE_WARM_SEARCH_QUEUE_KIND,
 	type CacheWarmSearchQueueMessage,
@@ -186,7 +187,7 @@ export async function processCacheWarmSearchMessage(
 		});
 	}
 
-	await recordCacheWarmSearchProgress(env, {
+	const completedRun = await recordCacheWarmSearchProgress(env, {
 		jobRunId: message.jobRunId,
 		messageId:
 			message.messageId ??
@@ -195,4 +196,14 @@ export async function processCacheWarmSearchMessage(
 		entryName: message.entryName,
 		stats,
 	});
+
+	if (
+		completedRun &&
+		!["queued", "running"].includes(completedRun.status)
+	) {
+		await finalizeProviderAvailabilityCycleForCacheRun(
+			env,
+			completedRun.job_run_id,
+		);
+	}
 }

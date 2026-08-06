@@ -7,10 +7,7 @@ import {
 	checkMovieListPotentialLoadCounts,
 	recordMovieListCurrentCountSnapshot,
 } from "./movieListLoadCounts";
-import {
-	promotePendingMovieGenres,
-	promotePendingMovieWatchProviders,
-} from "./movieRelationshipPromotions";
+import { promotePendingMovieGenres } from "./movieRelationshipPromotions";
 import {
 	createImportJobRun,
 	createImportJobRunId,
@@ -23,7 +20,6 @@ import {
 	TMDB_NEW_MOVIE_DETAILS_JOB_NAME,
 	TMDB_POPULARITY_REFRESH_JOB_NAME,
 	TMDB_PRIMARY_JOB_NAME,
-	TMDB_PROVIDER_REFRESH_JOB_NAME,
 	type ImportJobRunRow,
 	updateImportJobRunProgress,
 } from "../jobs/importJobRuns";
@@ -891,11 +887,6 @@ export async function rebuildMovieListItems(
 			});
 		}
 
-		dependencyRequirements.push({
-			jobName: TMDB_PROVIDER_REFRESH_JOB_NAME,
-			afterJobName: TMDB_NEW_MOVIE_DETAILS_JOB_NAME,
-		});
-
 		const dependencies = await checkImportJobDependencies(
 			env,
 			dependencyRequirements,
@@ -1087,8 +1078,6 @@ export async function rebuildMovieListItems(
 		}
 
 		const genrePromotion = await promotePendingMovieGenres(env, trigger);
-		const watchProviderPromotion =
-			await promotePendingMovieWatchProviders(env, trigger);
 
 		let lastTmdbId = 0;
 		let upsertedRows = 0;
@@ -1192,7 +1181,6 @@ export async function rebuildMovieListItems(
 					baseUpdatedRows: upsertedRows + imdbSync.updatedRows,
 					readiness,
 					genrePromotion,
-					watchProviderPromotion,
 				},
 			);
 
@@ -1258,7 +1246,6 @@ export async function rebuildMovieListItems(
 			popularityStagingCleanup,
 			deletedRows: 0,
 			genrePromotion,
-			watchProviderPromotion,
 			readiness,
 			startedAt,
 			endedAt,

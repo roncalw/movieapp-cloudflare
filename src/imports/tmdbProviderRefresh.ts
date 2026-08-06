@@ -18,24 +18,16 @@ import {
 	createImportJobRun,
 	createImportJobRunId,
 	finishImportJobRun,
-	getActiveImportJobRun,
 	getActiveImportJobRunForDate,
 	getImportJobRunById,
 	recordImportJobQueueMessageCompletion,
 	setImportJobRunQueueTotals,
 	touchImportJobRunProgress,
 	TMDB_ENRICH_JOB_NAME,
-	TMDB_NEW_MOVIE_DETAILS_JOB_NAME,
-	TMDB_PRIMARY_JOB_NAME,
 	TMDB_PROVIDER_REFRESH_JOB_NAME,
 	type ImportJobTrigger,
 } from "../jobs/importJobRuns";
-import {
-	checkImportJobDependencies,
-	finishSkippedDependencyRun,
-	getLatestCleanImportJobRunWithResultJsonNumberGreaterThan,
-	type ImportJobDependencyRequirement,
-} from "../jobs/importJobDependencies";
+import { continueIndependentProviderAvailabilityCycle } from "../jobs/providerAvailabilityCycle";
 import { logEvent } from "../shared/logging";
 import { STREAMS_WITH_ADS_PROVIDER_ID } from "../shared/watchProviderAvailability";
 import type {
@@ -812,6 +804,7 @@ async function cancelStaleProviderRefreshRuns(env: Env) {
 			lastProgressAt: run.last_progress_at,
 			staleAfterMinutes: TMDB_PROVIDER_REFRESH_STALE_RUN_MINUTES,
 		});
+		await continueIndependentProviderAvailabilityCycle(env, run.job_run_id);
 	}
 }
 
@@ -894,6 +887,10 @@ export async function processTmdbProviderRefreshDiscoveryMessage(
 				activeJobRun.started_at,
 				message.endDate,
 				discovery.checkpoint,
+			);
+			await continueIndependentProviderAvailabilityCycle(
+				env,
+				message.jobRunId,
 			);
 			return;
 		}
@@ -980,6 +977,10 @@ export async function processTmdbProviderRefreshDiscoveryMessage(
 		});
 
 		logEvent("tmdb-provider-refresh-cancelled", result);
+		await continueIndependentProviderAvailabilityCycle(
+			env,
+			message.jobRunId,
+		);
 	}
 }
 
@@ -1022,43 +1023,6 @@ export async function enqueueTmdbProviderRefreshJob(
 	}
 
 	try {
-		const latestPrimaryWithNewMovieIds =
-			await getLatestCleanImportJobRunWithResultJsonNumberGreaterThan(env, {
-				jobName: TMDB_PRIMARY_JOB_NAME,
-				resultJsonPath: "$.rowsInserted",
-				greaterThan: 0,
-				runDate: startedAt.slice(0, 10),
-			});
-		const dependencyRequirements: ImportJobDependencyRequirement[] = [
-			{ jobName: TMDB_PRIMARY_JOB_NAME },
-		];
-
-		if (latestPrimaryWithNewMovieIds) {
-			dependencyRequirements.push({
-				jobName: TMDB_NEW_MOVIE_DETAILS_JOB_NAME,
-				endedAfter: latestPrimaryWithNewMovieIds.ended_at,
-				endedAfterLabel:
-					"latest TMDB primary run that inserted new movie IDs",
-			});
-		}
-
-		const dependencies = await checkImportJobDependencies(
-			env,
-			dependencyRequirements,
-			startedAt.slice(0, 10),
-		);
-
-		if (!dependencies.ok) {
-			return finishSkippedDependencyRun(env, {
-				jobRunId,
-				jobName: TMDB_PROVIDER_REFRESH_JOB_NAME,
-				trigger: options.trigger,
-				startedAtMs,
-				startedAt,
-				blockers: dependencies.blockers,
-			});
-		}
-
 		await cancelStaleProviderRefreshRuns(env);
 
 		const runDate = startedAt.slice(0, 10);
@@ -1170,6 +1134,7 @@ export async function enqueueTmdbProviderRefreshJob(
 				result,
 				lastError,
 			});
+			await continueIndependentProviderAvailabilityCycle(env, jobRunId);
 		}
 
 		logEvent("tmdb-provider-refresh-cancelled", result);
@@ -1316,6 +1281,7 @@ export async function processTmdbProviderRefreshRows(
 			});
 
 			logEvent("tmdb-provider-refresh-cancelled", result);
+			await continueIndependentProviderAvailabilityCycle(env, jobRunId);
 
 			return {
 				processed,
@@ -1390,6 +1356,7 @@ export async function processTmdbProviderRefreshRows(
 	});
 	pendingStatements = [];
 	pendingStatementMovies = 0;
+	await continueIndependentProviderAvailabilityCycle(env, jobRunId);
 
 	const endedAtMs = Date.now();
 	const endedAt = new Date(endedAtMs).toISOString();

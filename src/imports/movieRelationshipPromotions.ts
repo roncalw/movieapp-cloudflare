@@ -2,6 +2,7 @@ import {
 	createImportJobRun,
 	createImportJobRunId,
 	finishImportJobRun,
+	getImportJobRunById,
 	MOVIE_GENRES_PROMOTE_JOB_NAME,
 	MOVIE_WATCH_PROVIDERS_PROMOTE_JOB_NAME,
 	TMDB_PROVIDER_REFRESH_JOB_NAME,
@@ -27,12 +28,6 @@ type PendingProviderPromotionCounts = {
 	fullRefreshAdsSupportedMovieCount: number;
 };
 
-type LatestProviderRefreshRun = {
-	job_run_id: string;
-	status: string;
-	error_count: number;
-};
-
 async function getPendingGenrePromotionCounts(
 	env: Env,
 ): Promise<PendingGenrePromotionCounts> {
@@ -52,6 +47,7 @@ async function getPendingGenrePromotionCounts(
 
 async function getPendingProviderPromotionCounts(
 	env: Env,
+	providerRefreshJobRunId: string,
 ): Promise<PendingProviderPromotionCounts> {
 	const row = await env.DB.prepare(
 		`SELECT
@@ -65,8 +61,11 @@ async function getPendingProviderPromotionCounts(
 		    COUNT(CASE WHEN is_full_refresh = 1 AND provider_id = ${STREAMS_WITH_ADS_PROVIDER_ID} THEN 1 END) AS fullRefreshAdsSupportedMovieCount
 		 FROM movie_watch_providers_staging
 		 WHERE promoted_at IS NULL
-		   AND region = 'US'`,
-	).first<PendingProviderPromotionCounts>();
+		   AND region = 'US'
+		   AND load_run_id = ?`,
+	)
+		.bind(providerRefreshJobRunId)
+		.first<PendingProviderPromotionCounts>();
 
 	return {
 		pendingMovieCount: row?.pendingMovieCount ?? 0,
@@ -81,24 +80,6 @@ async function getPendingProviderPromotionCounts(
 		fullRefreshAdsSupportedMovieCount:
 			row?.fullRefreshAdsSupportedMovieCount ?? 0,
 	};
-}
-
-async function getLatestProviderRefreshRun(
-	env: Env,
-): Promise<LatestProviderRefreshRun | null> {
-	const row = await env.DB.prepare(
-		`SELECT job_run_id,
-		        status,
-		        error_count
-		 FROM import_job_runs
-		 WHERE job_name = ?
-		 ORDER BY started_at DESC
-		 LIMIT 1`,
-	)
-		.bind(TMDB_PROVIDER_REFRESH_JOB_NAME)
-		.first<LatestProviderRefreshRun>();
-
-	return row ?? null;
 }
 
 export async function promotePendingMovieGenres(
@@ -193,6 +174,7 @@ export async function promotePendingMovieGenres(
 export async function promotePendingMovieWatchProviders(
 	env: Env,
 	trigger: ImportJobTrigger,
+	providerRefreshJobRunId: string,
 ) {
 	const startedAtMs = Date.now();
 	const jobRunId = createImportJobRunId(
@@ -207,17 +189,30 @@ export async function promotePendingMovieWatchProviders(
 	});
 
 	try {
-		const counts = await getPendingProviderPromotionCounts(env);
+		const providerRefreshRun = await getImportJobRunById(
+			env,
+			providerRefreshJobRunId,
+		);
+
+		if (
+			!providerRefreshRun ||
+			providerRefreshRun.job_name !== TMDB_PROVIDER_REFRESH_JOB_NAME ||
+			providerRefreshRun.status !== "complete" ||
+			providerRefreshRun.error_count !== 0 ||
+			providerRefreshRun.ended_at === null ||
+			providerRefreshRun.processed_count !== providerRefreshRun.selected_count
+		) {
+			throw new Error(
+				`Cannot apply watch providers because ${providerRefreshJobRunId} is not a complete, error-free ${TMDB_PROVIDER_REFRESH_JOB_NAME} run with all selected movies processed.`,
+			);
+		}
+
+		const counts = await getPendingProviderPromotionCounts(
+			env,
+			providerRefreshJobRunId,
+		);
 
 		if (counts.fullRefreshPendingMovieCount > 0) {
-			const latestProviderRefreshRun = await getLatestProviderRefreshRun(env);
-
-			if (latestProviderRefreshRun?.status !== "complete") {
-				throw new Error(
-					`Cannot promote full-refresh watch-provider staging because latest ${TMDB_PROVIDER_REFRESH_JOB_NAME} run is ${latestProviderRefreshRun?.status ?? "missing"} with ${latestProviderRefreshRun?.error_count ?? 0} errors.`,
-				);
-			}
-
 			await env.DB.batch([
 				env.DB.prepare(
 					`DELETE FROM movie_watch_providers
@@ -243,7 +238,7 @@ export async function promotePendingMovieWatchProviders(
 						  AND is_full_refresh = 1
 						  AND load_run_id = ?
 						  AND provider_id IS NOT NULL`,
-					).bind(jobRunId, latestProviderRefreshRun.job_run_id),
+					).bind(jobRunId, providerRefreshJobRunId),
 					env.DB.prepare(
 						`UPDATE movie_watch_providers_staging
 						 SET promoted_at = CURRENT_TIMESTAMP
@@ -251,57 +246,23 @@ export async function promotePendingMovieWatchProviders(
 						   AND region = 'US'
 						   AND is_full_refresh = 1
 						   AND load_run_id = ?`,
-					).bind(latestProviderRefreshRun.job_run_id),
+					).bind(providerRefreshJobRunId),
 					env.DB.prepare(
 						`DELETE FROM movie_watch_providers_staging
 						 WHERE region = 'US'
 						   AND is_full_refresh = 1
 						   AND load_run_id <> ?`,
-					).bind(latestProviderRefreshRun.job_run_id),
+					).bind(providerRefreshJobRunId),
 				]);
-		} else if (counts.pendingMovieCount > 0) {
-			await env.DB.batch([
-				env.DB.prepare(
-					`DELETE FROM movie_watch_providers
-					 WHERE region = 'US'
-					   AND provider_id <> ?
-					   AND tmdb_id IN (
-					     SELECT DISTINCT tmdb_id
-					     FROM movie_watch_providers_staging
-					     WHERE promoted_at IS NULL
-					       AND region = 'US'
-					 )`,
-				).bind(STREAMS_WITH_ADS_PROVIDER_ID),
-				env.DB.prepare(
-					`INSERT OR REPLACE INTO movie_watch_providers (
-						tmdb_id,
-						provider_id,
-						region,
-						promotion_run_id,
-						promoted_at
-					)
-					SELECT
-						tmdb_id,
-						provider_id,
-						region,
-						?,
-						CURRENT_TIMESTAMP
-					FROM movie_watch_providers_staging
-					WHERE promoted_at IS NULL
-					  AND region = 'US'
-					  AND provider_id IS NOT NULL`,
-				).bind(jobRunId),
-				env.DB.prepare(
-					`UPDATE movie_watch_providers_staging
-					 SET promoted_at = CURRENT_TIMESTAMP
-					 WHERE promoted_at IS NULL
-					   AND region = 'US'`,
-				),
-			]);
+		} else {
+			throw new Error(
+				`Cannot apply watch providers because ${providerRefreshJobRunId} has no pending full-refresh provider rows.`,
+			);
 		}
 
 		const result = {
 			jobRunId,
+			providerRefreshJobRunId,
 			...counts,
 			durationMs: Date.now() - startedAtMs,
 		};

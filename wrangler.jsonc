@@ -177,27 +177,30 @@
 				// 05:00 UTC Sunday (1:00 AM EDT Sunday)
 			"0 5 * * 1",
 			//============================================
-			// TMDB Watch Providers Staging
+			// Independent TMDB Watch Providers Staging
+				// Tuesday, Thursday, and Saturday at 3:00 PM Eastern.
+				// Cloudflare schedules in UTC. Both possible UTC hours are
+				// registered so the scheduled handler can select the one that
+				// is actually 3:00 PM in New York after a daylight-saving change.
+			"0 19,20 * * TUE,THU,SAT",
+			//============================================
+			// TMDB Popularity File Staging
 				// 07:00 UTC Sunday (3:00 AM EDT Sunday)
 			"0 7 * * 1",
 			//============================================
-			// TMDB Popularity File Staging
-				// 09:00 UTC Sunday (5:00 AM EDT Sunday)
-			"0 9 * * 1",
-			//============================================
 			// Movie List Production
-				// 12:00 UTC Sunday (8:00 AM EDT Sunday)
-			"0 12 * * 1",
+				// 10:00 UTC Sunday (6:00 AM EDT Sunday)
+			"0 10 * * 1",
 			//============================================
 			// Search Cache Warm All Genres
-				// 13:00 UTC Sunday (9:00 AM EDT Sunday)
-			"0 13 * * 1",
+				// 11:00 UTC Sunday (7:00 AM EDT Sunday)
+			"0 11 * * 1",
 			//============================================
 			// Final weekly import validation
-				// 15:00 UTC Sunday (11:00 AM EDT Sunday). This is two
+				// 13:00 UTC Sunday (9:00 AM EDT Sunday). This is two
 				// hours after cache warming begins, so the validator can
 				// detect any job that never reached a terminal status.
-			"0 15 * * 1"
+			"0 13 * * 1"
 		]
 	}
 	/**

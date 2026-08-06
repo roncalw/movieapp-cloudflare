@@ -122,7 +122,6 @@ export type MovieListBuildQueueContext = {
 		movieListCandidateRows: number;
 	};
 	genrePromotion: unknown;
-	watchProviderPromotion: unknown;
 	imdbCleanupPreviousRunId?: string | null;
 	imdbCleanupCandidateRows?: number;
 	imdbCleanupSkipped?: boolean;

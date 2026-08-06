@@ -12,6 +12,7 @@ import {
 	CACHE_WARM_SEARCH_PAGE_LIMIT,
 	CACHE_WARM_SEARCH_QUEUE_KIND,
 	type CacheWarmGenreConfig,
+	type CacheWarmSource,
 	type CacheWarmTrigger,
 	type CacheWarmSearchQueueMessage,
 } from "./cacheWarmTypes";
@@ -23,6 +24,7 @@ type EnqueueCacheWarmSearchOptions = {
 	trigger: CacheWarmTrigger;
 	genreKey?: string;
 	genreId?: number;
+	source?: CacheWarmSource;
 };
 
 function selectGenres(options: EnqueueCacheWarmSearchOptions) {
@@ -117,6 +119,7 @@ export async function enqueueCacheWarmSearchJob(
 		selectedEntryCount: queueMessages.length,
 		pageLimit: CACHE_WARM_SEARCH_PAGE_LIMIT,
 		selectedGenres: selectedGenres.map((genre) => genre.key),
+		source: options.source,
 	});
 
 	for (const chunk of chunkMessages(queueMessages, CACHE_WARM_MESSAGES_PER_SEND_BATCH)) {
@@ -143,6 +146,7 @@ export async function enqueueCacheWarmSearchJob(
 		})),
 		selectedGenreCount: selectedGenres.length,
 		selectedEntryCount: queueMessages.length,
+		source: options.source ?? null,
 		rowsQueued: queueMessages.length,
 		messagesQueued: queueMessages.length,
 		pageLimit: CACHE_WARM_SEARCH_PAGE_LIMIT,

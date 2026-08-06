@@ -71,7 +71,6 @@ function buildQueueContext(): MovieListBuildQueueContext {
 			movieListCandidateRows: 10,
 		},
 		genrePromotion: { pendingMovieCount: 1 },
-		watchProviderPromotion: { pendingMovieCount: 2 },
 	};
 }
 

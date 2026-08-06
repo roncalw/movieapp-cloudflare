@@ -4,6 +4,14 @@ export const CACHE_WARM_SEARCH_PAGE_LIMIT = 10;
 
 export type CacheWarmTrigger = "manual" | "cron";
 
+export type CacheWarmSource =
+	| { kind: "weekly-movie-list" }
+	| {
+			kind: "provider-refresh";
+			providerRefreshJobRunId: string;
+			providerPromotionJobRunId: string;
+	  };
+
 export type CacheWarmUrlEntry = {
 	name: string;
 	url: string;

@@ -93,7 +93,7 @@ const [
 	imdbCron,
 	tmdbPrimaryCron,
 	tmdbNewMovieDetailsCron,
-	tmdbEnrichmentCron,
+	tmdbProviderRefreshCron,
 	tmdbPopularityCron,
 	movieListBuildCron,
 	cacheWarmAllGenresCron,
@@ -106,7 +106,7 @@ const output = `// Generated from wrangler.jsonc by Wrangler's build command.
 export const SCHEDULED_IMDB_CRON = ${JSON.stringify(imdbCron)};
 export const SCHEDULED_TMDB_PRIMARY_CRON = ${JSON.stringify(tmdbPrimaryCron)};
 export const SCHEDULED_TMDB_NEW_MOVIE_DETAILS_CRON = ${JSON.stringify(tmdbNewMovieDetailsCron)};
-export const SCHEDULED_TMDB_ENRICHMENT_CRON = ${JSON.stringify(tmdbEnrichmentCron)};
+export const SCHEDULED_TMDB_PROVIDER_REFRESH_CRON = ${JSON.stringify(tmdbProviderRefreshCron)};
 export const SCHEDULED_TMDB_POPULARITY_CRON = ${JSON.stringify(tmdbPopularityCron)};
 export const SCHEDULED_MOVIE_LIST_BUILD_CRON = ${JSON.stringify(movieListBuildCron)};
 export const SCHEDULED_CACHE_WARM_ALL_GENRES_CRON = ${JSON.stringify(cacheWarmAllGenresCron)};

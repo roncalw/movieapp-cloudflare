@@ -10,6 +10,7 @@ import { logEvent } from "../shared/logging";
 import type { Env } from "../shared/types";
 import {
 	CACHE_WARM_SEARCH_JOB_NAME,
+	type CacheWarmSource,
 	type CacheWarmSearchStats,
 } from "./cacheWarmTypes";
 
@@ -27,6 +28,7 @@ export async function createCacheWarmSearchJobRun(
 		selectedEntryCount: number;
 		pageLimit: number;
 		selectedGenres: string[];
+		source?: CacheWarmSource;
 	},
 ) {
 	await createImportJobRun(env, {
@@ -52,6 +54,15 @@ export async function createCacheWarmSearchJobRun(
 				selectedEntryCount: options.selectedEntryCount,
 				pageLimit: options.pageLimit,
 				selectedGenres: options.selectedGenres,
+				sourceKind: options.source?.kind ?? null,
+				providerRefreshJobRunId:
+					options.source?.kind === "provider-refresh"
+						? options.source.providerRefreshJobRunId
+						: null,
+				providerPromotionJobRunId:
+					options.source?.kind === "provider-refresh"
+						? options.source.providerPromotionJobRunId
+						: null,
 				pageCount: 0,
 				firstRequestCount: 0,
 				retryRequestCount: 0,
@@ -228,11 +239,11 @@ export async function recordCacheWarmSearchProgress(
 	if (insertResult?.meta.changes === 0) {
 		await refreshCacheWarmSearchProgressFromQueueMessages(env, options.jobRunId);
 		await notifyImportJobRunCompletion(env, options.jobRunId);
-		return;
+		return getImportJobRunById(env, options.jobRunId);
 	}
 
 	if (updateResult?.meta.changes === 0) {
-		return;
+		return null;
 	}
 
 	const run = await getImportJobRunById(env, options.jobRunId);
@@ -258,7 +269,10 @@ export async function recordCacheWarmSearchProgress(
 		});
 
 		await notifyImportJobRunCompletion(env, options.jobRunId);
+		return run;
 	}
+
+	return null;
 }
 
 async function refreshCacheWarmSearchProgressFromQueueMessages(

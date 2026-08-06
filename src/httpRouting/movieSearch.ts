@@ -1,5 +1,8 @@
 import type { Env } from "../shared/types";
-import { MOVIE_LIST_BUILD_JOB_NAME } from "../jobs/importJobRuns";
+import {
+	MOVIE_LIST_BUILD_JOB_NAME,
+	MOVIE_WATCH_PROVIDERS_PROMOTE_JOB_NAME,
+} from "../jobs/importJobRuns";
 import { STREAMS_WITH_ADS_PROVIDER_ID } from "../shared/watchProviderAvailability";
 
 type MovieSearchListItem = {
@@ -37,34 +40,52 @@ export class RequestValidationError extends Error {}
 const MOVIE_SEARCH_CACHE_SECONDS = 60 * 60 * 24 * 7;
 const MOVIE_SEARCH_STALE_SECONDS = 60 * 60 * 24;
 const MOVIE_SEARCH_CACHE_GENERATION_PARAM = "__movieListBuild";
+const MOVIE_SEARCH_PROVIDER_GENERATION_PARAM = "__providerApply";
 const MOVIE_SEARCH_RESPONSE_VERSION_PARAM = "__responseVersion";
 const MOVIE_SEARCH_RESPONSE_VERSION = "subscription-or-ads-availability-v2";
 
 type MovieSearchCacheGenerationRow = {
-	job_run_id: string;
+	movie_list_job_run_id: string | null;
+	provider_apply_job_run_id: string | null;
 };
 
 async function getMovieSearchCacheGeneration(env: Env) {
 	/*
-		Each successful movie-list build receives a unique job-run ID. Adding that
-		ID to the internal cache key means a newly completed build immediately gets
-		a fresh set of cached search results. The caller's public URL is unchanged,
-		and the large movie_list_items table is queried only when the new cache key
-		misses. A request that hits the cache performs only this small indexed lookup
-		in the job-history table.
+		Each successful Movie List build and provider application receives a unique
+		job-run ID. Both IDs belong in the internal cache key: Movie List changes
+		movie fields, while provider application changes streamer filters and the
+		availability answer used by the shopping-bag badge. The caller's public URL
+		is unchanged. A request that hits the cache performs only these two small,
+		indexed job-history lookups.
 	*/
 	const row = await env.DB.prepare(
-		`SELECT job_run_id
-		 FROM import_job_runs
-		 WHERE job_name = ?
-		   AND status = 'complete'
-		 ORDER BY started_at DESC
-		 LIMIT 1`,
+		`SELECT
+		   (
+		     SELECT job_run_id
+		     FROM import_job_runs
+		     WHERE job_name = ?
+		       AND status = 'complete'
+		     ORDER BY started_at DESC
+		     LIMIT 1
+		   ) AS movie_list_job_run_id,
+		   (
+		     SELECT job_run_id
+		     FROM import_job_runs
+		     WHERE job_name = ?
+		       AND status = 'complete'
+		     ORDER BY started_at DESC
+		     LIMIT 1
+		   ) AS provider_apply_job_run_id`,
 	)
-		.bind(MOVIE_LIST_BUILD_JOB_NAME)
+		.bind(MOVIE_LIST_BUILD_JOB_NAME, MOVIE_WATCH_PROVIDERS_PROMOTE_JOB_NAME)
 		.first<MovieSearchCacheGenerationRow>();
 
-	return row?.job_run_id ?? "before-first-complete-build";
+	return {
+		movieListJobRunId:
+			row?.movie_list_job_run_id ?? "before-first-complete-build",
+		providerApplyJobRunId:
+			row?.provider_apply_job_run_id ?? "before-first-provider-apply",
+	};
 }
 
 function isIsoDate(value: string) {
@@ -694,7 +715,11 @@ export async function getCachedMovieSearchResponse(
 	const cacheUrl = new URL(searchUrl.toString());
 	cacheUrl.searchParams.set(
 		MOVIE_SEARCH_CACHE_GENERATION_PARAM,
-		cacheGeneration,
+		cacheGeneration.movieListJobRunId,
+	);
+	cacheUrl.searchParams.set(
+		MOVIE_SEARCH_PROVIDER_GENERATION_PARAM,
+		cacheGeneration.providerApplyJobRunId,
 	);
 	/*
 		A cache entry stores the complete JSON response. When that response gains a

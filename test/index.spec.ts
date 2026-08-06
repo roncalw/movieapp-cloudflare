@@ -301,6 +301,7 @@ function createMockEnv(rows: unknown[], envOverrides: Partial<Env> = {}) {
 	*/
 	let preparedSql = "";
 	let preparedBindings: unknown[] = [];
+	const preparedCalls: Array<{ sql: string; bindings: unknown[] }> = [];
 	let prepareCount = 0;
 
 	const env = {
@@ -316,10 +317,13 @@ function createMockEnv(rows: unknown[], envOverrides: Partial<Env> = {}) {
 			prepare(sql: string) {
 				preparedSql = sql;
 				prepareCount += 1;
+				const preparedCall = { sql, bindings: [] as unknown[] };
+				preparedCalls.push(preparedCall);
 
 				return {
 					bind(...bindings: unknown[]) {
 						preparedBindings = bindings;
+						preparedCall.bindings = bindings;
 						return this;
 					},
 					/*
@@ -350,6 +354,7 @@ function createMockEnv(rows: unknown[], envOverrides: Partial<Env> = {}) {
 		env,
 		getPreparedSql: () => preparedSql,
 		getPreparedBindings: () => preparedBindings,
+		getPreparedCalls: () => preparedCalls,
 		getPrepareCount: () => prepareCount,
 	};
 }
@@ -660,6 +665,26 @@ describe("MovieApp Worker", () => {
 		*/
 		expect(mock.getPrepareCount()).toBe(3);
 		expect(mock.getPreparedSql()).toContain("FROM import_job_runs");
+	});
+
+	it("changes the Advanced Search cache generation when providers are applied", async () => {
+		const mock = createMockEnv([]);
+
+		const response = await worker.fetch(
+			new IncomingRequest(
+				"http://provider-cache-generation.example/movies/search?pageSize=20",
+			),
+			mock.env,
+		);
+		const generationCall = mock
+			.getPreparedCalls()
+			.find(({ sql }) => sql.includes("AS provider_apply_job_run_id"));
+
+		expect(response.status).toBe(200);
+		expect(generationCall?.bindings).toEqual([
+			"movie-list-build",
+			"movie-watch-providers-promote",
+		]);
 	});
 
 	it("does not reuse an Advanced Search response saved before ads availability existed", async () => {

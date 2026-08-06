@@ -70,6 +70,8 @@ export const MOVIE_LIST_CURRENT_COUNT_SNAPSHOT_JOB_NAME =
 export const MOVIE_GENRES_PROMOTE_JOB_NAME = "movie-genres-promote";
 export const MOVIE_WATCH_PROVIDERS_PROMOTE_JOB_NAME =
 	"movie-watch-providers-promote";
+export const PROVIDER_AVAILABILITY_VALIDATION_JOB_NAME =
+	"provider-availability-validation";
 export const WEEKLY_IMPORT_VALIDATION_JOB_NAME =
 	"weekly-import-validation";
 

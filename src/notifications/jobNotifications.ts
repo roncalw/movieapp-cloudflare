@@ -30,6 +30,7 @@ const JOB_NAME_TITLES: Record<string, string> = {
 	"movie-list-current-count-snapshot": "Movie List Current Count Snapshot",
 	"movie-list-potential-load-check": "Movie List Potential Load Safety Check",
 	"movie-watch-providers-promote": "Movie Watch Providers Apply Step",
+	"provider-availability-validation": "Provider Availability Refresh",
 	"tmdb-enrich": "TMDB Full Detail Enrichment Job",
 	"tmdb-genre-lookup-refresh": "TMDB Genre Lookup Refresh Job",
 	"tmdb-language-lookup-refresh": "TMDB Language Lookup Refresh Job",

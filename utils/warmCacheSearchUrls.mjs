@@ -7,6 +7,9 @@ const currentDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(currentDir, "..");
 const defaultUrlFilePath = resolve(projectRoot, "data/cacheSearchURL.jsonc");
 const maxPagesPerUrl = 10;
+const defaultOriginalLanguage = "en";
+const cacheConfirmationMaxAttempts = 3;
+const cacheConfirmationDelayMs = 250;
 const urlFilePath = process.argv[2]
   ? resolve(process.cwd(), process.argv[2])
   : defaultUrlFilePath;
@@ -104,6 +107,17 @@ async function requestUrl(url) {
   };
 }
 
+function wait(ms) {
+  return new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
+}
+
+function addDefaultOriginalLanguage(url) {
+  const cacheUrl = new URL(url);
+  cacheUrl.searchParams.set("originalLanguages", defaultOriginalLanguage);
+  cacheUrl.searchParams.sort();
+  return cacheUrl.toString();
+}
+
 function parseJsonBody(bodyText) {
   if (bodyText.trim() === "") {
     return null;
@@ -160,18 +174,46 @@ async function warmPage(url, pageNumber) {
   const firstResult = await requestUrl(url);
   logResult(`page ${pageNumber} first`, firstResult);
 
+  if (firstResult.httpStatus >= 400) {
+    throw new Error(`Cache warm request failed: ${firstResult.httpStatus}`);
+  }
+
   if (firstResult.status !== "MISS") {
     return firstResult;
   }
 
-  const secondResult = await requestUrl(url);
-  logResult(`page ${pageNumber} retry`, secondResult);
+  for (
+    let confirmationAttempt = 1;
+    confirmationAttempt <= cacheConfirmationMaxAttempts;
+    confirmationAttempt += 1
+  ) {
+    if (confirmationAttempt > 1) {
+      await wait(cacheConfirmationDelayMs * (confirmationAttempt - 1));
+    }
 
-  return secondResult;
+    const retryResult = await requestUrl(url);
+    logResult(
+      `page ${pageNumber} confirmation ${confirmationAttempt}`,
+      retryResult,
+    );
+
+    if (retryResult.httpStatus >= 400) {
+      throw new Error(`Cache warm retry failed: ${retryResult.httpStatus}`);
+    }
+
+    if (retryResult.status === "HIT") {
+      return retryResult;
+    }
+  }
+
+  throw new Error(
+    `Cache warm confirmation did not reach HIT after ${cacheConfirmationMaxAttempts} attempts.`,
+  );
 }
 
 async function warmSearchEntry(entry) {
-  let currentUrl = entry.url;
+  const baseUrl = addDefaultOriginalLanguage(entry.url);
+  let currentUrl = baseUrl;
 
   for (let pageNumber = 1; pageNumber <= maxPagesPerUrl; pageNumber += 1) {
     console.log(`page ${pageNumber}: ${currentUrl}`);
@@ -184,7 +226,7 @@ async function warmSearchEntry(entry) {
       return;
     }
 
-    currentUrl = appendCursorToUrl(entry.url, nextCursor);
+    currentUrl = appendCursorToUrl(baseUrl, nextCursor);
   }
 
   console.log(`stopped after page ${maxPagesPerUrl}`);

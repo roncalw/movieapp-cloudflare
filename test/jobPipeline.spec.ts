@@ -6,7 +6,11 @@ import {
 import { checkImportJobDependencies } from "../src/jobs/importJobDependencies";
 import type { ImportJobRunRow } from "../src/jobs/importJobRuns";
 import { getEmailOutcomeLabel } from "../src/notifications/jobNotifications";
-import { classifyProviderLookupOutcome } from "../src/imports/tmdbProviderRefresh";
+import {
+	classifyProviderLookupOutcome,
+	enqueueTmdbProviderRefreshJob,
+} from "../src/imports/tmdbProviderRefresh";
+import { promotePendingMovieWatchProviders } from "../src/imports/movieRelationshipPromotions";
 import { insertImdbRatingQueueRows } from "../src/imports/imdbRatings";
 import {
 	getImdbSourceJoinSql,
@@ -15,7 +19,24 @@ import {
 import {
 	getMovieListSourceRunIssues,
 	getWeeklyImportValidationIssues,
+	MOVIE_LIST_SUCCESS_JOB_NAMES,
+	REQUIRED_WEEKLY_IMPORT_JOB_NAMES,
 } from "../src/jobs/weeklyImportValidation";
+import { isIndependentProviderRefreshTime } from "../src/jobs/scheduled";
+import {
+	SCHEDULED_CACHE_WARM_ALL_GENRES_CRON,
+	SCHEDULED_IMDB_CRON,
+	SCHEDULED_MOVIE_LIST_BUILD_CRON,
+	SCHEDULED_TMDB_NEW_MOVIE_DETAILS_CRON,
+	SCHEDULED_TMDB_POPULARITY_CRON,
+	SCHEDULED_TMDB_PRIMARY_CRON,
+	SCHEDULED_TMDB_PROVIDER_REFRESH_CRON,
+	SCHEDULED_WEEKLY_IMPORT_VALIDATION_CRON,
+} from "../src/jobs/scheduledCronConfig";
+import {
+	getProviderAvailabilityCountIssues,
+	type ProviderAvailabilityCounts,
+} from "../src/jobs/providerAvailabilityCycle";
 import {
 	handleQueue,
 	IMPORT_DEAD_LETTER_QUEUE_NAME,
@@ -93,6 +114,97 @@ describe("weekly import job safety", () => {
 		);
 	});
 
+	it("keeps the provider refresh independent from the weekly required-job lists", () => {
+		expect(REQUIRED_WEEKLY_IMPORT_JOB_NAMES).not.toContain(
+			"tmdb-provider-refresh",
+		);
+		expect(MOVIE_LIST_SUCCESS_JOB_NAMES).not.toContain(
+			"movie-watch-providers-promote",
+		);
+	});
+
+	it("uses the approved weekly times after removing the old provider slot", () => {
+		expect({
+			imdb: SCHEDULED_IMDB_CRON,
+			tmdbPrimary: SCHEDULED_TMDB_PRIMARY_CRON,
+			newMovieDetails: SCHEDULED_TMDB_NEW_MOVIE_DETAILS_CRON,
+			provider: SCHEDULED_TMDB_PROVIDER_REFRESH_CRON,
+			popularity: SCHEDULED_TMDB_POPULARITY_CRON,
+			movieList: SCHEDULED_MOVIE_LIST_BUILD_CRON,
+			cacheWarm: SCHEDULED_CACHE_WARM_ALL_GENRES_CRON,
+			weeklyValidation: SCHEDULED_WEEKLY_IMPORT_VALIDATION_CRON,
+		}).toEqual({
+			imdb: "0 1 * * 1",
+			tmdbPrimary: "0 3 * * 1",
+			newMovieDetails: "0 5 * * 1",
+			provider: "0 19,20 * * TUE,THU,SAT",
+			popularity: "0 7 * * 1",
+			movieList: "0 10 * * 1",
+			cacheWarm: "0 11 * * 1",
+			weeklyValidation: "0 13 * * 1",
+		});
+	});
+
+	it("starts the independent provider refresh at 3 PM Eastern in summer and winter", () => {
+		// Tuesday, August 4, 2026: New York is on daylight time (UTC-4).
+		expect(
+			isIndependentProviderRefreshTime(Date.parse("2026-08-04T19:00:00Z")),
+		).toBe(true);
+		expect(
+			isIndependentProviderRefreshTime(Date.parse("2026-08-04T20:00:00Z")),
+		).toBe(false);
+
+		// Tuesday, December 1, 2026: New York is on standard time (UTC-5).
+		expect(
+			isIndependentProviderRefreshTime(Date.parse("2026-12-01T19:00:00Z")),
+		).toBe(false);
+		expect(
+			isIndependentProviderRefreshTime(Date.parse("2026-12-01T20:00:00Z")),
+		).toBe(true);
+	});
+
+	it("stops a provider replacement when the completed snapshot drops too far", () => {
+		const current: ProviderAvailabilityCounts = {
+			subscriptionRelationshipCount: 100,
+			subscriptionMovieCount: 100,
+			adsMovieCount: 100,
+			totalAvailabilityRelationshipCount: 100,
+			availabilityMovieCount: 100,
+		};
+		const exactlyAllowed: ProviderAvailabilityCounts = {
+			subscriptionRelationshipCount: 90,
+			subscriptionMovieCount: 90,
+			adsMovieCount: 90,
+			totalAvailabilityRelationshipCount: 90,
+			availabilityMovieCount: 90,
+		};
+		const unsafe: ProviderAvailabilityCounts = {
+			...exactlyAllowed,
+			totalAvailabilityRelationshipCount: 89,
+		};
+
+		expect(
+			getProviderAvailabilityCountIssues(current, exactlyAllowed),
+		).toEqual([]);
+		expect(getProviderAvailabilityCountIssues(current, unsafe)).toEqual([
+			"all availability relationships dropped 11.00% from 100 to 89; allowed decrease 10%.",
+		]);
+	});
+
+	it("never replaces live providers with an empty completed snapshot", () => {
+		const empty: ProviderAvailabilityCounts = {
+			subscriptionRelationshipCount: 0,
+			subscriptionMovieCount: 0,
+			adsMovieCount: 0,
+			totalAvailabilityRelationshipCount: 0,
+			availabilityMovieCount: 0,
+		};
+
+		expect(getProviderAvailabilityCountIssues(empty, empty)).toEqual([
+			"The completed provider refresh contains no availability rows.",
+		]);
+	});
+
 	it("treats a TMDB provider 404 as an accepted unavailable outcome", () => {
 		const outcome = classifyProviderLookupOutcome(
 			null,
@@ -112,6 +224,125 @@ describe("weekly import job safety", () => {
 			"TMDB request failed: 404 Not Found",
 		);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("starts Provider Refresh without requiring same-day weekly TMDb jobs", async () => {
+		const prepared: Array<{ sql: string; bindings: unknown[] }> = [];
+		const send = vi.fn().mockResolvedValue(undefined);
+		const env = {
+			JOB_NOTIFICATION_EMAIL_ENABLED: "false",
+			DB: {
+				prepare(sql: string) {
+					const call = { sql, bindings: [] as unknown[] };
+					prepared.push(call);
+					return {
+						bind(...bindings: unknown[]) {
+							call.bindings = bindings;
+							return this;
+						},
+						async all() {
+							return { results: [] };
+						},
+						async first() {
+							return null;
+						},
+						async run() {
+							return { meta: { changes: 1 } };
+						},
+					};
+				},
+				async batch() {
+					return [{ meta: { changes: 1 } }];
+				},
+			},
+			TMDB_ENRICHMENT_QUEUE: { send },
+		} as unknown as Env;
+
+		const result = await enqueueTmdbProviderRefreshJob(env, {
+			trigger: "manual",
+			useLock: false,
+			nowMs: Date.parse("2026-08-04T19:00:00Z"),
+		});
+		const allBindings = prepared.flatMap(({ bindings }) => bindings);
+
+		expect(result).toMatchObject({
+			trigger: "manual",
+			phase: "candidate_discovery",
+			discoveryQueued: true,
+		});
+		expect(send).toHaveBeenCalledOnce();
+		expect(allBindings).not.toContain("tmdb-primary");
+		expect(allBindings).not.toContain("tmdb-new-movie-details");
+	});
+
+	it("applies provider rows from the exact completed refresh run", async () => {
+		type FakeStatement = {
+			sql: string;
+			bindings: unknown[];
+			bind: (...bindings: unknown[]) => FakeStatement;
+			first: () => Promise<unknown>;
+			run: () => Promise<{ meta: { changes: number } }>;
+		};
+		const exactRefreshRunId = "tmdb-provider-refresh-cron-exact";
+		const batchStatements: FakeStatement[] = [];
+		const env = {
+			JOB_NOTIFICATION_EMAIL_ENABLED: "false",
+			DB: {
+				prepare(sql: string) {
+					const statement: FakeStatement = {
+						sql,
+						bindings: [],
+						bind(...bindings: unknown[]) {
+							this.bindings = bindings;
+							return this;
+						},
+						async first() {
+							if (sql.includes("WHERE job_run_id = ?")) {
+								return buildRun({
+									job_run_id: exactRefreshRunId,
+									job_name: "tmdb-provider-refresh",
+								});
+							}
+
+							return {
+								pendingMovieCount: 80_000,
+								pendingProviderCount: 190_000,
+								pendingAvailabilityRelationshipCount: 260_000,
+								adsSupportedMovieCount: 70_000,
+								fullRefreshPendingMovieCount: 80_000,
+								fullRefreshPendingProviderCount: 190_000,
+								fullRefreshPendingAvailabilityRelationshipCount: 260_000,
+								fullRefreshAdsSupportedMovieCount: 70_000,
+							};
+						},
+						async run() {
+							return { meta: { changes: 1 } };
+						},
+					};
+					return statement;
+				},
+				async batch(statements: FakeStatement[]) {
+					batchStatements.push(...statements);
+					return statements.map(() => ({ meta: { changes: 1 } }));
+				},
+			},
+		} as unknown as Env;
+
+		await promotePendingMovieWatchProviders(
+			env,
+			"cron",
+			exactRefreshRunId,
+		);
+		const insert = batchStatements.find(({ sql }) =>
+			sql.includes("INSERT OR REPLACE INTO movie_watch_providers"),
+		);
+		const markApplied = batchStatements.find(({ sql }) =>
+			sql.includes("UPDATE movie_watch_providers_staging"),
+		);
+
+		expect(insert?.sql).toContain("load_run_id = ?");
+		expect(insert?.bindings.at(-1)).toBe(exactRefreshRunId);
+		expect(markApplied?.bindings).toEqual([exactRefreshRunId]);
 	});
 
 	it("discovers US ad-supported movies without making per-movie provider requests", async () => {

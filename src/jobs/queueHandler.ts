@@ -51,6 +51,10 @@ import {
 	failActiveImportJobRun,
 	MOVIE_LIST_BUILD_JOB_NAME,
 } from "./importJobRuns";
+import {
+	finalizeProviderAvailabilityCycleForCacheRun,
+	recordProviderAvailabilityCycleFailure,
+} from "./providerAvailabilityCycle";
 
 export const IMPORT_DEAD_LETTER_QUEUE_NAME =
 	"movieapp-import-dead-letter-queue";
@@ -91,6 +95,21 @@ async function handleDeadLetterQueue(
 				MOVIE_LIST_BUILD_JOB_NAME,
 				movieListLockOwner,
 			);
+		}
+
+		if (
+			isTmdbProviderRefreshQueueMessage(message.body) ||
+			isTmdbProviderRefreshDiscoveryQueueMessage(message.body)
+		) {
+			await recordProviderAvailabilityCycleFailure(
+				env,
+				jobRunId,
+				reason,
+			);
+		}
+
+		if (isCacheWarmSearchQueueMessage(message.body)) {
+			await finalizeProviderAvailabilityCycleForCacheRun(env, jobRunId);
 		}
 
 		logEvent("queue-message-dead-lettered", {

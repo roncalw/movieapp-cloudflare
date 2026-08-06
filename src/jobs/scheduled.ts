@@ -18,10 +18,10 @@ import {
 	SCHEDULED_CACHE_WARM_ALL_GENRES_CRON,
 	SCHEDULED_IMDB_CRON,
 	SCHEDULED_MOVIE_LIST_BUILD_CRON,
-	SCHEDULED_TMDB_ENRICHMENT_CRON,
 	SCHEDULED_TMDB_NEW_MOVIE_DETAILS_CRON,
 	SCHEDULED_TMDB_POPULARITY_CRON,
 	SCHEDULED_TMDB_PRIMARY_CRON,
+	SCHEDULED_TMDB_PROVIDER_REFRESH_CRON,
 	SCHEDULED_WEEKLY_IMPORT_VALIDATION_CRON,
 } from "./scheduledCronConfig";
 import { validateWeeklyImportPipeline } from "./weeklyImportValidation";
@@ -37,6 +37,33 @@ type JobPauseFlagName =
 	| "TMDB_ENRICH_JOB_PAUSED"
 	| "MOVIE_LIST_JOB_PAUSED"
 	| "PIPELINE_VALIDATION_JOB_PAUSED";
+
+const PROVIDER_REFRESH_TIME_ZONE = "America/New_York";
+const PROVIDER_REFRESH_LOCAL_HOUR = 15;
+const PROVIDER_REFRESH_LOCAL_WEEKDAYS = new Set(["Tue", "Thu", "Sat"]);
+
+/**
+ * Cloudflare evaluates Cron Triggers in UTC, while the provider refresh must
+ * remain at 3:00 PM New York time. Its cron expression contains both UTC hours
+ * that can represent that Eastern time. Only the matching daylight-saving
+ * candidate is allowed to start the job.
+ */
+export function isIndependentProviderRefreshTime(scheduledTime: number) {
+	const parts = new Intl.DateTimeFormat("en-US", {
+		timeZone: PROVIDER_REFRESH_TIME_ZONE,
+		weekday: "short",
+		hour: "2-digit",
+		minute: "2-digit",
+		hourCycle: "h23",
+	}).formatToParts(new Date(scheduledTime));
+	const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+	return (
+		PROVIDER_REFRESH_LOCAL_WEEKDAYS.has(values.weekday ?? "") &&
+		Number(values.hour) === PROVIDER_REFRESH_LOCAL_HOUR &&
+		Number(values.minute) === 0
+	);
+}
 
 function isPauseFlagEnabled(value: string | undefined) {
 	return value?.toLowerCase() === "true";
@@ -172,6 +199,7 @@ async function runScheduledCacheWarmAllGenres(
 
 	return enqueueCacheWarmSearchJob(env, {
 		trigger: "cron",
+		source: { kind: "weekly-movie-list" },
 	});
 }
 
@@ -267,7 +295,18 @@ export function handleScheduled(
 		return;
 	}
 
-	if (controller.cron === SCHEDULED_TMDB_ENRICHMENT_CRON) {
+	if (controller.cron === SCHEDULED_TMDB_PROVIDER_REFRESH_CRON) {
+		if (!isIndependentProviderRefreshTime(controller.scheduledTime)) {
+			logEvent("scheduled-cron-daylight-saving-candidate-skipped", {
+				jobName: "tmdb-provider-refresh",
+				cron: controller.cron,
+				scheduledTime: new Date(controller.scheduledTime).toISOString(),
+				timeZone: PROVIDER_REFRESH_TIME_ZONE,
+				expectedLocalHour: PROVIDER_REFRESH_LOCAL_HOUR,
+			});
+			return;
+		}
+
 		if (
 			skipPausedScheduledJob(
 				env,

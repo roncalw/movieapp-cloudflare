@@ -280,7 +280,6 @@ export async function enqueueMovieListPopularityQueueWork(
 		popularityTmdbIdRange: MOVIE_LIST_POPULARITY_TMDB_ID_RANGE,
 		readiness: context.readiness,
 		genrePromotion: context.genrePromotion,
-		watchProviderPromotion: context.watchProviderPromotion,
 		startedAt: context.startedAt,
 	};
 
@@ -1012,7 +1011,6 @@ async function completeQueuedMovieListBuild(
 		},
 		deletedRows: 0,
 		genrePromotion: message.context.genrePromotion,
-		watchProviderPromotion: message.context.watchProviderPromotion,
 		readiness: message.context.readiness,
 		currentCountSnapshot,
 		startedAt: message.context.startedAt,
