@@ -348,6 +348,19 @@ export async function handleFetch(
 	}
 
 	if (url.pathname === "/admin/import/imdb-ratings/enqueue-manual") {
+		const allowedParams = new Set(["limit"]);
+		for (const key of url.searchParams.keys()) {
+			if (!allowedParams.has(key)) {
+				return Response.json(
+					{
+						error:
+							"enqueue-manual only accepts the optional limit parameter.",
+					},
+					{ status: 400 },
+				);
+			}
+		}
+
 		const rawLimit = url.searchParams.get("limit");
 		const limit = rawLimit === null ? undefined : Number(rawLimit);
 		if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {

@@ -1138,6 +1138,20 @@ describe("MovieApp Worker", () => {
 		});
 	});
 
+	it("rejects unknown IMDb enqueue parameters without starting an import", async () => {
+		const mock = createMockEnv([]);
+		const request = createManualAdminRequest(
+			"http://example.com/admin/import/imdb-ratings/enqueue-manual?unexpectedParameter=1",
+		);
+		const response = await worker.fetch(request, mock.env);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: "enqueue-manual only accepts the optional limit parameter.",
+		});
+		expect(mock.getPreparedSql()).toBe("");
+	});
+
 	it("rejects query strings on TMDB lookup refresh manual endpoints", async () => {
 		const mock = createMockEnv([]);
 

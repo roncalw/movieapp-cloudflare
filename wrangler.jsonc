@@ -109,7 +109,13 @@
 				"max_batch_size": 100,
 				"max_batch_timeout": 10,
 				"max_retries": 10,
-				"dead_letter_queue": "movieapp-import-dead-letter-queue"
+				"dead_letter_queue": "movieapp-import-dead-letter-queue",
+				// D1 processes writes serially, but a bounded amount of concurrent
+				// request pipelining keeps it busy without unrestricted queue autoscaling.
+				"max_concurrency": 20,
+				// If D1 is temporarily unavailable, wait before trying the same
+				// 25-rating message again instead of spending all retries immediately.
+				"retry_delay": 60
 			},
 			{
 				"queue": "movieapp-tmdb-enrichment-queue",
