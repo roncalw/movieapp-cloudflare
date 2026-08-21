@@ -5,7 +5,11 @@ import {
 } from "../src/externalApis/tmdbClient";
 import { checkImportJobDependencies } from "../src/jobs/importJobDependencies";
 import type { ImportJobRunRow } from "../src/jobs/importJobRuns";
-import { getEmailOutcomeLabel } from "../src/notifications/jobNotifications";
+import {
+	getEmailOutcomeLabel,
+	getJobNotificationSubject,
+	getJobTitle,
+} from "../src/notifications/jobNotifications";
 import {
 	classifyProviderLookupOutcome,
 	enqueueTmdbProviderRefreshJob,
@@ -594,8 +598,8 @@ describe("weekly import job safety", () => {
 	});
 
 	it("confirms a cache write again when the immediate retry also misses", async () => {
-		const fetchMock = vi
-			.spyOn(globalThis, "fetch")
+		const requestMock = vi
+			.fn()
 			.mockResolvedValueOnce(
 				new Response("{}", {
 					headers: { "x-movieapp-cache": "MISS" },
@@ -625,13 +629,38 @@ describe("weekly import job safety", () => {
 		const result = await warmCachePage(
 			"https://example.com/movies/search?pageSize=20",
 			stats,
+			requestMock,
 		);
 
 		expect(result.status).toBe("HIT");
-		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(requestMock).toHaveBeenCalledTimes(3);
 		expect(stats.firstRequestCount).toBe(1);
 		expect(stats.retryRequestCount).toBe(2);
 		expect(stats.missCount).toBe(2);
 		expect(stats.retryHitCount).toBe(1);
+	});
+
+	it("names the final provider email as a summary report and puts its outcome after the title", () => {
+		expect(getJobTitle("provider-availability-validation")).toBe(
+			"Provider Refresh Job Summary Report",
+		);
+		expect(
+			getJobNotificationSubject(
+				"provider-availability-validation",
+				"complete",
+				"12 seconds",
+			),
+		).toBe(
+			"[MovieApp] Provider Refresh Job Summary Report: SUCCESS (complete, 12 seconds)",
+		);
+		expect(
+			getJobNotificationSubject(
+				"provider-availability-validation",
+				"failed",
+				"1 second",
+			),
+		).toBe(
+			"[MovieApp] Provider Refresh Job Summary Report: FAILED (failed, 1 second)",
+		);
 	});
 });

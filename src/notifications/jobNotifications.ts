@@ -30,7 +30,7 @@ const JOB_NAME_TITLES: Record<string, string> = {
 	"movie-list-current-count-snapshot": "Movie List Current Count Snapshot",
 	"movie-list-potential-load-check": "Movie List Potential Load Safety Check",
 	"movie-watch-providers-promote": "Movie Watch Providers Apply Step",
-	"provider-availability-validation": "Provider Availability Refresh",
+	"provider-availability-validation": "Provider Refresh Job Summary Report",
 	"tmdb-enrich": "TMDB Full Detail Enrichment Job",
 	"tmdb-genre-lookup-refresh": "TMDB Genre Lookup Refresh Job",
 	"tmdb-language-lookup-refresh": "TMDB Language Lookup Refresh Job",
@@ -49,8 +49,23 @@ function isNotificationDisabled(env: Env) {
 	return env.JOB_NOTIFICATION_EMAIL_ENABLED?.toLowerCase() === "false";
 }
 
-function getJobTitle(jobName: string) {
+export function getJobTitle(jobName: string) {
 	return JOB_NAME_TITLES[jobName] ?? jobName;
+}
+
+export function getJobNotificationSubject(
+	jobName: string,
+	status: string,
+	durationText: string,
+) {
+	const outcomeLabel = getEmailOutcomeLabel(status);
+	const jobTitle = getJobTitle(jobName);
+
+	if (jobName === "provider-availability-validation") {
+		return `[MovieApp] ${jobTitle}: ${outcomeLabel} (${status}, ${durationText})`;
+	}
+
+	return `[MovieApp] ${outcomeLabel}: ${jobTitle} (${status}, ${durationText})`;
 }
 
 export function getEmailOutcomeLabel(status: string) {
@@ -371,7 +386,11 @@ export async function notifyImportJobRunCompletion(
 			{
 				from: config.from,
 				to: config.to,
-				subject: `[MovieApp] ${getEmailOutcomeLabel(run.status)}: ${getJobTitle(run.job_name)} (${run.status}, ${durationText})`,
+				subject: getJobNotificationSubject(
+					run.job_name,
+					run.status,
+					durationText,
+				),
 				text: buildEmailText(run),
 			},
 		);

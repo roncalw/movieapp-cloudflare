@@ -3,6 +3,7 @@ import type {
 	WorkerQueueMessage,
 } from "../shared/types";
 import { logEvent } from "../shared/logging";
+import { getCachedMovieSearchResponse } from "../httpRouting/movieSearch";
 import { recordCacheWarmSearchProgress } from "./cacheWarmJobRuns";
 import { finalizeProviderAvailabilityCycleForCacheRun } from "../jobs/providerAvailabilityCycle";
 import {
@@ -19,6 +20,8 @@ type CacheWarmRequestResult = {
 	status: string;
 };
 
+type CacheWarmRequest = (url: string) => Promise<Response>;
+
 const CACHE_WARM_CONFIRMATION_MAX_ATTEMPTS = 3;
 const CACHE_WARM_CONFIRMATION_DELAY_MS = 250;
 
@@ -32,12 +35,30 @@ export function isCacheWarmSearchQueueMessage(
 	return "kind" in body && body.kind === CACHE_WARM_SEARCH_QUEUE_KIND;
 }
 
-async function requestCacheUrl(url: string): Promise<CacheWarmRequestResult> {
-	const response = await fetch(url, {
+async function requestMovieSearchInsideWorker(env: Env, url: string) {
+	/*
+		This queue consumer and /movies/search run inside the same Worker. Calling
+		the Worker's public workers.dev address with global fetch would leave the
+		Worker and ask Cloudflare to route the request back into that same Worker.
+		Cloudflare requires special cross-Worker routing configuration for that
+		public round trip. Calling the shared movie-search handler directly keeps
+		the work inside this Worker and still executes the real database query,
+		cache lookup, cache write, response headers, and cursor behavior.
+	*/
+	const request = new Request(url, {
 		headers: {
 			"user-agent": "movieapp-cache-warmer/1.0",
 		},
 	});
+
+	return getCachedMovieSearchResponse(request, env, new URL(url));
+}
+
+async function requestCacheUrl(
+	url: string,
+	request: CacheWarmRequest,
+): Promise<CacheWarmRequestResult> {
+	const response = await request(url);
 	const bodyText = await response.text();
 	const movieAppCacheStatus = response.headers.get("x-movieapp-cache");
 	const cloudflareCacheStatus = response.headers.get("cf-cache-status");
@@ -105,8 +126,9 @@ function recordCacheStatus(
 export async function warmCachePage(
 	url: string,
 	stats: CacheWarmSearchStats,
+	request: CacheWarmRequest,
 ) {
-	const firstResult = await requestCacheUrl(url);
+	const firstResult = await requestCacheUrl(url, request);
 	stats.firstRequestCount += 1;
 	recordCacheStatus(stats, firstResult, false);
 
@@ -129,7 +151,7 @@ export async function warmCachePage(
 			await wait(CACHE_WARM_CONFIRMATION_DELAY_MS * (confirmationAttempt - 1));
 		}
 
-		const retryResult = await requestCacheUrl(url);
+		const retryResult = await requestCacheUrl(url, request);
 		stats.retryRequestCount += 1;
 		recordCacheStatus(stats, retryResult, true);
 
@@ -162,10 +184,12 @@ export async function processCacheWarmSearchMessage(
 		lastError: null,
 	};
 	let currentUrl = message.url;
+	const request: CacheWarmRequest = (url) =>
+		requestMovieSearchInsideWorker(env, url);
 
 	try {
 		for (let page = 1; page <= message.maxPages; page += 1) {
-			const result = await warmCachePage(currentUrl, stats);
+			const result = await warmCachePage(currentUrl, stats, request);
 			stats.pageCount += 1;
 			const nextCursor = getNextCursor(result);
 
