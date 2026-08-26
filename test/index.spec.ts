@@ -134,8 +134,8 @@
 				env.DB
 					real runtime object/property used by the Worker code
 */
-import { describe, it, expect } from "vitest";
-import worker, { type Env } from "../src/index";
+import { describe, it, expect } from 'vitest';
+import worker, { type Env } from '../src/index';
 
 /*
 	The Cloudflare test tools need this typed Request helper.
@@ -299,7 +299,7 @@ function createMockEnv(rows: unknown[], envOverrides: Partial<Env> = {}) {
 		Later in the test, we check it with expect(...).toBe(...).
 		That proves the Worker asked for the columns we expect.
 	*/
-	let preparedSql = "";
+	let preparedSql = '';
 	let preparedBindings: unknown[] = [];
 	const preparedCalls: Array<{ sql: string; bindings: unknown[] }> = [];
 	let prepareCount = 0;
@@ -345,8 +345,8 @@ function createMockEnv(rows: unknown[], envOverrides: Partial<Env> = {}) {
 				};
 			},
 		},
-		ADMIN_IMPORT_TOKEN: "test-admin-token",
-		ORIGINAL_LANGUAGE_SEARCH_ENABLED: "true",
+		ADMIN_IMPORT_TOKEN: 'test-admin-token',
+		ORIGINAL_LANGUAGE_SEARCH_ENABLED: 'true',
 		...envOverrides,
 	} as unknown as Env;
 
@@ -361,9 +361,9 @@ function createMockEnv(rows: unknown[], envOverrides: Partial<Env> = {}) {
 
 function createManualAdminRequest(url: string) {
 	return new IncomingRequest(url, {
-		method: "POST",
+		method: 'POST',
 		headers: {
-			authorization: "Bearer test-admin-token",
+			authorization: 'Bearer test-admin-token',
 		},
 	});
 }
@@ -374,7 +374,7 @@ function createManualAdminRequest(url: string) {
 	This group is named "MovieApp Worker", so Vitest output tells us
 	these tests belong to the Worker.
 */
-describe("MovieApp Worker", () => {
+describe('MovieApp Worker', () => {
 	/*
 		it(...) defines one test.
 
@@ -388,7 +388,7 @@ describe("MovieApp Worker", () => {
 			2. the Worker returns status 200
 			3. the Worker returns JSON shaped like { movies: [...] }
 	*/
-	it("returns movies from the D1 movies table", async () => {
+	it('returns movies from the D1 movies table', async () => {
 		/*
 			These rows pretend to be rows from D1.
 
@@ -398,9 +398,9 @@ describe("MovieApp Worker", () => {
 		const rows = [
 			{
 				id: 1,
-				MovieName: "Blade Runner",
-				IMDBRating: "8.1",
-				IMDBVoteCounts: "850,000",
+				MovieName: 'Blade Runner',
+				IMDBRating: '8.1',
+				IMDBVoteCounts: '850,000',
 			},
 		];
 
@@ -414,7 +414,7 @@ describe("MovieApp Worker", () => {
 			The domain does not matter here. The important part is /movies,
 			because the Worker reads url.pathname.
 		*/
-		const request = new IncomingRequest("http://example.com/movies");
+		const request = new IncomingRequest('http://example.com/movies');
 
 		/*
 			This line calls the Worker directly.
@@ -438,30 +438,26 @@ describe("MovieApp Worker", () => {
 			If any expect(...) line is wrong, npm test fails.
 		*/
 		expect(response.status).toBe(200);
-		expect(response.headers.get("content-type")).toContain("application/json");
+		expect(response.headers.get('content-type')).toContain('application/json');
 		expect(await response.json()).toEqual({ movies: rows });
-		expect(mock.getPreparedSql()).toBe(
-			"SELECT id, MovieName, IMDBRating, IMDBVoteCounts FROM movies ORDER BY id",
-		);
+		expect(mock.getPreparedSql()).toBe('SELECT id, MovieName, IMDBRating, IMDBVoteCounts FROM movies ORDER BY id');
 	});
 
-	it("returns app-shaped movie search rows", async () => {
+	it('returns app-shaped movie search rows', async () => {
 		const rows = [
 			{
 				tmdb_id: 281979,
-				poster_path: "/ikb6cZI8RXUqcxApMJmIdimAJ1X.jpg",
+				poster_path: '/ikb6cZI8RXUqcxApMJmIdimAJ1X.jpg',
 				imdb_rating: 8.8,
 				imdb_vote_count: 9981,
 				popularity: 12.34,
-				original_language: "en",
+				original_language: 'en',
 				available_with_subscription: 1,
 				available_without_rent_or_purchase: 1,
 			},
 		];
 		const mock = createMockEnv(rows);
-		const request = new IncomingRequest(
-			"http://example.com/movies/search?genreIds=27&minImdbVotes=5000&pageSize=20",
-		);
+		const request = new IncomingRequest('http://example.com/movies/search?genreIds=27&minImdbVotes=5000&pageSize=20');
 		const response = await worker.fetch(request, mock.env);
 
 		expect(response.status).toBe(200);
@@ -469,232 +465,167 @@ describe("MovieApp Worker", () => {
 			movies: [
 				{
 					tmdb_id: 281979,
-					poster_path: "/ikb6cZI8RXUqcxApMJmIdimAJ1X.jpg",
+					poster_path: '/ikb6cZI8RXUqcxApMJmIdimAJ1X.jpg',
 					imdb_rating: 8.8,
-					original_language: "en",
+					original_language: 'en',
 					available_with_subscription: true,
 					available_without_rent_or_purchase: true,
 				},
 			],
 			nextCursor: null,
 			pageSize: 20,
-			sort: "imdb",
+			sort: 'imdb',
 		});
-		expect(mock.getPreparedSql()).toContain(
-			"FROM movie_list_items AS movie",
-		);
-		expect(mock.getPreparedSql()).toContain(
-			"FROM movie_genres AS genre",
-		);
-		expect(mock.getPreparedSql()).toContain(
-			"INDEXED BY idx_movie_list_items_search_imdb_v2_cover",
-		);
+		expect(mock.getPreparedSql()).toContain('FROM movie_list_items AS movie');
+		expect(mock.getPreparedSql()).toContain('FROM movie_genres AS genre');
+		expect(mock.getPreparedSql()).toContain('INDEXED BY idx_movie_list_items_search_imdb_v2_cover');
 	});
 
-	it("calculates subscription availability for an unfiltered movie search", async () => {
+	it('calculates subscription availability for an unfiltered movie search', async () => {
 		const mock = createMockEnv([]);
 		const response = await worker.fetch(
-			new IncomingRequest(
-				"http://example.com/movies/search?pageSize=20&datePreset=last5years",
-			),
+			new IncomingRequest('http://example.com/movies/search?pageSize=20&datePreset=last5years'),
 			mock.env,
 		);
 
 		expect(response.status).toBe(200);
-		expect(mock.getPreparedSql()).toContain(
-			"FROM movie_watch_providers AS subscription_provider",
-		);
-		expect(mock.getPreparedSql()).toContain(
-			"subscription_provider.tmdb_id = movie.tmdb_id",
-		);
-		expect(mock.getPreparedSql()).toContain(
-			"subscription_provider.region = 'US'",
-		);
-		expect(mock.getPreparedSql()).toContain(
-			"subscription_provider.provider_id <> -1",
-		);
-		expect(mock.getPreparedSql()).toContain(
-			"AS available_with_subscription",
-		);
-		expect(mock.getPreparedSql()).toContain(
-			"AS available_without_rent_or_purchase",
-		);
+		expect(mock.getPreparedSql()).toContain('FROM movie_watch_providers AS subscription_provider');
+		expect(mock.getPreparedSql()).toContain('subscription_provider.tmdb_id = movie.tmdb_id');
+		expect(mock.getPreparedSql()).toContain("subscription_provider.region = 'US'");
+		expect(mock.getPreparedSql()).toContain('subscription_provider.provider_id <> -1');
+		expect(mock.getPreparedSql()).toContain('AS available_with_subscription');
+		expect(mock.getPreparedSql()).toContain('AS available_without_rent_or_purchase');
 	});
 
-	it("uses a language-first covering index for adaptable language filtering", async () => {
+	it('uses a language-first covering index for adaptable language filtering', async () => {
 		const mock = createMockEnv([]);
-		const request = new IncomingRequest(
-			"http://language-filter.example/movies/search?originalLanguages=KO,en,ko&pageSize=20",
-		);
+		const request = new IncomingRequest('http://language-filter.example/movies/search?originalLanguages=KO,en,ko&pageSize=20');
 		const response = await worker.fetch(request, mock.env);
-		const body = await response.json() as {
+		const body = (await response.json()) as {
 			originalLanguages: string[];
 		};
 
 		expect(response.status).toBe(200);
-		expect(body.originalLanguages).toEqual(["en", "ko"]);
-		expect(mock.getPreparedSql()).toContain(
-			"INDEXED BY idx_movie_list_items_language_popularity_v2_cover",
-		);
-		expect(mock.getPreparedSql()).toContain(
-			"movie.original_language IN (?, ?)",
-		);
-		expect(mock.getPreparedBindings()).toContain("en");
-		expect(mock.getPreparedBindings()).toContain("ko");
+		expect(body.originalLanguages).toEqual(['en', 'ko']);
+		expect(mock.getPreparedSql()).toContain('INDEXED BY idx_movie_list_items_language_popularity_v2_cover');
+		expect(mock.getPreparedSql()).toContain('movie.original_language IN (?, ?)');
+		expect(mock.getPreparedBindings()).toContain('en');
+		expect(mock.getPreparedBindings()).toContain('ko');
 	});
 
-	it("keeps all-language search on its separate covering index", async () => {
+	it('keeps all-language search on its separate covering index', async () => {
 		const mock = createMockEnv([]);
-		const request = new IncomingRequest(
-			"http://all-languages.example/movies/search?pageSize=20",
-		);
+		const request = new IncomingRequest('http://all-languages.example/movies/search?pageSize=20');
 		const response = await worker.fetch(request, mock.env);
 
 		expect(response.status).toBe(200);
-		expect(mock.getPreparedSql()).toContain(
-			"INDEXED BY idx_movie_list_items_search_popularity_v2_cover",
-		);
-		expect(mock.getPreparedSql()).not.toContain(
-			"movie.original_language = ?",
-		);
+		expect(mock.getPreparedSql()).toContain('INDEXED BY idx_movie_list_items_search_popularity_v2_cover');
+		expect(mock.getPreparedSql()).not.toContain('movie.original_language = ?');
 	});
 
-	it("uses the language-first IMDb index for one selected language", async () => {
+	it('uses the language-first IMDb index for one selected language', async () => {
 		const mock = createMockEnv([]);
-		const request = new IncomingRequest(
-			"http://language-imdb.example/movies/search?originalLanguages=ja&sort=imdb&pageSize=20",
-		);
+		const request = new IncomingRequest('http://language-imdb.example/movies/search?originalLanguages=ja&sort=imdb&pageSize=20');
 		const response = await worker.fetch(request, mock.env);
 
 		expect(response.status).toBe(200);
-		expect(mock.getPreparedSql()).toContain(
-			"INDEXED BY idx_movie_list_items_language_imdb_v2_cover",
-		);
-		expect(mock.getPreparedSql()).toContain("movie.original_language = ?");
-		expect(mock.getPreparedBindings()).toContain("ja");
+		expect(mock.getPreparedSql()).toContain('INDEXED BY idx_movie_list_items_language_imdb_v2_cover');
+		expect(mock.getPreparedSql()).toContain('movie.original_language = ?');
+		expect(mock.getPreparedBindings()).toContain('ja');
 	});
 
-	it("keeps unfiltered search on a retained v2 index when language search is disabled", async () => {
+	it('keeps unfiltered search on a retained v2 index when language search is disabled', async () => {
 		const mock = createMockEnv([], {
-			ORIGINAL_LANGUAGE_SEARCH_ENABLED: "false",
+			ORIGINAL_LANGUAGE_SEARCH_ENABLED: 'false',
 		});
-		const response = await worker.fetch(
-			new IncomingRequest(
-				"http://pre-index-deploy.example/movies/search?pageSize=20",
-			),
-			mock.env,
-		);
+		const response = await worker.fetch(new IncomingRequest('http://pre-index-deploy.example/movies/search?pageSize=20'), mock.env);
 
 		expect(response.status).toBe(200);
-		expect(mock.getPreparedSql()).toContain(
-			"INDEXED BY idx_movie_list_items_search_popularity_v2_cover",
-		);
+		expect(mock.getPreparedSql()).toContain('INDEXED BY idx_movie_list_items_search_popularity_v2_cover');
 	});
 
-	it("rejects malformed original-language codes before querying D1", async () => {
+	it('rejects malformed original-language codes before querying D1', async () => {
 		const mock = createMockEnv([]);
-		const request = new IncomingRequest(
-			"http://invalid-language.example/movies/search?originalLanguages=english",
-		);
+		const request = new IncomingRequest('http://invalid-language.example/movies/search?originalLanguages=english');
 		const response = await worker.fetch(request, mock.env);
 
 		expect(response.status).toBe(400);
 		expect(await response.json()).toEqual({
-			error:
-				"originalLanguages must be a comma-separated list of two- or three-letter language codes.",
+			error: 'originalLanguages must be a comma-separated list of two- or three-letter language codes.',
 		});
 		expect(mock.getPrepareCount()).toBe(0);
 	});
 
-	it("returns TMDB language codes with authoritative English names", async () => {
+	it('returns TMDB language codes with authoritative English names', async () => {
 		const mock = createMockEnv([
 			{
-				language_code: "en",
-				english_name: "English",
-				native_name: "English",
+				language_code: 'en',
+				english_name: 'English',
+				native_name: 'English',
 			},
 			{
-				language_code: "ko",
-				english_name: "Korean",
-				native_name: "한국어/조선말",
+				language_code: 'ko',
+				english_name: 'Korean',
+				native_name: '한국어/조선말',
 			},
 		]);
-		const request = new IncomingRequest(
-			"http://language-lookup.example/movies/languages",
-		);
+		const request = new IncomingRequest('http://language-lookup.example/movies/languages');
 		const response = await worker.fetch(request, mock.env);
 
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({
 			languages: [
-				{ code: "en", englishName: "English", nativeName: "English" },
+				{ code: 'en', englishName: 'English', nativeName: 'English' },
 				{
-					code: "ko",
-					englishName: "Korean",
-					nativeName: "한국어/조선말",
+					code: 'ko',
+					englishName: 'Korean',
+					nativeName: '한국어/조선말',
 				},
 			],
 		});
-		expect(mock.getPreparedSql()).toContain(
-			"FROM tmdb_original_language_lookup",
-		);
+		expect(mock.getPreparedSql()).toContain('FROM tmdb_original_language_lookup');
 	});
 
-	it("canonicalizes language order and case in the movie-search cache key", async () => {
+	it('canonicalizes language order and case in the movie-search cache key', async () => {
 		const mock = createMockEnv([]);
 		const firstResponse = await worker.fetch(
-			new IncomingRequest(
-				"http://language-cache.example/movies/search?pageSize=20&originalLanguages=KO,en",
-			),
+			new IncomingRequest('http://language-cache.example/movies/search?pageSize=20&originalLanguages=KO,en'),
 			mock.env,
 		);
 		const secondResponse = await worker.fetch(
-			new IncomingRequest(
-				"http://language-cache.example/movies/search?originalLanguages=en,ko&pageSize=20",
-			),
+			new IncomingRequest('http://language-cache.example/movies/search?originalLanguages=en,ko&pageSize=20'),
 			mock.env,
 		);
 
 		expect(firstResponse.status).toBe(200);
 		expect(secondResponse.status).toBe(200);
-		expect(secondResponse.headers.get("x-movieapp-cache")).toBe("HIT");
+		expect(secondResponse.headers.get('x-movieapp-cache')).toBe('HIT');
 		/*
 			The first request performs one small cache-generation lookup plus the
 			movie search. The second request repeats only the generation lookup and
 			then serves the cached movie result, so the large search runs once.
 		*/
 		expect(mock.getPrepareCount()).toBe(3);
-		expect(mock.getPreparedSql()).toContain("FROM import_job_runs");
+		expect(mock.getPreparedSql()).toContain('FROM import_job_runs');
 	});
 
-	it("changes the Advanced Search cache generation when providers are applied", async () => {
+	it('changes the Advanced Search cache generation when providers are applied', async () => {
 		const mock = createMockEnv([]);
 
 		const response = await worker.fetch(
-			new IncomingRequest(
-				"http://provider-cache-generation.example/movies/search?pageSize=20",
-			),
+			new IncomingRequest('http://provider-cache-generation.example/movies/search?pageSize=20'),
 			mock.env,
 		);
-		const generationCall = mock
-			.getPreparedCalls()
-			.find(({ sql }) => sql.includes("AS provider_apply_job_run_id"));
+		const generationCall = mock.getPreparedCalls().find(({ sql }) => sql.includes('AS provider_apply_job_run_id'));
 
 		expect(response.status).toBe(200);
-		expect(generationCall?.bindings).toEqual([
-			"movie-list-build",
-			"movie-watch-providers-promote",
-		]);
+		expect(generationCall?.bindings).toEqual(['movie-list-build', 'movie-watch-providers-promote']);
 	});
 
-	it("does not reuse an Advanced Search response saved before ads availability existed", async () => {
-		const publicUrl =
-			"http://response-version-cache.example/movies/search?pageSize=20";
+	it('does not reuse an Advanced Search response saved before ads availability existed', async () => {
+		const publicUrl = 'http://response-version-cache.example/movies/search?pageSize=20';
 		const oldCacheUrl = new URL(publicUrl);
-		oldCacheUrl.searchParams.set(
-			"__movieListBuild",
-			"before-first-complete-build",
-		);
+		oldCacheUrl.searchParams.set('__movieListBuild', 'before-first-complete-build');
 		oldCacheUrl.searchParams.sort();
 		await caches.default.put(
 			new Request(oldCacheUrl.toString()),
@@ -702,9 +633,9 @@ describe("MovieApp Worker", () => {
 				movies: [
 					{
 						tmdb_id: 969681,
-						poster_path: "/old-cache.jpg",
+						poster_path: '/old-cache.jpg',
 						imdb_rating: 8.3,
-						original_language: "en",
+						original_language: 'en',
 					},
 				],
 				nextCursor: null,
@@ -714,20 +645,17 @@ describe("MovieApp Worker", () => {
 		const mock = createMockEnv([
 			{
 				tmdb_id: 969681,
-				poster_path: "/current-result.jpg",
+				poster_path: '/current-result.jpg',
 				imdb_rating: 8.3,
 				imdb_vote_count: 2000,
 				popularity: 500,
-				original_language: "en",
+				original_language: 'en',
 				available_with_subscription: 0,
 				available_without_rent_or_purchase: 1,
 			},
 		]);
-		const response = await worker.fetch(
-			new IncomingRequest(publicUrl),
-			mock.env,
-		);
-		const body = await response.json() as {
+		const response = await worker.fetch(new IncomingRequest(publicUrl), mock.env);
+		const body = (await response.json()) as {
 			movies: Array<{
 				poster_path: string;
 				available_with_subscription: boolean;
@@ -735,25 +663,23 @@ describe("MovieApp Worker", () => {
 			}>;
 		};
 
-		expect(response.headers.get("x-movieapp-cache")).toBe("MISS");
+		expect(response.headers.get('x-movieapp-cache')).toBe('MISS');
 		expect(body.movies[0]).toMatchObject({
-			poster_path: "/current-result.jpg",
+			poster_path: '/current-result.jpg',
 			available_with_subscription: false,
 			available_without_rent_or_purchase: true,
 		});
-		expect(mock.getPreparedSql()).toContain("AS available_with_subscription");
+		expect(mock.getPreparedSql()).toContain('AS available_with_subscription');
 	});
 
-	it("returns one MovieList IMDb rating by TMDB id", async () => {
+	it('returns one MovieList IMDb rating by TMDB id', async () => {
 		const mock = createMockEnv([
 			{
 				tmdb_id: 281979,
 				imdb_rating: 8.8,
 			},
 		]);
-		const request = new IncomingRequest(
-			"http://example.com/movies/281979/imdb-rating",
-		);
+		const request = new IncomingRequest('http://example.com/movies/281979/imdb-rating');
 		const response = await worker.fetch(request, mock.env);
 
 		expect(response.status).toBe(200);
@@ -761,15 +687,13 @@ describe("MovieApp Worker", () => {
 			tmdb_id: 281979,
 			imdb_rating: 8.8,
 		});
-		expect(mock.getPreparedSql()).toContain("FROM movie_list_items");
-		expect(mock.getPreparedSql()).toContain("WHERE tmdb_id = ?");
+		expect(mock.getPreparedSql()).toContain('FROM movie_list_items');
+		expect(mock.getPreparedSql()).toContain('WHERE tmdb_id = ?');
 	});
 
-	it("returns null when a MovieList IMDb rating is not available", async () => {
+	it('returns null when a MovieList IMDb rating is not available', async () => {
 		const mock = createMockEnv([]);
-		const request = new IncomingRequest(
-			"http://example.com/movies/999999/imdb-rating",
-		);
+		const request = new IncomingRequest('http://example.com/movies/999999/imdb-rating');
 		const response = await worker.fetch(request, mock.env);
 
 		expect(response.status).toBe(200);
@@ -779,7 +703,7 @@ describe("MovieApp Worker", () => {
 		});
 	});
 
-	it("returns IMDb rating and subscription-or-ads availability as movie card data", async () => {
+	it('returns IMDb rating and subscription-or-ads availability as movie card data', async () => {
 		const mock = createMockEnv([
 			{
 				imdb_rating: 8.8,
@@ -787,9 +711,7 @@ describe("MovieApp Worker", () => {
 				available_without_rent_or_purchase: 1,
 			},
 		]);
-		const request = new IncomingRequest(
-			"http://example.com/movies/281979/card-data",
-		);
+		const request = new IncomingRequest('http://example.com/movies/281979/card-data');
 		const response = await worker.fetch(request, mock.env);
 
 		expect(response.status).toBe(200);
@@ -799,14 +721,14 @@ describe("MovieApp Worker", () => {
 			available_with_subscription: true,
 			available_without_rent_or_purchase: true,
 		});
-		expect(mock.getPreparedSql()).toContain("FROM movie_list_items");
-		expect(mock.getPreparedSql()).toContain("FROM movie_watch_providers");
+		expect(mock.getPreparedSql()).toContain('FROM movie_list_items');
+		expect(mock.getPreparedSql()).toContain('FROM movie_watch_providers');
 		expect(mock.getPreparedSql()).toContain("region = 'US'");
-		expect(mock.getPreparedSql()).toContain("provider_id <> ?");
+		expect(mock.getPreparedSql()).toContain('provider_id <> ?');
 		expect(mock.getPreparedBindings()).toEqual([281979, 281979, -1, 281979]);
 	});
 
-	it("returns a confirmed rent-or-purchase answer when no viewing-option row exists", async () => {
+	it('returns a confirmed rent-or-purchase answer when no viewing-option row exists', async () => {
 		const mock = createMockEnv([
 			{
 				imdb_rating: null,
@@ -814,9 +736,7 @@ describe("MovieApp Worker", () => {
 				available_without_rent_or_purchase: 0,
 			},
 		]);
-		const request = new IncomingRequest(
-			"http://example.com/movies/999999/card-data",
-		);
+		const request = new IncomingRequest('http://example.com/movies/999999/card-data');
 		const response = await worker.fetch(request, mock.env);
 
 		expect(response.status).toBe(200);
@@ -828,7 +748,7 @@ describe("MovieApp Worker", () => {
 		});
 	});
 
-	it("keeps ads-only availability separate from subscription availability", async () => {
+	it('keeps ads-only availability separate from subscription availability', async () => {
 		const mock = createMockEnv([
 			{
 				imdb_rating: 6.8,
@@ -836,10 +756,7 @@ describe("MovieApp Worker", () => {
 				available_without_rent_or_purchase: 1,
 			},
 		]);
-		const response = await worker.fetch(
-			new IncomingRequest("http://example.com/movies/123456/card-data"),
-			mock.env,
-		);
+		const response = await worker.fetch(new IncomingRequest('http://example.com/movies/123456/card-data'), mock.env);
 
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({
@@ -850,88 +767,168 @@ describe("MovieApp Worker", () => {
 		});
 	});
 
-	it("accepts a stable current-day end date preset for movie search", async () => {
-		const mock = createMockEnv([]);
-		const request = new IncomingRequest(
-			"http://example.com/movies/search?beginDate=2020-01-01&endDatePreset=today&pageSize=20",
+	it('returns up to 50 movie-card answers in one ordered batch', async () => {
+		const mock = createMockEnv([
+			{
+				tmdb_id: 281979,
+				imdb_rating: 8.8,
+				available_with_subscription: 1,
+				available_without_rent_or_purchase: 1,
+			},
+			{
+				tmdb_id: 999999,
+				imdb_rating: null,
+				available_with_subscription: 0,
+				available_without_rent_or_purchase: 0,
+			},
+		]);
+		const response = await worker.fetch(
+			new IncomingRequest('http://example.com/movies/card-data/batch', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ tmdb_ids: [281979, 999999] }),
+			}),
+			mock.env,
 		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			results: [
+				{
+					tmdb_id: 281979,
+					imdb_rating: 8.8,
+					available_with_subscription: true,
+					available_without_rent_or_purchase: true,
+				},
+				{
+					tmdb_id: 999999,
+					imdb_rating: null,
+					available_with_subscription: false,
+					available_without_rent_or_purchase: false,
+				},
+			],
+		});
+		expect(mock.getPrepareCount()).toBe(1);
+		expect(mock.getPreparedSql()).toContain('FROM json_each(?)');
+		expect(mock.getPreparedSql()).toContain('LEFT JOIN movie_list_items AS movie');
+		expect(mock.getPreparedSql()).toContain('FROM movie_watch_providers AS provider');
+		expect(mock.getPreparedSql()).toContain('ORDER BY requested.position');
+		expect(mock.getPreparedBindings()).toEqual(['[281979,999999]', -1]);
+	});
+
+	it('rejects invalid movie-card batch bodies before querying D1', async () => {
+		const mock = createMockEnv([]);
+		const response = await worker.fetch(
+			new IncomingRequest('http://example.com/movies/card-data/batch', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ tmdb_ids: [281979, 281979] }),
+			}),
+			mock.env,
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: 'tmdb_ids must not contain duplicates.',
+		});
+		expect(mock.getPrepareCount()).toBe(0);
+	});
+
+	it('rejects movie-card batches larger than 50 IDs', async () => {
+		const mock = createMockEnv([]);
+		const response = await worker.fetch(
+			new IncomingRequest('http://example.com/movies/card-data/batch', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					tmdb_ids: Array.from({ length: 51 }, (_, index) => index + 1),
+				}),
+			}),
+			mock.env,
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: 'tmdb_ids must contain between 1 and 50 movie IDs.',
+		});
+		expect(mock.getPrepareCount()).toBe(0);
+	});
+
+	it('requires POST for movie-card batches', async () => {
+		const mock = createMockEnv([]);
+		const response = await worker.fetch(new IncomingRequest('http://example.com/movies/card-data/batch'), mock.env);
+
+		expect(response.status).toBe(405);
+		expect(response.headers.get('Allow')).toBe('POST');
+		expect(mock.getPrepareCount()).toBe(0);
+	});
+
+	it('accepts a stable current-day end date preset for movie search', async () => {
+		const mock = createMockEnv([]);
+		const request = new IncomingRequest('http://example.com/movies/search?beginDate=2020-01-01&endDatePreset=today&pageSize=20');
 		const response = await worker.fetch(request, mock.env);
-		const body = await response.json() as {
+		const body = (await response.json()) as {
 			beginDate: string;
 			endDate: string;
 			endDatePreset: string | null;
 		};
 
 		expect(response.status).toBe(200);
-		expect(body.beginDate).toBe("2020-01-01");
+		expect(body.beginDate).toBe('2020-01-01');
 		expect(body.endDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-		expect(body.endDatePreset).toBe("today");
+		expect(body.endDatePreset).toBe('today');
 	});
 
-	it("supports any US flatrate provider filtering for movie search", async () => {
+	it('supports any US flatrate provider filtering for movie search', async () => {
 		const mock = createMockEnv([]);
 		const request = new IncomingRequest(
-			"http://example.com/movies/search?pageSize=20&datePreset=last5years&watchMonetizationTypes=flatrate",
+			'http://example.com/movies/search?pageSize=20&datePreset=last5years&watchMonetizationTypes=flatrate',
 		);
 		const response = await worker.fetch(request, mock.env);
 
 		expect(response.status).toBe(200);
-		expect(mock.getPreparedSql()).toContain(
-			"FROM movie_watch_providers AS provider",
-		);
+		expect(mock.getPreparedSql()).toContain('FROM movie_watch_providers AS provider');
 		expect(mock.getPreparedSql()).toContain("provider.region = 'US'");
-		expect(mock.getPreparedSql()).toContain("provider.provider_id <> -1");
-		expect(mock.getPreparedSql()).not.toContain("provider.provider_id IN");
-		expect(mock.getPreparedSql()).toContain(
-			"1 AS available_with_subscription",
-		);
-		expect(mock.getPreparedSql()).not.toContain(
-			"movie_watch_providers AS subscription_provider",
-		);
+		expect(mock.getPreparedSql()).toContain('provider.provider_id <> -1');
+		expect(mock.getPreparedSql()).not.toContain('provider.provider_id IN');
+		expect(mock.getPreparedSql()).toContain('1 AS available_with_subscription');
+		expect(mock.getPreparedSql()).not.toContain('movie_watch_providers AS subscription_provider');
 	});
 
-	it("does not allow the internal ads marker to be selected as a streamer", async () => {
+	it('does not allow the internal ads marker to be selected as a streamer', async () => {
 		const mock = createMockEnv([]);
-		const response = await worker.fetch(
-			new IncomingRequest(
-				"http://example.com/movies/search?pageSize=20&providerIds=-1",
-			),
-			mock.env,
-		);
+		const response = await worker.fetch(new IncomingRequest('http://example.com/movies/search?pageSize=20&providerIds=-1'), mock.env);
 
 		expect(response.status).toBe(400);
 		expect(await response.json()).toEqual({
-			error: "providerIds must contain positive TMDb provider IDs.",
+			error: 'providerIds must contain positive TMDb provider IDs.',
 		});
 	});
 
-	it("parses import job result_json for monitor responses", async () => {
+	it('parses import job result_json for monitor responses', async () => {
 		const mock = createMockEnv([
 			{
-				job_run_id: "tmdb-genre-lookup-refresh-manual-test",
-				job_name: "tmdb-genre-lookup-refresh",
-				status: "complete",
-				trigger: "manual",
+				job_run_id: 'tmdb-genre-lookup-refresh-manual-test',
+				job_name: 'tmdb-genre-lookup-refresh',
+				status: 'complete',
+				trigger: 'manual',
 				selected_count: 19,
 				queued_count: 0,
 				processed_count: 19,
 				updated_count: 19,
 				error_count: 0,
 				provider_rows_inserted: 0,
-				started_at: "2026-05-18 00:43:39",
-				last_progress_at: "2026-05-18 00:43:40",
-				ended_at: "2026-05-18 00:43:40",
+				started_at: '2026-05-18 00:43:39',
+				last_progress_at: '2026-05-18 00:43:40',
+				ended_at: '2026-05-18 00:43:40',
 				duration_ms: 999,
 				last_error: null,
-				result_json:
-					'{"jobRunId":"tmdb-genre-lookup-refresh-manual-test","notificationEmailMessageId":"message@test.example"}',
-				notification_sent_at: "2026-05-18 00:43:42",
+				result_json: '{"jobRunId":"tmdb-genre-lookup-refresh-manual-test","notificationEmailMessageId":"message@test.example"}',
+				notification_sent_at: '2026-05-18 00:43:42',
 				notification_error: null,
 			},
 		]);
-		const request = new IncomingRequest(
-			"http://example.com/admin/import/job-runs?jobName=tmdb-genre-lookup-refresh&limit=1",
-		);
+		const request = new IncomingRequest('http://example.com/admin/import/job-runs?jobName=tmdb-genre-lookup-refresh&limit=1');
 		const response = await worker.fetch(request, mock.env);
 		const body = (await response.json()) as {
 			runs: Array<{ result_json: unknown }>;
@@ -939,126 +936,124 @@ describe("MovieApp Worker", () => {
 
 		expect(response.status).toBe(200);
 		expect(body.runs[0].result_json).toEqual({
-			jobRunId: "tmdb-genre-lookup-refresh-manual-test",
-			notificationEmailMessageId: "message@test.example",
+			jobRunId: 'tmdb-genre-lookup-refresh-manual-test',
+			notificationEmailMessageId: 'message@test.example',
 		});
 	});
 
-	it("summarizes the latest scheduled main jobs in production order", async () => {
+	it('summarizes the latest scheduled main jobs in production order', async () => {
 		const mock = createMockEnv([
 			{
-				job_name: "weekly-import-validation",
-				status: "complete",
+				job_name: 'weekly-import-validation',
+				status: 'complete',
 				selected_count: 10,
 				processed_count: 10,
 				error_count: 0,
-				started_at: "2026-06-22 15:00:46",
-				ended_at: "2026-06-22 15:00:48",
+				started_at: '2026-06-22 15:00:46',
+				ended_at: '2026-06-22 15:00:48',
 				duration_ms: 2000,
 			},
 			{
-				job_name: "cache-warm-search",
-				status: "complete_with_errors",
+				job_name: 'cache-warm-search',
+				status: 'complete_with_errors',
 				selected_count: 3024,
 				processed_count: 3024,
 				error_count: 1,
-				started_at: "2026-06-22 13:00:46",
-				ended_at: "2026-06-22 13:41:09",
+				started_at: '2026-06-22 13:00:46',
+				ended_at: '2026-06-22 13:41:09',
 				duration_ms: 2422999,
 			},
 			{
-				job_name: "movie-list-build",
-				status: "complete",
+				job_name: 'movie-list-build',
+				status: 'complete',
 				selected_count: 599,
 				processed_count: 599,
 				error_count: 0,
-				started_at: "2026-06-22 12:00:45",
-				ended_at: "2026-06-22 12:01:32",
+				started_at: '2026-06-22 12:00:45',
+				ended_at: '2026-06-22 12:01:32',
 				duration_ms: 46999,
 			},
 			{
-				job_name: "tmdb-provider-refresh",
-				status: "complete",
+				job_name: 'tmdb-provider-refresh',
+				status: 'complete',
 				selected_count: 82511,
 				processed_count: 82511,
 				error_count: 0,
-				started_at: "2026-06-22 07:00:55",
-				ended_at: "2026-06-22 08:04:42",
+				started_at: '2026-06-22 07:00:55',
+				ended_at: '2026-06-22 08:04:42',
 				duration_ms: 3827000,
 			},
 			{
-				job_name: "tmdb-new-movie-details",
-				status: "complete",
+				job_name: 'tmdb-new-movie-details',
+				status: 'complete',
 				selected_count: 604,
 				processed_count: 604,
 				error_count: 0,
-				started_at: "2026-06-22 05:00:47",
-				ended_at: "2026-06-22 05:01:07",
+				started_at: '2026-06-22 05:00:47',
+				ended_at: '2026-06-22 05:01:07',
 				duration_ms: 20000,
 			},
 			{
-				job_name: "tmdb-primary",
-				status: "complete",
+				job_name: 'tmdb-primary',
+				status: 'complete',
 				selected_count: 677,
 				processed_count: 677,
 				error_count: 0,
-				started_at: "2026-06-22 03:00:46",
-				ended_at: "2026-06-22 03:00:58",
+				started_at: '2026-06-22 03:00:46',
+				ended_at: '2026-06-22 03:00:58',
 				duration_ms: 12000,
 			},
 			{
-				job_name: "imdb-ratings",
-				status: "complete",
+				job_name: 'imdb-ratings',
+				status: 'complete',
 				selected_count: 1683289,
 				processed_count: 1683289,
 				error_count: 0,
-				started_at: "2026-06-22 01:00:58",
-				ended_at: "2026-06-22 01:11:50",
+				started_at: '2026-06-22 01:00:58',
+				ended_at: '2026-06-22 01:11:50',
 				duration_ms: 652000,
 			},
 		]);
-		const request = new IncomingRequest(
-			"http://example.com/admin/import/last-job-runs-summary",
-		);
+		const request = new IncomingRequest('http://example.com/admin/import/last-job-runs-summary');
 		const response = await worker.fetch(request, mock.env);
 		const body = (await response.json()) as Record<string, unknown>;
 
 		expect(response.status).toBe(200);
 		expect(Object.keys(body)).toEqual([
-			"IMDB",
-			"Primary",
-			"Primary Enhanced",
-			"Watch Providers",
-			"Popularity",
-			"Movie Table",
-			"Cache Warming",
-			"Final Validation",
+			'IMDB',
+			'Primary',
+			'Primary Enhanced',
+			'Watch Providers',
+			'Popularity',
+			'Movie Table',
+			'Cache Warming',
+			'Final Validation',
 		]);
 		expect(body.IMDB).toEqual({
 			Timing: {
-				Started_At: "SUNDAY - 6/21/2026 9:00:58 PM EDT",
-				Ended_At: "SUNDAY - 6/21/2026 9:11:50 PM EDT",
-				Duration: "10 minutes 52 seconds",
+				Started_At: 'SUNDAY - 6/21/2026 9:00:58 PM EDT',
+				Ended_At: 'SUNDAY - 6/21/2026 9:11:50 PM EDT',
+				Duration: '10 minutes 52 seconds',
 			},
-			Status: "complete",
+			Status: 'complete',
 			Work_Counts: {
 				Selected: 1683289,
 				Processed: 1683289,
 				Errors: 0,
 			},
 		});
-		expect(body["Watch Providers"]).toMatchObject({
+		expect(body['Watch Providers']).toMatchObject({
 			Timing: {
-				Duration: "1 hour 3 minutes 47 seconds",
+				Duration: '1 hour 3 minutes 47 seconds',
 			},
 		});
-		expect(body["Cache Warming"]).toEqual({
+		expect(body['Cache Warming']).toEqual({
 			Timing: {
-				Started_At: "MONDAY - 6/22/2026 9:00:46 AM EDT",
-				Ended_At: "MONDAY - 6/22/2026 9:41:09 AM EDT",
-				Duration: "40 minutes 23 seconds",
+				Started_At: 'MONDAY - 6/22/2026 9:00:46 AM EDT',
+				Ended_At: 'MONDAY - 6/22/2026 9:41:09 AM EDT',
+				Duration: '40 minutes 23 seconds',
 			},
-			Status: "complete_with_errors",
+			Status: 'complete_with_errors',
 			Work_Counts: {
 				Selected: 3024,
 				Processed: 3024,
@@ -1066,220 +1061,186 @@ describe("MovieApp Worker", () => {
 			},
 		});
 		expect(mock.getPreparedSql()).toContain("WHERE trigger = 'cron'");
-		expect(mock.getPreparedSql()).toContain("ROW_NUMBER() OVER");
+		expect(mock.getPreparedSql()).toContain('ROW_NUMBER() OVER');
 	});
 
-	it("requires POST for manual admin import endpoints", async () => {
+	it('requires POST for manual admin import endpoints', async () => {
 		const mock = createMockEnv([]);
-		const request = new IncomingRequest(
-			"http://example.com/admin/import/tmdb/new-primary-manual",
-		);
+		const request = new IncomingRequest('http://example.com/admin/import/tmdb/new-primary-manual');
 		const response = await worker.fetch(request, mock.env);
 
 		expect(response.status).toBe(405);
-		expect(response.headers.get("allow")).toBe("POST");
+		expect(response.headers.get('allow')).toBe('POST');
 		expect(await response.json()).toEqual({
-			error: "Access not permitted",
+			error: 'Access not permitted',
 		});
 	});
 
-	it("uses the same public response for missing or wrong manual admin tokens", async () => {
+	it('uses the same public response for missing or wrong manual admin tokens', async () => {
 		const missingTokenMock = createMockEnv([]);
-		delete (missingTokenMock.env as { ADMIN_IMPORT_TOKEN?: string })
-			.ADMIN_IMPORT_TOKEN;
+		delete (missingTokenMock.env as { ADMIN_IMPORT_TOKEN?: string }).ADMIN_IMPORT_TOKEN;
 
 		const missingTokenResponse = await worker.fetch(
-			createManualAdminRequest(
-				"http://example.com/admin/import/tmdb/new-primary-manual",
-			),
+			createManualAdminRequest('http://example.com/admin/import/tmdb/new-primary-manual'),
 			missingTokenMock.env,
 		);
 
 		expect(missingTokenResponse.status).toBe(500);
 		expect(await missingTokenResponse.json()).toEqual({
-			error: "Access not permitted",
+			error: 'Access not permitted',
 		});
 
 		const wrongTokenMock = createMockEnv([]);
-		const wrongTokenRequest = new IncomingRequest(
-			"http://example.com/admin/import/tmdb/new-primary-manual",
-			{
-				method: "POST",
-				headers: {
-					authorization: "Bearer wrong-token",
-				},
+		const wrongTokenRequest = new IncomingRequest('http://example.com/admin/import/tmdb/new-primary-manual', {
+			method: 'POST',
+			headers: {
+				authorization: 'Bearer wrong-token',
 			},
-		);
-		const wrongTokenResponse = await worker.fetch(
-			wrongTokenRequest,
-			wrongTokenMock.env,
-		);
+		});
+		const wrongTokenResponse = await worker.fetch(wrongTokenRequest, wrongTokenMock.env);
 
 		expect(wrongTokenResponse.status).toBe(401);
-		expect(wrongTokenResponse.headers.get("www-authenticate")).toBe(
-			"Bearer",
-		);
+		expect(wrongTokenResponse.headers.get('www-authenticate')).toBe('Bearer');
 		expect(await wrongTokenResponse.json()).toEqual({
-			error: "Access not permitted",
+			error: 'Access not permitted',
 		});
 	});
 
-	it("rejects query strings on the normal TMDB primary manual endpoint", async () => {
+	it('rejects query strings on the normal TMDB primary manual endpoint', async () => {
 		const mock = createMockEnv([]);
-		const request = createManualAdminRequest(
-			"http://example.com/admin/import/tmdb/new-primary-manual?limit=100",
-		);
+		const request = createManualAdminRequest('http://example.com/admin/import/tmdb/new-primary-manual?limit=100');
 		const response = await worker.fetch(request, mock.env);
 
 		expect(response.status).toBe(400);
 		expect(await response.json()).toEqual({
-			error:
-				"new-primary-manual does not accept beginDate, endDate, or limit. Use limited-primary-manual for explicit ranges.",
+			error: 'new-primary-manual does not accept beginDate, endDate, or limit. Use limited-primary-manual for explicit ranges.',
 		});
 	});
 
-	it("rejects unknown IMDb enqueue parameters without starting an import", async () => {
+	it('rejects unknown IMDb enqueue parameters without starting an import', async () => {
 		const mock = createMockEnv([]);
-		const request = createManualAdminRequest(
-			"http://example.com/admin/import/imdb-ratings/enqueue-manual?unexpectedParameter=1",
-		);
+		const request = createManualAdminRequest('http://example.com/admin/import/imdb-ratings/enqueue-manual?unexpectedParameter=1');
 		const response = await worker.fetch(request, mock.env);
 
 		expect(response.status).toBe(400);
 		expect(await response.json()).toEqual({
-			error: "enqueue-manual only accepts the optional limit parameter.",
+			error: 'enqueue-manual only accepts the optional limit parameter.',
 		});
-		expect(mock.getPreparedSql()).toBe("");
+		expect(mock.getPreparedSql()).toBe('');
 	});
 
-	it("rejects query strings on TMDB lookup refresh manual endpoints", async () => {
+	it('rejects query strings on TMDB lookup refresh manual endpoints', async () => {
 		const mock = createMockEnv([]);
 
 		const genreResponse = await worker.fetch(
-			createManualAdminRequest(
-				"http://example.com/admin/import/tmdb/genre-lookup-refresh-manual?language=en-US",
-			),
+			createManualAdminRequest('http://example.com/admin/import/tmdb/genre-lookup-refresh-manual?language=en-US'),
 			mock.env,
 		);
 		const providerResponse = await worker.fetch(
-			createManualAdminRequest(
-				"http://example.com/admin/import/tmdb/watch-provider-lookup-refresh-manual?region=US",
-			),
+			createManualAdminRequest('http://example.com/admin/import/tmdb/watch-provider-lookup-refresh-manual?region=US'),
 			mock.env,
 		);
 		const languageResponse = await worker.fetch(
-			createManualAdminRequest(
-				"http://example.com/admin/import/tmdb/language-lookup-refresh-manual?language=en-US",
-			),
+			createManualAdminRequest('http://example.com/admin/import/tmdb/language-lookup-refresh-manual?language=en-US'),
 			mock.env,
 		);
 		const backfillResponse = await worker.fetch(
-			createManualAdminRequest(
-				"http://example.com/admin/import/tmdb/original-language-backfill-manual?limit=20",
-			),
+			createManualAdminRequest('http://example.com/admin/import/tmdb/original-language-backfill-manual?limit=20'),
 			mock.env,
 		);
 
 		expect(genreResponse.status).toBe(400);
 		expect(await genreResponse.json()).toEqual({
-			error:
-				"genre-lookup-refresh-manual does not accept query parameters. It refreshes the en-US TMDB movie genre lookup table.",
+			error: 'genre-lookup-refresh-manual does not accept query parameters. It refreshes the en-US TMDB movie genre lookup table.',
 		});
 		expect(providerResponse.status).toBe(400);
 		expect(await providerResponse.json()).toEqual({
-			error:
-				"watch-provider-lookup-refresh-manual does not accept query parameters. It refreshes the US TMDB watch-provider lookup table.",
+			error: 'watch-provider-lookup-refresh-manual does not accept query parameters. It refreshes the US TMDB watch-provider lookup table.',
 		});
 		expect(languageResponse.status).toBe(400);
 		expect(await languageResponse.json()).toEqual({
-			error:
-				"language-lookup-refresh-manual does not accept query parameters. It refreshes TMDB's original-language names.",
+			error: "language-lookup-refresh-manual does not accept query parameters. It refreshes TMDB's original-language names.",
 		});
 		expect(backfillResponse.status).toBe(400);
 		expect(await backfillResponse.json()).toEqual({
 			error:
-				"original-language-backfill-manual does not accept query parameters. It safely fills only original_language for existing movie IDs.",
+				'original-language-backfill-manual does not accept query parameters. It safely fills only original_language for existing movie IDs.',
 		});
 	});
 
-	it("rejects malformed popularity source dates before starting an import", async () => {
+	it('rejects malformed popularity source dates before starting an import', async () => {
+		const mock = createMockEnv([]);
+		const request = createManualAdminRequest('http://example.com/admin/import/tmdb/popularity-refresh-manual?sourceDate=07-31-2026');
+		const response = await worker.fetch(request, mock.env);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: 'sourceDate must use YYYY-MM-DD format.',
+		});
+	});
+
+	it('rejects a Movie List popularity override that is not a popularity job ID', async () => {
 		const mock = createMockEnv([]);
 		const request = createManualAdminRequest(
-			"http://example.com/admin/import/tmdb/popularity-refresh-manual?sourceDate=07-31-2026",
+			'http://example.com/admin/import/movie-list/rebuild-manual?runDate=2026-07-27&popularityRunId=imdb-ratings-cron-123',
 		);
 		const response = await worker.fetch(request, mock.env);
 
 		expect(response.status).toBe(400);
 		expect(await response.json()).toEqual({
-			error: "sourceDate must use YYYY-MM-DD format.",
+			error: 'popularityRunId must identify a tmdb-popularity-refresh job run.',
 		});
 	});
 
-	it("rejects a Movie List popularity override that is not a popularity job ID", async () => {
+	it('rejects a Movie List IMDb override that is not an IMDb job ID', async () => {
 		const mock = createMockEnv([]);
 		const request = createManualAdminRequest(
-			"http://example.com/admin/import/movie-list/rebuild-manual?runDate=2026-07-27&popularityRunId=imdb-ratings-cron-123",
+			'http://example.com/admin/import/movie-list/rebuild-manual?runDate=2026-07-27&imdbRunId=tmdb-primary-cron-123',
 		);
 		const response = await worker.fetch(request, mock.env);
 
 		expect(response.status).toBe(400);
 		expect(await response.json()).toEqual({
-			error:
-				"popularityRunId must identify a tmdb-popularity-refresh job run.",
+			error: 'imdbRunId must identify an imdb-ratings job run.',
 		});
 	});
 
-	it("rejects a Movie List IMDb override that is not an IMDb job ID", async () => {
-		const mock = createMockEnv([]);
-		const request = createManualAdminRequest(
-			"http://example.com/admin/import/movie-list/rebuild-manual?runDate=2026-07-27&imdbRunId=tmdb-primary-cron-123",
-		);
-		const response = await worker.fetch(request, mock.env);
-
-		expect(response.status).toBe(400);
-		expect(await response.json()).toEqual({
-			error: "imdbRunId must identify an imdb-ratings job run.",
-		});
-	});
-
-	it("rejects an invalid weekly validation date before querying job status", async () => {
+	it('rejects an invalid weekly validation date before querying job status', async () => {
 		const mock = createMockEnv([]);
 		const response = await worker.fetch(
-			createManualAdminRequest(
-				"http://example.com/admin/import/weekly-validation-manual?runDate=July-27",
-			),
+			createManualAdminRequest('http://example.com/admin/import/weekly-validation-manual?runDate=July-27'),
 			mock.env,
 		);
 
 		expect(response.status).toBe(400);
 		expect(await response.json()).toEqual({
-			error: "runDate must use YYYY-MM-DD format.",
+			error: 'runDate must use YYYY-MM-DD format.',
 		});
 		expect(mock.getPrepareCount()).toBe(0);
 	});
 
-	it("requires an explicit limit on the limited TMDB primary manual endpoint", async () => {
+	it('requires an explicit limit on the limited TMDB primary manual endpoint', async () => {
 		const mock = createMockEnv([]);
 		const request = createManualAdminRequest(
-			"http://example.com/admin/import/tmdb/limited-primary-manual?beginDate=2000-01-01&endDate=2000-12-31",
+			'http://example.com/admin/import/tmdb/limited-primary-manual?beginDate=2000-01-01&endDate=2000-12-31',
 		);
 		const response = await worker.fetch(request, mock.env);
 
 		expect(response.status).toBe(400);
 		expect(await response.json()).toEqual({
-			error: "limit is required and must be a positive integer.",
+			error: 'limit is required and must be a positive integer.',
 		});
 	});
 
-	it("does not keep the old TMDB primary load-manual route", async () => {
+	it('does not keep the old TMDB primary load-manual route', async () => {
 		const mock = createMockEnv([]);
 		const request = new IncomingRequest(
-			"http://example.com/admin/import/tmdb/load-manual?limit=100&beginDate=2000-01-01&endDate=2000-12-31",
+			'http://example.com/admin/import/tmdb/load-manual?limit=100&beginDate=2000-01-01&endDate=2000-12-31',
 		);
 		const response = await worker.fetch(request, mock.env);
 
 		expect(response.status).toBe(404);
-		expect(await response.json()).toEqual({ error: "Not found." });
+		expect(await response.json()).toEqual({ error: 'Not found.' });
 	});
 
 	/*
@@ -1295,12 +1256,12 @@ describe("MovieApp Worker", () => {
 
 		the Worker should return 404.
 	*/
-	it("returns not found for routes other than /movies", async () => {
+	it('returns not found for routes other than /movies', async () => {
 		const mock = createMockEnv([]);
-		const request = new IncomingRequest("http://example.com/");
+		const request = new IncomingRequest('http://example.com/');
 		const response = await worker.fetch(request, mock.env);
 
 		expect(response.status).toBe(404);
-		expect(await response.json()).toEqual({ error: "Not found." });
+		expect(await response.json()).toEqual({ error: 'Not found.' });
 	});
 });

@@ -1,16 +1,7 @@
-import {
-	dryRunReadImdbRatings,
-	enqueueImdbRatingRows,
-} from "../imports/imdbRatings";
-import { enqueueCacheWarmSearchJob } from "../cache/cacheWarmJob";
-import {
-	AppVersionRequestValidationError,
-	getCachedAppVersionResponse,
-} from "./appVersion";
-import {
-	checkMovieListPotentialLoadCounts,
-	recordMovieListCurrentCountSnapshot,
-} from "../imports/movieListLoadCounts";
+import { dryRunReadImdbRatings, enqueueImdbRatingRows } from '../imports/imdbRatings';
+import { enqueueCacheWarmSearchJob } from '../cache/cacheWarmJob';
+import { AppVersionRequestValidationError, getCachedAppVersionResponse } from './appVersion';
+import { checkMovieListPotentialLoadCounts, recordMovieListCurrentCountSnapshot } from '../imports/movieListLoadCounts';
 import {
 	getRecentImportJobRuns,
 	getRecentTmdbEnrichmentImportJobRuns,
@@ -29,51 +20,40 @@ import {
 	TMDB_PROVIDER_REFRESH_JOB_NAME,
 	TMDB_WATCH_PROVIDER_LOOKUP_REFRESH_JOB_NAME,
 	WEEKLY_IMPORT_VALIDATION_JOB_NAME,
-} from "../jobs/importJobRuns";
-import { validateWeeklyImportPipeline } from "../jobs/weeklyImportValidation";
+} from '../jobs/importJobRuns';
+import { validateWeeklyImportPipeline } from '../jobs/weeklyImportValidation';
 import {
 	getMovieCardDataByTmdbId,
+	getMovieCardDataByTmdbIds,
+	MOVIE_CARD_DATA_BATCH_PATH,
+	parseMovieCardDataBatchBody,
 	getCachedMovieSearchResponse,
 	getMovieListImdbRatingByTmdbId,
 	parseMovieCardDataTmdbIdPath,
 	parseMovieListTmdbIdPath,
 	RequestValidationError,
-} from "./movieSearch";
-import { getCachedMovieLanguagesResponse } from "./movieLanguages";
+} from './movieSearch';
+import { getCachedMovieLanguagesResponse } from './movieLanguages';
 import {
 	getCachedPersonFamilyResponse,
 	PersonFamilyRequestValidationError,
 	WikidataPersonFamilyUpstreamError,
 	WikidataPersonNotFoundError,
-} from "./personFamily";
-import { getPrivacyPolicyResponse } from "./privacyPolicy";
-import { rebuildMovieListItems } from "../imports/movieListBuild";
-import {
-	enqueueTmdbEnrichmentJob,
-	TMDB_ENRICH_TMDB_CONCURRENCY,
-} from "../imports/tmdbEnrichment";
-import { enqueueTmdbNewMovieDetailsJob } from "../imports/tmdbNewMovieDetails";
-import { enqueueTmdbProviderRefreshJob } from "../imports/tmdbProviderRefresh";
-import { enqueueTmdbPopularityRefresh } from "../imports/tmdbPopularity";
-import {
-	enqueueTmdbOriginalLanguageBackfill,
-} from "../imports/tmdbOriginalLanguageBackfill";
-import { enqueueTmdbOriginalLanguageResidual } from "../imports/tmdbOriginalLanguageResidual";
-import {
-	isIsoDate,
-	loadNewTmdbPrimaryRows,
-	loadTmdbPrimaryRowsManual,
-	TMDB_PRIMARY_STANDARD_LIMIT,
-} from "../imports/tmdbPrimary";
-import {
-	refreshTmdbGenreLookup,
-	refreshTmdbLanguageLookup,
-	refreshTmdbWatchProviderLookup,
-} from "../imports/tmdbLookupRefresh";
-import { sendJobNotificationTestEmail } from "../notifications/jobNotifications";
-import { logEvent } from "../shared/logging";
-import type { Env } from "../shared/types";
-import { getLastJobRunsSummary } from "./lastJobRunsSummary";
+} from './personFamily';
+import { getPrivacyPolicyResponse } from './privacyPolicy';
+import { rebuildMovieListItems } from '../imports/movieListBuild';
+import { enqueueTmdbEnrichmentJob, TMDB_ENRICH_TMDB_CONCURRENCY } from '../imports/tmdbEnrichment';
+import { enqueueTmdbNewMovieDetailsJob } from '../imports/tmdbNewMovieDetails';
+import { enqueueTmdbProviderRefreshJob } from '../imports/tmdbProviderRefresh';
+import { enqueueTmdbPopularityRefresh } from '../imports/tmdbPopularity';
+import { enqueueTmdbOriginalLanguageBackfill } from '../imports/tmdbOriginalLanguageBackfill';
+import { enqueueTmdbOriginalLanguageResidual } from '../imports/tmdbOriginalLanguageResidual';
+import { isIsoDate, loadNewTmdbPrimaryRows, loadTmdbPrimaryRowsManual, TMDB_PRIMARY_STANDARD_LIMIT } from '../imports/tmdbPrimary';
+import { refreshTmdbGenreLookup, refreshTmdbLanguageLookup, refreshTmdbWatchProviderLookup } from '../imports/tmdbLookupRefresh';
+import { sendJobNotificationTestEmail } from '../notifications/jobNotifications';
+import { logEvent } from '../shared/logging';
+import type { Env } from '../shared/types';
+import { getLastJobRunsSummary } from './lastJobRunsSummary';
 
 type MovieRow = {
 	id: number;
@@ -86,101 +66,86 @@ function jsonResponse(body: unknown, init?: ResponseInit) {
 	return new Response(JSON.stringify(body, null, 2), {
 		...init,
 		headers: {
-			"content-type": "application/json; charset=UTF-8",
+			'content-type': 'application/json; charset=UTF-8',
 			...init?.headers,
 		},
 	});
 }
 
 const MANUAL_MUTATION_PATHS = new Set([
-	"/admin/import/imdb-ratings/enqueue-manual",
-	"/admin/import/tmdb/new-primary-manual",
-	"/admin/import/tmdb/limited-primary-manual",
-	"/admin/import/tmdb/enrich-all-manual",
-	"/admin/import/tmdb/new-movie-details-manual",
-	"/admin/import/tmdb/provider-refresh-manual",
-	"/admin/import/tmdb/popularity-refresh-manual",
-	"/admin/import/tmdb/genre-lookup-refresh-manual",
-	"/admin/import/tmdb/language-lookup-refresh-manual",
-	"/admin/import/tmdb/original-language-backfill-manual",
-	"/admin/import/tmdb/original-language-residual-manual",
-	"/admin/import/tmdb/watch-provider-lookup-refresh-manual",
-	"/admin/cache/search/warm-manual",
-	"/admin/import/movie-list/rebuild-manual",
-	"/admin/import/movie-list/potential-load-check",
-	"/admin/import/movie-list/current-count-snapshot",
-	"/admin/import/weekly-validation-manual",
-	"/admin/notifications/email-test-manual",
+	'/admin/import/imdb-ratings/enqueue-manual',
+	'/admin/import/tmdb/new-primary-manual',
+	'/admin/import/tmdb/limited-primary-manual',
+	'/admin/import/tmdb/enrich-all-manual',
+	'/admin/import/tmdb/new-movie-details-manual',
+	'/admin/import/tmdb/provider-refresh-manual',
+	'/admin/import/tmdb/popularity-refresh-manual',
+	'/admin/import/tmdb/genre-lookup-refresh-manual',
+	'/admin/import/tmdb/language-lookup-refresh-manual',
+	'/admin/import/tmdb/original-language-backfill-manual',
+	'/admin/import/tmdb/original-language-residual-manual',
+	'/admin/import/tmdb/watch-provider-lookup-refresh-manual',
+	'/admin/cache/search/warm-manual',
+	'/admin/import/movie-list/rebuild-manual',
+	'/admin/import/movie-list/potential-load-check',
+	'/admin/import/movie-list/current-count-snapshot',
+	'/admin/import/weekly-validation-manual',
+	'/admin/notifications/email-test-manual',
 ]);
 
+const PUBLIC_POST_PATHS = new Set([MOVIE_CARD_DATA_BATCH_PATH]);
+
 const ACCESS_NOT_PERMITTED_BODY = {
-	error: "Access not permitted",
+	error: 'Access not permitted',
 };
 
-function validateManualMutationAccess(
-	request: Request,
-	env: Env,
-	url: URL,
-) {
+function validateManualMutationAccess(request: Request, env: Env, url: URL) {
 	if (!MANUAL_MUTATION_PATHS.has(url.pathname)) {
 		return null;
 	}
 
-	if (request.method !== "POST") {
-		logEvent("admin-manual-endpoint-method-rejected", {
+	if (request.method !== 'POST') {
+		logEvent('admin-manual-endpoint-method-rejected', {
 			path: url.pathname,
 			method: request.method,
-			requiredMethod: "POST",
-			userAgent: request.headers.get("user-agent"),
-			cfConnectingIp: request.headers.get("cf-connecting-ip"),
+			requiredMethod: 'POST',
+			userAgent: request.headers.get('user-agent'),
+			cfConnectingIp: request.headers.get('cf-connecting-ip'),
 		});
 
-		return jsonResponse(
-			ACCESS_NOT_PERMITTED_BODY,
-			{ status: 405, headers: { allow: "POST" } },
-		);
+		return jsonResponse(ACCESS_NOT_PERMITTED_BODY, { status: 405, headers: { allow: 'POST' } });
 	}
 
 	if (!env.ADMIN_IMPORT_TOKEN) {
-		logEvent("admin-manual-endpoint-token-missing", {
+		logEvent('admin-manual-endpoint-token-missing', {
 			path: url.pathname,
 		});
 
-		return jsonResponse(
-			ACCESS_NOT_PERMITTED_BODY,
-			{ status: 500 },
-		);
+		return jsonResponse(ACCESS_NOT_PERMITTED_BODY, { status: 500 });
 	}
 
-	const authorization = request.headers.get("authorization") ?? "";
+	const authorization = request.headers.get('authorization') ?? '';
 	const expectedAuthorization = `Bearer ${env.ADMIN_IMPORT_TOKEN}`;
 
 	if (authorization !== expectedAuthorization) {
-		logEvent("admin-manual-endpoint-unauthorized", {
+		logEvent('admin-manual-endpoint-unauthorized', {
 			path: url.pathname,
 			method: request.method,
 			hasAuthorization: authorization.length > 0,
-			userAgent: request.headers.get("user-agent"),
-			cfConnectingIp: request.headers.get("cf-connecting-ip"),
+			userAgent: request.headers.get('user-agent'),
+			cfConnectingIp: request.headers.get('cf-connecting-ip'),
 		});
 
-		return jsonResponse(
-			ACCESS_NOT_PERMITTED_BODY,
-			{ status: 401, headers: { "www-authenticate": "Bearer" } },
-		);
+		return jsonResponse(ACCESS_NOT_PERMITTED_BODY, { status: 401, headers: { 'www-authenticate': 'Bearer' } });
 	}
 
 	return null;
 }
 
-function jobErrorResponse(
-	error: unknown,
-	jobName: string,
-	monitorEndpoint: string,
-) {
+function jobErrorResponse(error: unknown, jobName: string, monitorEndpoint: string) {
 	const message = error instanceof Error ? error.message : String(error);
 
-	logEvent("manual-endpoint-cancelled", {
+	logEvent('manual-endpoint-cancelled', {
 		jobName,
 		monitorEndpoint,
 		error: message,
@@ -196,31 +161,20 @@ function jobErrorResponse(
 	);
 }
 
-export async function handleFetch(
-	request: Request,
-	env: Env,
-	ctx?: ExecutionContext,
-) {
+export async function handleFetch(request: Request, env: Env, ctx?: ExecutionContext) {
 	const url = new URL(request.url);
 
-	const manualMutationAccessError = validateManualMutationAccess(
-		request,
-		env,
-		url,
-	);
+	const manualMutationAccessError = validateManualMutationAccess(request, env, url);
 
 	if (manualMutationAccessError) {
 		return manualMutationAccessError;
 	}
 
-	if (!MANUAL_MUTATION_PATHS.has(url.pathname) && request.method !== "GET") {
-		return jsonResponse(
-			{ error: "Only GET requests are supported." },
-			{ status: 405, headers: { allow: "GET" } },
-		);
+	if (!MANUAL_MUTATION_PATHS.has(url.pathname) && !PUBLIC_POST_PATHS.has(url.pathname) && request.method !== 'GET') {
+		return jsonResponse({ error: 'Only GET requests are supported.' }, { status: 405, headers: { allow: 'GET' } });
 	}
 
-	if (url.pathname === "/movies/search") {
+	if (url.pathname === '/movies/search') {
 		try {
 			return await getCachedMovieSearchResponse(request, env, url, ctx);
 		} catch (error) {
@@ -228,15 +182,15 @@ export async function handleFetch(
 				return Response.json({ error: error.message }, { status: 400 });
 			}
 
-			return Response.json({ error: "Movie search failed." }, { status: 500 });
+			return Response.json({ error: 'Movie search failed.' }, { status: 500 });
 		}
 	}
 
-	if (url.pathname === "/movies/languages") {
+	if (url.pathname === '/movies/languages') {
 		return getCachedMovieLanguagesResponse(request, env, ctx);
 	}
 
-	if (url.pathname === "/app-version/latest") {
+	if (url.pathname === '/app-version/latest') {
 		try {
 			return await getCachedAppVersionResponse(request, env, url, ctx);
 		} catch (error) {
@@ -244,22 +198,16 @@ export async function handleFetch(
 				return Response.json({ error: error.message }, { status: 400 });
 			}
 
-			logEvent("app-version-endpoint-failed", {
+			logEvent('app-version-endpoint-failed', {
 				error: error instanceof Error ? error.message : String(error),
 			});
-			console.error(
-				"App version lookup failed:",
-				error instanceof Error ? error.message : String(error),
-			);
+			console.error('App version lookup failed:', error instanceof Error ? error.message : String(error));
 
-			return Response.json(
-				{ error: "App version lookup failed." },
-				{ status: 500 },
-			);
+			return Response.json({ error: 'App version lookup failed.' }, { status: 500 });
 		}
 	}
 
-	if (url.pathname === "/people/family") {
+	if (url.pathname === '/people/family') {
 		try {
 			return await getCachedPersonFamilyResponse(request, url, ctx);
 		} catch (error) {
@@ -271,60 +219,67 @@ export async function handleFetch(
 				return Response.json({ error: error.message }, { status: 404 });
 			}
 
-			logEvent("person-family-endpoint-failed", {
+			logEvent('person-family-endpoint-failed', {
 				error: error instanceof Error ? error.message : String(error),
 			});
-			console.error(
-				"Person family lookup failed:",
-				error instanceof Error ? error.message : String(error),
-			);
+			console.error('Person family lookup failed:', error instanceof Error ? error.message : String(error));
 
 			return Response.json(
-				{ error: "Person family lookup failed." },
+				{ error: 'Person family lookup failed.' },
 				{
-					status:
-						error instanceof WikidataPersonFamilyUpstreamError ? 502 : 500,
+					status: error instanceof WikidataPersonFamilyUpstreamError ? 502 : 500,
 				},
 			);
 		}
 	}
 
-	if (
-		url.pathname === "/privacy" ||
-		url.pathname === "/privacy-policy"
-	) {
+	if (url.pathname === '/privacy' || url.pathname === '/privacy-policy') {
 		return getPrivacyPolicyResponse();
 	}
 
 	try {
+		if (url.pathname === MOVIE_CARD_DATA_BATCH_PATH) {
+			if (request.method !== 'POST') {
+				return Response.json({ error: 'This endpoint requires POST.' }, { status: 405, headers: { Allow: 'POST' } });
+			}
+
+			if (url.search !== '') {
+				return Response.json({ error: 'This endpoint does not accept query parameters.' }, { status: 400 });
+			}
+
+			let requestBody: unknown;
+
+			try {
+				requestBody = await request.json();
+			} catch {
+				throw new RequestValidationError('Request body must be valid JSON.');
+			}
+
+			const tmdbIds = parseMovieCardDataBatchBody(requestBody);
+
+			return Response.json({
+				results: await getMovieCardDataByTmdbIds(env, tmdbIds),
+			});
+		}
+
 		const movieCardDataTmdbId = parseMovieCardDataTmdbIdPath(url.pathname);
 
 		if (movieCardDataTmdbId !== null) {
-			if (url.search !== "") {
-				return Response.json(
-					{ error: "This endpoint does not accept query parameters." },
-					{ status: 400 },
-				);
+			if (url.search !== '') {
+				return Response.json({ error: 'This endpoint does not accept query parameters.' }, { status: 400 });
 			}
 
-			return Response.json(
-				await getMovieCardDataByTmdbId(env, movieCardDataTmdbId),
-			);
+			return Response.json(await getMovieCardDataByTmdbId(env, movieCardDataTmdbId));
 		}
 
 		const movieListRatingTmdbId = parseMovieListTmdbIdPath(url.pathname);
 
 		if (movieListRatingTmdbId !== null) {
-			if (url.search !== "") {
-				return Response.json(
-					{ error: "This endpoint does not accept query parameters." },
-					{ status: 400 },
-				);
+			if (url.search !== '') {
+				return Response.json({ error: 'This endpoint does not accept query parameters.' }, { status: 400 });
 			}
 
-			return Response.json(
-				await getMovieListImdbRatingByTmdbId(env, movieListRatingTmdbId),
-			);
+			return Response.json(await getMovieListImdbRatingByTmdbId(env, movieListRatingTmdbId));
 		}
 	} catch (error) {
 		if (error instanceof RequestValidationError) {
@@ -333,106 +288,80 @@ export async function handleFetch(
 
 		return Response.json(
 			{
-				error: url.pathname.endsWith("/imdb-rating")
-					? "Movie IMDb rating lookup failed."
-					: "Movie card data lookup failed.",
+				error: url.pathname.endsWith('/imdb-rating') ? 'Movie IMDb rating lookup failed.' : 'Movie card data lookup failed.',
 			},
 			{ status: 500 },
 		);
 	}
 
-	if (url.pathname === "/admin/import/imdb-ratings/dry-run") {
-		const limit = Number(url.searchParams.get("limit") ?? 10000);
+	if (url.pathname === '/admin/import/imdb-ratings/dry-run') {
+		const limit = Number(url.searchParams.get('limit') ?? 10000);
 		const result = await dryRunReadImdbRatings(limit);
 		return Response.json(result);
 	}
 
-	if (url.pathname === "/admin/import/imdb-ratings/enqueue-manual") {
-		const allowedParams = new Set(["limit"]);
+	if (url.pathname === '/admin/import/imdb-ratings/enqueue-manual') {
+		const allowedParams = new Set(['limit']);
 		for (const key of url.searchParams.keys()) {
 			if (!allowedParams.has(key)) {
 				return Response.json(
 					{
-						error:
-							"enqueue-manual only accepts the optional limit parameter.",
+						error: 'enqueue-manual only accepts the optional limit parameter.',
 					},
 					{ status: 400 },
 				);
 			}
 		}
 
-		const rawLimit = url.searchParams.get("limit");
+		const rawLimit = url.searchParams.get('limit');
 		const limit = rawLimit === null ? undefined : Number(rawLimit);
 		if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
-			return Response.json(
-				{ error: "limit must be a positive integer." },
-				{ status: 400 },
-			);
+			return Response.json({ error: 'limit must be a positive integer.' }, { status: 400 });
 		}
 		try {
 			const result = await enqueueImdbRatingRows(env, limit);
 			return Response.json(result);
 		} catch (error) {
-			return jobErrorResponse(
-				error,
-				IMDB_RATINGS_JOB_NAME,
-				"/admin/import/job-runs?jobName=imdb-ratings&limit=1",
-			);
+			return jobErrorResponse(error, IMDB_RATINGS_JOB_NAME, '/admin/import/job-runs?jobName=imdb-ratings&limit=1');
 		}
 	}
 
-	if (url.pathname === "/admin/import/tmdb/new-primary-manual") {
-		if (url.search !== "") {
+	if (url.pathname === '/admin/import/tmdb/new-primary-manual') {
+		if (url.search !== '') {
 			return Response.json(
 				{
-					error:
-						"new-primary-manual does not accept beginDate, endDate, or limit. Use limited-primary-manual for explicit ranges.",
+					error: 'new-primary-manual does not accept beginDate, endDate, or limit. Use limited-primary-manual for explicit ranges.',
 				},
 				{ status: 400 },
 			);
 		}
 
 		try {
-			const result = await loadNewTmdbPrimaryRows(env, "manual");
-			const status =
-				"skipped" in result &&
-				result.skipped &&
-				result.skipReason === "begin_date_older_than_28_days"
-					? 409
-					: 200;
+			const result = await loadNewTmdbPrimaryRows(env, 'manual');
+			const status = 'skipped' in result && result.skipped && result.skipReason === 'begin_date_older_than_28_days' ? 409 : 200;
 
 			return Response.json(result, {
 				status,
 			});
 		} catch (error) {
-			return jobErrorResponse(
-				error,
-				TMDB_PRIMARY_JOB_NAME,
-				"/admin/import/job-runs?jobName=tmdb-primary&limit=1",
-			);
+			return jobErrorResponse(error, TMDB_PRIMARY_JOB_NAME, '/admin/import/job-runs?jobName=tmdb-primary&limit=1');
 		}
 	}
 
-	if (url.pathname === "/admin/import/tmdb/limited-primary-manual") {
+	if (url.pathname === '/admin/import/tmdb/limited-primary-manual') {
 		const startedAtMs = Date.now();
 		const startedAt = new Date(startedAtMs).toISOString();
-		const rawLimit = url.searchParams.get("limit");
+		const rawLimit = url.searchParams.get('limit');
 		const limit = Number(rawLimit);
-		const beginDate = url.searchParams.get("beginDate");
-		const endDate = url.searchParams.get("endDate");
+		const beginDate = url.searchParams.get('beginDate');
+		const endDate = url.searchParams.get('endDate');
 
 		if (!rawLimit) {
-			return Response.json(
-				{ error: "limit is required and must be a positive integer." },
-				{ status: 400 },
-			);
+			return Response.json({ error: 'limit is required and must be a positive integer.' }, { status: 400 });
 		}
 
 		if (!Number.isInteger(limit) || limit < 1) {
-			return Response.json(
-				{ error: "limit must be a positive integer." },
-				{ status: 400 },
-			);
+			return Response.json({ error: 'limit must be a positive integer.' }, { status: 400 });
 		}
 
 		if (limit > TMDB_PRIMARY_STANDARD_LIMIT) {
@@ -448,7 +377,7 @@ export async function handleFetch(
 		if (!beginDate || !isIsoDate(beginDate)) {
 			return Response.json(
 				{
-					error: "beginDate is required and must use YYYY-MM-DD format.",
+					error: 'beginDate is required and must use YYYY-MM-DD format.',
 					beginDate,
 				},
 				{ status: 400 },
@@ -458,7 +387,7 @@ export async function handleFetch(
 		if (!endDate || !isIsoDate(endDate)) {
 			return Response.json(
 				{
-					error: "endDate is required and must use YYYY-MM-DD format.",
+					error: 'endDate is required and must use YYYY-MM-DD format.',
 					endDate,
 				},
 				{ status: 400 },
@@ -468,7 +397,7 @@ export async function handleFetch(
 		if (beginDate > endDate) {
 			return Response.json(
 				{
-					error: "beginDate must be less than or equal to endDate.",
+					error: 'beginDate must be less than or equal to endDate.',
 					beginDate,
 					endDate,
 				},
@@ -476,7 +405,7 @@ export async function handleFetch(
 			);
 		}
 
-		logEvent("tmdb-limited-primary-manual-start", {
+		logEvent('tmdb-limited-primary-manual-start', {
 			startedAt,
 			limit,
 			beginDate,
@@ -484,12 +413,7 @@ export async function handleFetch(
 		});
 
 		try {
-			const result = await loadTmdbPrimaryRowsManual(
-				env,
-				beginDate,
-				endDate,
-				limit,
-			);
+			const result = await loadTmdbPrimaryRowsManual(env, beginDate, endDate, limit);
 
 			const endedAtMs = Date.now();
 			const endedAt = new Date(endedAtMs).toISOString();
@@ -501,7 +425,7 @@ export async function handleFetch(
 				durationMs,
 			};
 
-			logEvent("tmdb-limited-primary-manual-end", {
+			logEvent('tmdb-limited-primary-manual-end', {
 				startedAt,
 				endedAt,
 				durationMs,
@@ -522,44 +446,36 @@ export async function handleFetch(
 
 			return Response.json(responseBody);
 		} catch (error) {
-			return jobErrorResponse(
-				error,
-				TMDB_PRIMARY_JOB_NAME,
-				"/admin/import/job-runs?jobName=tmdb-primary&limit=1",
-			);
+			return jobErrorResponse(error, TMDB_PRIMARY_JOB_NAME, '/admin/import/job-runs?jobName=tmdb-primary&limit=1');
 		}
 	}
 
-	if (url.pathname === "/admin/import/tmdb/enrich-progress") {
+	if (url.pathname === '/admin/import/tmdb/enrich-progress') {
 		const runs = await getRecentTmdbEnrichmentImportJobRuns(env);
 		return Response.json({ runs });
 	}
 
-	if (url.pathname === "/admin/import/job-runs") {
-		const jobName = url.searchParams.get("jobName") ?? undefined;
-		const limit = Number(url.searchParams.get("limit") ?? 20);
+	if (url.pathname === '/admin/import/job-runs') {
+		const jobName = url.searchParams.get('jobName') ?? undefined;
+		const limit = Number(url.searchParams.get('limit') ?? 20);
 
 		if (!Number.isInteger(limit) || limit < 1) {
-			return Response.json(
-				{ error: "limit must be a positive integer." },
-				{ status: 400 },
-			);
+			return Response.json({ error: 'limit must be a positive integer.' }, { status: 400 });
 		}
 
 		const runs = await getRecentImportJobRuns(env, { jobName, limit });
 		return Response.json({ runs });
 	}
 
-	if (url.pathname === "/admin/import/last-job-runs-summary") {
+	if (url.pathname === '/admin/import/last-job-runs-summary') {
 		return jsonResponse(await getLastJobRunsSummary(env));
 	}
 
-	if (url.pathname === "/admin/notifications/email-test-manual") {
-		if (url.search !== "") {
+	if (url.pathname === '/admin/notifications/email-test-manual') {
+		if (url.search !== '') {
 			return Response.json(
 				{
-					error:
-						"email-test-manual does not accept query parameters. It sends one test email through the configured Dynu SMTP settings.",
+					error: 'email-test-manual does not accept query parameters. It sends one test email through the configured Dynu SMTP settings.',
 				},
 				{ status: 400 },
 			);
@@ -570,81 +486,60 @@ export async function handleFetch(
 
 			return Response.json(result);
 		} catch (error) {
-			return jobErrorResponse(
-				error,
-				"job-notification-email-test",
-				"/admin/notifications/email-test-manual",
-			);
+			return jobErrorResponse(error, 'job-notification-email-test', '/admin/notifications/email-test-manual');
 		}
 	}
 
-	if (url.pathname === "/admin/import/weekly-validation-manual") {
-		const allowedParams = new Set(["runDate"]);
+	if (url.pathname === '/admin/import/weekly-validation-manual') {
+		const allowedParams = new Set(['runDate']);
 		for (const key of url.searchParams.keys()) {
 			if (!allowedParams.has(key)) {
 				return Response.json(
 					{
-						error:
-							"weekly-validation-manual only accepts the optional runDate query parameter.",
+						error: 'weekly-validation-manual only accepts the optional runDate query parameter.',
 					},
 					{ status: 400 },
 				);
 			}
 		}
 
-		const runDate = url.searchParams.get("runDate") ?? undefined;
+		const runDate = url.searchParams.get('runDate') ?? undefined;
 		if (runDate !== undefined && !isIsoDate(runDate)) {
-			return Response.json(
-				{ error: "runDate must use YYYY-MM-DD format." },
-				{ status: 400 },
-			);
+			return Response.json({ error: 'runDate must use YYYY-MM-DD format.' }, { status: 400 });
 		}
 
 		try {
-			return Response.json(
-				await validateWeeklyImportPipeline(env, "manual", { runDate }),
-			);
+			return Response.json(await validateWeeklyImportPipeline(env, 'manual', { runDate }));
 		} catch (error) {
-			return jobErrorResponse(
-				error,
-				WEEKLY_IMPORT_VALIDATION_JOB_NAME,
-				"/admin/import/job-runs?jobName=weekly-import-validation&limit=1",
-			);
+			return jobErrorResponse(error, WEEKLY_IMPORT_VALIDATION_JOB_NAME, '/admin/import/job-runs?jobName=weekly-import-validation&limit=1');
 		}
 	}
 
-	if (url.pathname === "/admin/cache/search/warm-manual") {
-		const allowedParams = new Set(["genre", "genreId"]);
+	if (url.pathname === '/admin/cache/search/warm-manual') {
+		const allowedParams = new Set(['genre', 'genreId']);
 		for (const key of url.searchParams.keys()) {
 			if (!allowedParams.has(key)) {
 				return Response.json(
 					{
-						error:
-							"warm-manual only accepts optional genre or genreId query parameters.",
+						error: 'warm-manual only accepts optional genre or genreId query parameters.',
 					},
 					{ status: 400 },
 				);
 			}
 		}
 
-		const genreKey = url.searchParams.get("genre") ?? undefined;
-		const rawGenreId = url.searchParams.get("genreId");
+		const genreKey = url.searchParams.get('genre') ?? undefined;
+		const rawGenreId = url.searchParams.get('genreId');
 
 		if (genreKey && rawGenreId) {
-			return Response.json(
-				{ error: "Use either genre or genreId, not both." },
-				{ status: 400 },
-			);
+			return Response.json({ error: 'Use either genre or genreId, not both.' }, { status: 400 });
 		}
 
 		let genreId: number | undefined;
 		if (rawGenreId !== null) {
 			const parsedGenreId = Number(rawGenreId);
 			if (!Number.isInteger(parsedGenreId) || parsedGenreId < 1) {
-				return Response.json(
-					{ error: "genreId must be a positive integer." },
-					{ status: 400 },
-				);
+				return Response.json({ error: 'genreId must be a positive integer.' }, { status: 400 });
 			}
 
 			genreId = parsedGenreId;
@@ -652,39 +547,27 @@ export async function handleFetch(
 
 		try {
 			const result = await enqueueCacheWarmSearchJob(env, {
-				trigger: "manual",
+				trigger: 'manual',
 				genreKey,
 				genreId,
 			});
 
 			return Response.json(result);
 		} catch (error) {
-			return jobErrorResponse(
-				error,
-				"cache-warm-search",
-				"/admin/import/job-runs?jobName=cache-warm-search&limit=1",
-			);
+			return jobErrorResponse(error, 'cache-warm-search', '/admin/import/job-runs?jobName=cache-warm-search&limit=1');
 		}
 	}
 
-	if (url.pathname === "/admin/import/tmdb/enrich-all-manual") {
-		const limit = Number(url.searchParams.get("limit") ?? 1000);
-		const refreshOlderThanDays = Number(
-			url.searchParams.get("refreshOlderThanDays") ?? 7,
-		);
+	if (url.pathname === '/admin/import/tmdb/enrich-all-manual') {
+		const limit = Number(url.searchParams.get('limit') ?? 1000);
+		const refreshOlderThanDays = Number(url.searchParams.get('refreshOlderThanDays') ?? 7);
 
 		if (!Number.isInteger(limit) || limit < 1) {
-			return Response.json(
-				{ error: "limit must be a positive integer." },
-				{ status: 400 },
-			);
+			return Response.json({ error: 'limit must be a positive integer.' }, { status: 400 });
 		}
 
 		if (!Number.isInteger(refreshOlderThanDays) || refreshOlderThanDays < 1) {
-			return Response.json(
-				{ error: "refreshOlderThanDays must be a positive integer." },
-				{ status: 400 },
-			);
+			return Response.json({ error: 'refreshOlderThanDays must be a positive integer.' }, { status: 400 });
 		}
 
 		try {
@@ -694,25 +577,21 @@ export async function handleFetch(
 				progressEvery: 5000,
 				tmdbConcurrency: TMDB_ENRICH_TMDB_CONCURRENCY,
 				useLock: true,
-				trigger: "manual",
+				trigger: 'manual',
 			});
 
 			return Response.json(result);
 		} catch (error) {
-			return jobErrorResponse(
-				error,
-				TMDB_ENRICH_JOB_NAME,
-				"/admin/import/job-runs?jobName=tmdb-enrich&limit=1",
-			);
+			return jobErrorResponse(error, TMDB_ENRICH_JOB_NAME, '/admin/import/job-runs?jobName=tmdb-enrich&limit=1');
 		}
 	}
 
-	if (url.pathname === "/admin/import/tmdb/new-movie-details-manual") {
-		if (url.search !== "") {
+	if (url.pathname === '/admin/import/tmdb/new-movie-details-manual') {
+		if (url.search !== '') {
 			return Response.json(
 				{
 					error:
-						"new-movie-details-manual does not accept query parameters. It enriches the movies from the latest successful TMDB primary run that still need details.",
+						'new-movie-details-manual does not accept query parameters. It enriches the movies from the latest successful TMDB primary run that still need details.',
 				},
 				{ status: 400 },
 			);
@@ -721,25 +600,20 @@ export async function handleFetch(
 		try {
 			const result = await enqueueTmdbNewMovieDetailsJob(env, {
 				useLock: true,
-				trigger: "manual",
+				trigger: 'manual',
 			});
 
 			return Response.json(result);
 		} catch (error) {
-			return jobErrorResponse(
-				error,
-				TMDB_NEW_MOVIE_DETAILS_JOB_NAME,
-				"/admin/import/job-runs?jobName=tmdb-new-movie-details&limit=1",
-			);
+			return jobErrorResponse(error, TMDB_NEW_MOVIE_DETAILS_JOB_NAME, '/admin/import/job-runs?jobName=tmdb-new-movie-details&limit=1');
 		}
 	}
 
-	if (url.pathname === "/admin/import/tmdb/provider-refresh-manual") {
-		if (url.search !== "") {
+	if (url.pathname === '/admin/import/tmdb/provider-refresh-manual') {
+		if (url.search !== '') {
 			return Response.json(
 				{
-					error:
-						"provider-refresh-manual does not accept query parameters. It always refreshes the current US flatrate provider set.",
+					error: 'provider-refresh-manual does not accept query parameters. It always refreshes the current US flatrate provider set.',
 				},
 				{ status: 400 },
 			);
@@ -748,247 +622,203 @@ export async function handleFetch(
 		try {
 			const result = await enqueueTmdbProviderRefreshJob(env, {
 				useLock: true,
-				trigger: "manual",
+				trigger: 'manual',
 			});
 
 			return Response.json(result);
 		} catch (error) {
-			return jobErrorResponse(
-				error,
-				TMDB_PROVIDER_REFRESH_JOB_NAME,
-				"/admin/import/job-runs?jobName=tmdb-provider-refresh&limit=1",
-			);
+			return jobErrorResponse(error, TMDB_PROVIDER_REFRESH_JOB_NAME, '/admin/import/job-runs?jobName=tmdb-provider-refresh&limit=1');
 		}
 	}
 
-	if (url.pathname === "/admin/import/tmdb/popularity-refresh-manual") {
-		const allowedParams = new Set(["sourceDate"]);
+	if (url.pathname === '/admin/import/tmdb/popularity-refresh-manual') {
+		const allowedParams = new Set(['sourceDate']);
 
 		for (const key of url.searchParams.keys()) {
 			if (!allowedParams.has(key)) {
 				return Response.json(
 					{
-						error:
-							"popularity-refresh-manual only accepts the optional sourceDate query parameter.",
+						error: 'popularity-refresh-manual only accepts the optional sourceDate query parameter.',
 					},
 					{ status: 400 },
 				);
 			}
 		}
 
-		const sourceDate = url.searchParams.get("sourceDate") ?? undefined;
+		const sourceDate = url.searchParams.get('sourceDate') ?? undefined;
 
 		if (sourceDate !== undefined && !isIsoDate(sourceDate)) {
-			return Response.json(
-				{ error: "sourceDate must use YYYY-MM-DD format." },
-				{ status: 400 },
-			);
+			return Response.json({ error: 'sourceDate must use YYYY-MM-DD format.' }, { status: 400 });
 		}
 
 		try {
 			return Response.json(
 				await enqueueTmdbPopularityRefresh(env, {
-					trigger: "manual",
+					trigger: 'manual',
 					sourceDate,
 				}),
 			);
 		} catch (error) {
-			return jobErrorResponse(
-				error,
-				TMDB_POPULARITY_REFRESH_JOB_NAME,
-				"/admin/import/job-runs?jobName=tmdb-popularity-refresh&limit=1",
-			);
+			return jobErrorResponse(error, TMDB_POPULARITY_REFRESH_JOB_NAME, '/admin/import/job-runs?jobName=tmdb-popularity-refresh&limit=1');
 		}
 	}
 
-	if (url.pathname === "/admin/import/tmdb/genre-lookup-refresh-manual") {
-		if (url.search !== "") {
+	if (url.pathname === '/admin/import/tmdb/genre-lookup-refresh-manual') {
+		if (url.search !== '') {
 			return Response.json(
 				{
-					error:
-						"genre-lookup-refresh-manual does not accept query parameters. It refreshes the en-US TMDB movie genre lookup table.",
+					error: 'genre-lookup-refresh-manual does not accept query parameters. It refreshes the en-US TMDB movie genre lookup table.',
 				},
 				{ status: 400 },
 			);
 		}
 
 		try {
-			const result = await refreshTmdbGenreLookup(env, "manual");
+			const result = await refreshTmdbGenreLookup(env, 'manual');
 
 			return Response.json(result);
 		} catch (error) {
 			return jobErrorResponse(
 				error,
 				TMDB_GENRE_LOOKUP_REFRESH_JOB_NAME,
-				"/admin/import/job-runs?jobName=tmdb-genre-lookup-refresh&limit=1",
+				'/admin/import/job-runs?jobName=tmdb-genre-lookup-refresh&limit=1',
 			);
 		}
 	}
 
-	if (url.pathname === "/admin/import/tmdb/language-lookup-refresh-manual") {
-		if (url.search !== "") {
+	if (url.pathname === '/admin/import/tmdb/language-lookup-refresh-manual') {
+		if (url.search !== '') {
 			return Response.json(
 				{
-					error:
-						"language-lookup-refresh-manual does not accept query parameters. It refreshes TMDB's original-language names.",
+					error: "language-lookup-refresh-manual does not accept query parameters. It refreshes TMDB's original-language names.",
 				},
 				{ status: 400 },
 			);
 		}
 
 		try {
-			const result = await refreshTmdbLanguageLookup(env, "manual");
+			const result = await refreshTmdbLanguageLookup(env, 'manual');
 
 			return Response.json(result);
 		} catch (error) {
 			return jobErrorResponse(
 				error,
 				TMDB_LANGUAGE_LOOKUP_REFRESH_JOB_NAME,
-				"/admin/import/job-runs?jobName=tmdb-language-lookup-refresh&limit=1",
+				'/admin/import/job-runs?jobName=tmdb-language-lookup-refresh&limit=1',
 			);
 		}
 	}
 
-	if (
-		url.pathname ===
-		"/admin/import/tmdb/original-language-backfill-manual"
-	) {
-		if (url.search !== "") {
+	if (url.pathname === '/admin/import/tmdb/original-language-backfill-manual') {
+		if (url.search !== '') {
 			return Response.json(
 				{
 					error:
-						"original-language-backfill-manual does not accept query parameters. It safely fills only original_language for existing movie IDs.",
+						'original-language-backfill-manual does not accept query parameters. It safely fills only original_language for existing movie IDs.',
 				},
 				{ status: 400 },
 			);
 		}
 
 		try {
-			const result = await enqueueTmdbOriginalLanguageBackfill(
-				env,
-				"manual",
-			);
+			const result = await enqueueTmdbOriginalLanguageBackfill(env, 'manual');
 
 			return Response.json(result);
 		} catch (error) {
 			return jobErrorResponse(
 				error,
 				TMDB_ORIGINAL_LANGUAGE_BACKFILL_JOB_NAME,
-				"/admin/import/job-runs?jobName=tmdb-original-language-backfill&limit=1",
+				'/admin/import/job-runs?jobName=tmdb-original-language-backfill&limit=1',
 			);
 		}
 	}
 
-	if (
-		url.pathname ===
-		"/admin/import/tmdb/original-language-residual-manual"
-	) {
-		if (url.search !== "") {
+	if (url.pathname === '/admin/import/tmdb/original-language-residual-manual') {
+		if (url.search !== '') {
 			return Response.json(
 				{
 					error:
-						"original-language-residual-manual does not accept query parameters. It fills only unresolved original_language values for existing movie IDs.",
+						'original-language-residual-manual does not accept query parameters. It fills only unresolved original_language values for existing movie IDs.',
 				},
 				{ status: 400 },
 			);
 		}
 
 		try {
-			const result = await enqueueTmdbOriginalLanguageResidual(
-				env,
-				"manual",
-			);
+			const result = await enqueueTmdbOriginalLanguageResidual(env, 'manual');
 
 			return Response.json(result);
 		} catch (error) {
 			return jobErrorResponse(
 				error,
 				TMDB_ORIGINAL_LANGUAGE_RESIDUAL_JOB_NAME,
-				"/admin/import/job-runs?jobName=tmdb-original-language-residual&limit=1",
+				'/admin/import/job-runs?jobName=tmdb-original-language-residual&limit=1',
 			);
 		}
 	}
 
-	if (url.pathname === "/admin/import/tmdb/watch-provider-lookup-refresh-manual") {
-		if (url.search !== "") {
+	if (url.pathname === '/admin/import/tmdb/watch-provider-lookup-refresh-manual') {
+		if (url.search !== '') {
 			return Response.json(
 				{
 					error:
-						"watch-provider-lookup-refresh-manual does not accept query parameters. It refreshes the US TMDB watch-provider lookup table.",
+						'watch-provider-lookup-refresh-manual does not accept query parameters. It refreshes the US TMDB watch-provider lookup table.',
 				},
 				{ status: 400 },
 			);
 		}
 
 		try {
-			const result = await refreshTmdbWatchProviderLookup(env, "manual");
+			const result = await refreshTmdbWatchProviderLookup(env, 'manual');
 
 			return Response.json(result);
 		} catch (error) {
 			return jobErrorResponse(
 				error,
 				TMDB_WATCH_PROVIDER_LOOKUP_REFRESH_JOB_NAME,
-				"/admin/import/job-runs?jobName=tmdb-watch-provider-lookup-refresh&limit=1",
+				'/admin/import/job-runs?jobName=tmdb-watch-provider-lookup-refresh&limit=1',
 			);
 		}
 	}
 
-	if (url.pathname === "/admin/import/movie-list/rebuild-manual") {
-		const allowedParams = new Set([
-			"runDate",
-			"imdbRunId",
-			"popularityRunId",
-		]);
+	if (url.pathname === '/admin/import/movie-list/rebuild-manual') {
+		const allowedParams = new Set(['runDate', 'imdbRunId', 'popularityRunId']);
 		for (const key of url.searchParams.keys()) {
 			if (!allowedParams.has(key)) {
 				return Response.json(
 					{
-						error:
-							"rebuild-manual only accepts the optional runDate, imdbRunId, and popularityRunId parameters.",
+						error: 'rebuild-manual only accepts the optional runDate, imdbRunId, and popularityRunId parameters.',
 					},
 					{ status: 400 },
 				);
 			}
 		}
 
-		const dependencyRunDate = url.searchParams.get("runDate") ?? undefined;
-		const imdbRunId = url.searchParams.get("imdbRunId") ?? undefined;
-		const popularityRunId =
-			url.searchParams.get("popularityRunId") ?? undefined;
+		const dependencyRunDate = url.searchParams.get('runDate') ?? undefined;
+		const imdbRunId = url.searchParams.get('imdbRunId') ?? undefined;
+		const popularityRunId = url.searchParams.get('popularityRunId') ?? undefined;
 		if (dependencyRunDate !== undefined && !isIsoDate(dependencyRunDate)) {
-			return Response.json(
-				{ error: "runDate must use YYYY-MM-DD format." },
-				{ status: 400 },
-			);
+			return Response.json({ error: 'runDate must use YYYY-MM-DD format.' }, { status: 400 });
 		}
 
-		if (
-			imdbRunId !== undefined &&
-			(!imdbRunId.startsWith(`${IMDB_RATINGS_JOB_NAME}-`) ||
-				imdbRunId.length > 200)
-		) {
-			return Response.json(
-				{ error: "imdbRunId must identify an imdb-ratings job run." },
-				{ status: 400 },
-			);
+		if (imdbRunId !== undefined && (!imdbRunId.startsWith(`${IMDB_RATINGS_JOB_NAME}-`) || imdbRunId.length > 200)) {
+			return Response.json({ error: 'imdbRunId must identify an imdb-ratings job run.' }, { status: 400 });
 		}
 
 		if (
 			popularityRunId !== undefined &&
-			(!popularityRunId.startsWith(`${TMDB_POPULARITY_REFRESH_JOB_NAME}-`) ||
-				popularityRunId.length > 200)
+			(!popularityRunId.startsWith(`${TMDB_POPULARITY_REFRESH_JOB_NAME}-`) || popularityRunId.length > 200)
 		) {
 			return Response.json(
 				{
-					error:
-						"popularityRunId must identify a tmdb-popularity-refresh job run.",
+					error: 'popularityRunId must identify a tmdb-popularity-refresh job run.',
 				},
 				{ status: 400 },
 			);
 		}
 
 		try {
-			const result = await rebuildMovieListItems(env, "manual", {
+			const result = await rebuildMovieListItems(env, 'manual', {
 				dependencyRunDate,
 				imdbRunId,
 				popularityRunId,
@@ -996,47 +826,41 @@ export async function handleFetch(
 			});
 			return Response.json(result);
 		} catch (error) {
-			return jobErrorResponse(
-				error,
-				MOVIE_LIST_BUILD_JOB_NAME,
-				"/admin/import/job-runs?jobName=movie-list-build&limit=1",
-			);
+			return jobErrorResponse(error, MOVIE_LIST_BUILD_JOB_NAME, '/admin/import/job-runs?jobName=movie-list-build&limit=1');
 		}
 	}
 
-	if (url.pathname === "/admin/import/movie-list/potential-load-check") {
+	if (url.pathname === '/admin/import/movie-list/potential-load-check') {
 		try {
-			const result = await checkMovieListPotentialLoadCounts(env, "manual");
+			const result = await checkMovieListPotentialLoadCounts(env, 'manual');
 			return Response.json(result);
 		} catch (error) {
 			return jobErrorResponse(
 				error,
 				MOVIE_LIST_POTENTIAL_LOAD_CHECK_JOB_NAME,
-				"/admin/import/job-runs?jobName=movie-list-potential-load-check&limit=1",
+				'/admin/import/job-runs?jobName=movie-list-potential-load-check&limit=1',
 			);
 		}
 	}
 
-	if (url.pathname === "/admin/import/movie-list/current-count-snapshot") {
+	if (url.pathname === '/admin/import/movie-list/current-count-snapshot') {
 		try {
-			const result = await recordMovieListCurrentCountSnapshot(env, "manual");
+			const result = await recordMovieListCurrentCountSnapshot(env, 'manual');
 			return Response.json(result);
 		} catch (error) {
 			return jobErrorResponse(
 				error,
 				MOVIE_LIST_CURRENT_COUNT_SNAPSHOT_JOB_NAME,
-				"/admin/import/job-runs?jobName=movie-list-current-count-snapshot&limit=1",
+				'/admin/import/job-runs?jobName=movie-list-current-count-snapshot&limit=1',
 			);
 		}
 	}
 
-	if (url.pathname === "/movies") {
-		const { results } = await env.DB.prepare(
-			"SELECT id, MovieName, IMDBRating, IMDBVoteCounts FROM movies ORDER BY id",
-		).all<MovieRow>();
+	if (url.pathname === '/movies') {
+		const { results } = await env.DB.prepare('SELECT id, MovieName, IMDBRating, IMDBVoteCounts FROM movies ORDER BY id').all<MovieRow>();
 
 		return jsonResponse({ movies: results });
 	}
 
-	return jsonResponse({ error: "Not found." }, { status: 404 });
+	return jsonResponse({ error: 'Not found.' }, { status: 404 });
 }
