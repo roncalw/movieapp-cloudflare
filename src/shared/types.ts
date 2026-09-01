@@ -22,6 +22,8 @@ export interface Env {
 		| TmdbProviderRefreshQueueMessage
 	>;
 	TMDB_API_KEY: string;
+	STREAMING_AVAILABILITY_API_KEY?: string;
+	STREAMING_AVAILABILITY_MONTHLY_LIMIT?: string;
 	ADMIN_IMPORT_TOKEN?: string;
 	GOOGLE_PLAY_PACKAGE_NAME?: string;
 	GOOGLE_PLAY_TRACK?: string;

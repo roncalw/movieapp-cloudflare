@@ -93,6 +93,7 @@ export const TMDB_DISCOVER_MAX_PAGE = 500;
 const tmdbRequestTimestamps: number[] = [];
 
 export type TmdbFetchRetryOptions = {
+	requestTimeoutMs?: number;
 	maxAttempts?: number;
 	retryDelayMs?: number;
 	retryNotFound?: boolean;
@@ -145,6 +146,7 @@ async function fetchTmdbJson<T>(
 		url.searchParams.set("api_key", env.TMDB_API_KEY);
 
 		const response = await fetch(url, {
+			signal: retryOptions.requestTimeoutMs ? AbortSignal.timeout(retryOptions.requestTimeoutMs) : undefined,
 			headers: {
 				accept: "application/json",
 			},
@@ -260,6 +262,14 @@ async function getTmdbUsWatchMonetizationDiscoverPage(
 	}
 
 	return fetchTmdbJson<TmdbDiscoverPage>(url, env, retryOptions);
+}
+
+export async function getTmdbMovieExternalIds(tmdbId: number, env: Env) {
+	const url = new URL(`https://api.themoviedb.org/3/movie/${tmdbId}/external_ids`);
+	// A foreground tap must not inherit the import jobs' long retry schedule.
+	return fetchTmdbJson<{ id: number; wikidata_id?: string | null }>(url, env, {
+		maxAttempts: 1, retryNotFound: false, requestTimeoutMs: 5000,
+	});
 }
 
 export async function getTmdbMovieDetails(tmdbId: number, env: Env) {

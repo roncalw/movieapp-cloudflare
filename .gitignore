@@ -170,3 +170,7 @@ dist
 
 # Production D1 safety exports are local recovery artifacts, not source files.
 artifacts/original-language/*.sql
+
+
+# References
+/.codex/verification/

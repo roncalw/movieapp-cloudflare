@@ -14,6 +14,7 @@
 		"enabled": true
 	},
 	"vars": {
+		"STREAMING_AVAILABILITY_MONTHLY_LIMIT": "900",
 		"ALL_JOBS_PAUSED": "false",
 		"CACHE_WARM_JOB_PAUSED": "false",
 		"GOOGLE_PLAY_PACKAGE_NAME": "com.codefest.movieapp",

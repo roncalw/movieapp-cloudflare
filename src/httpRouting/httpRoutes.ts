@@ -41,6 +41,7 @@ import {
 	WikidataPersonNotFoundError,
 } from './personFamily';
 import { getPrivacyPolicyResponse } from './privacyPolicy';
+import { getStreamingLinkResponse } from './streamingLink';
 import { rebuildMovieListItems } from '../imports/movieListBuild';
 import { enqueueTmdbEnrichmentJob, TMDB_ENRICH_TMDB_CONCURRENCY } from '../imports/tmdbEnrichment';
 import { enqueueTmdbNewMovieDetailsJob } from '../imports/tmdbNewMovieDetails';
@@ -172,6 +173,10 @@ export async function handleFetch(request: Request, env: Env, ctx?: ExecutionCon
 
 	if (!MANUAL_MUTATION_PATHS.has(url.pathname) && !PUBLIC_POST_PATHS.has(url.pathname) && request.method !== 'GET') {
 		return jsonResponse({ error: 'Only GET requests are supported.' }, { status: 405, headers: { allow: 'GET' } });
+	}
+
+	if (url.pathname === '/streaming-link') {
+		return getStreamingLinkResponse(url, env);
 	}
 
 	if (url.pathname === '/movies/search') {

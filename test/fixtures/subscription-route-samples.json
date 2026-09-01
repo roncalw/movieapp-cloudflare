@@ -1,0 +1,214 @@
+[
+  {
+    "tmdbId": "movie/938614",
+    "showType": "movie",
+    "title": "Late Night with the Devil",
+    "streamingOptions": {
+      "us": [
+        {
+          "service": {
+            "id": "prime"
+          },
+          "type": "rent",
+          "link": "https://www.amazon.com/gp/video/detail/0NYJVVVAGM57ZC561VK0R657IV?ref_=atv_dp"
+        },
+        {
+          "service": {
+            "id": "amc"
+          },
+          "type": "subscription",
+          "link": "https://www.amcplus.com/movies/late-night-with-the-devil--1067652"
+        },
+        {
+          "service": {
+            "id": "apple"
+          },
+          "type": "rent",
+          "link": "https://tv.apple.com/us/movie/late-night-with-the-devil/umc.cmc.prb0czsivjhyev6dcwdwesde?playableId=tvs.sbd.9001%3A1737014858"
+        },
+        {
+          "service": {
+            "id": "roku"
+          },
+          "type": "addon",
+          "link": "https://therokuchannel.roku.com/details/d3fe0a1b021457e3a6af921ef585c52a",
+          "addon": {
+            "id": "shudder"
+          }
+        },
+        {
+          "service": {
+            "id": "prime"
+          },
+          "type": "buy",
+          "link": "https://www.amazon.com/gp/video/detail/0NYJVVVAGM57ZC561VK0R657IV?ref_=atv_dp"
+        },
+        {
+          "service": {
+            "id": "roku"
+          },
+          "type": "addon",
+          "link": "https://therokuchannel.roku.com/details/d3fe0a1b021457e3a6af921ef585c52a",
+          "addon": {
+            "id": "amcplus"
+          }
+        },
+        {
+          "service": {
+            "id": "hulu"
+          },
+          "type": "subscription",
+          "link": "https://www.hulu.com/movie/late-night-with-the-devil-a5c3c6e5-da1c-40ec-b708-4c7987689657"
+        },
+        {
+          "service": {
+            "id": "apple"
+          },
+          "type": "addon",
+          "link": "https://tv.apple.com/us/movie/late-night-with-the-devil/umc.cmc.prb0czsivjhyev6dcwdwesde?playableId=tvs.sbd.1000206%3AAMCNFL0000013474",
+          "addon": {
+            "id": "tvs.sbd.1000206"
+          }
+        },
+        {
+          "service": {
+            "id": "prime"
+          },
+          "type": "addon",
+          "link": "https://www.amazon.com/gp/video/detail/0NYJVVVAGM57ZC561VK0R657IV?ref_=atv_dp",
+          "addon": {
+            "id": "shuddertv"
+          }
+        },
+        {
+          "service": {
+            "id": "prime"
+          },
+          "type": "rent",
+          "link": "https://www.amazon.com/gp/video/detail/0NYJVVVAGM57ZC561VK0R657IV?ref_=atv_dp"
+        },
+        {
+          "service": {
+            "id": "disney"
+          },
+          "type": "addon",
+          "link": "https://www.disneyplus.com/browse/entity-a5c3c6e5-da1c-40ec-b708-4c7987689657",
+          "addon": {
+            "id": "hulu"
+          }
+        },
+        {
+          "service": {
+            "id": "apple"
+          },
+          "type": "addon",
+          "link": "https://tv.apple.com/us/movie/late-night-with-the-devil/umc.cmc.prb0czsivjhyev6dcwdwesde?playableId=tvs.sbd.1000383%3AAMCNFL0000013474",
+          "addon": {
+            "id": "tvs.sbd.1000383"
+          }
+        },
+        {
+          "service": {
+            "id": "apple"
+          },
+          "type": "buy",
+          "link": "https://tv.apple.com/us/movie/late-night-with-the-devil/umc.cmc.prb0czsivjhyev6dcwdwesde?playableId=tvs.sbd.9001%3A1737014858"
+        },
+        {
+          "service": {
+            "id": "prime"
+          },
+          "type": "addon",
+          "link": "https://www.amazon.com/gp/video/detail/0NYJVVVAGM57ZC561VK0R657IV?ref_=atv_dp",
+          "addon": {
+            "id": "amcplus"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "tmdbId": "movie/936075",
+    "showType": "movie",
+    "title": "Michael",
+    "streamingOptions": {
+      "us": [
+        {
+          "service": {
+            "id": "apple"
+          },
+          "type": "addon",
+          "link": "https://tv.apple.com/us/movie/michael/umc.cmc.655k6wal020m8folvcy526dff?playableId=tvs.sbd.1000231%3AAS00046019",
+          "addon": {
+            "id": "tvs.sbd.1000231"
+          }
+        },
+        {
+          "service": {
+            "id": "apple"
+          },
+          "type": "rent",
+          "link": "https://tv.apple.com/us/movie/michael/umc.cmc.655k6wal020m8folvcy526dff?playableId=tvs.sbd.9001%3A1895068395"
+        },
+        {
+          "service": {
+            "id": "roku"
+          },
+          "type": "addon",
+          "link": "https://therokuchannel.roku.com/details/b3a97d438dd4c8f22bed39c69a3260b5",
+          "addon": {
+            "id": "starz"
+          }
+        },
+        {
+          "service": {
+            "id": "starz"
+          },
+          "type": "subscription",
+          "link": "https://www.starz.com/us/en/movies/michael-67321"
+        },
+        {
+          "service": {
+            "id": "prime"
+          },
+          "type": "addon",
+          "link": "https://www.amazon.com/gp/video/detail/0TGV4AISR3S2UGLHZJ4FV4EM9J?ref_=atv_dp",
+          "addon": {
+            "id": "starzSub"
+          }
+        },
+        {
+          "service": {
+            "id": "apple"
+          },
+          "type": "buy",
+          "link": "https://tv.apple.com/us/movie/michael/umc.cmc.655k6wal020m8folvcy526dff?playableId=tvs.sbd.9001%3A1895068395"
+        },
+        {
+          "service": {
+            "id": "prime"
+          },
+          "type": "rent",
+          "link": "https://www.amazon.com/gp/video/detail/0TGV4AISR3S2UGLHZJ4FV4EM9J?ref_=atv_dp"
+        },
+        {
+          "service": {
+            "id": "hulu"
+          },
+          "type": "addon",
+          "link": "https://www.hulu.com/movie/michael-8d719349-6f1e-4d4b-8613-2b232bcd43cd",
+          "addon": {
+            "id": "starz"
+          }
+        },
+        {
+          "service": {
+            "id": "prime"
+          },
+          "type": "buy",
+          "link": "https://www.amazon.com/gp/video/detail/0TGV4AISR3S2UGLHZJ4FV4EM9J?ref_=atv_dp"
+        }
+      ]
+    }
+  }
+]
