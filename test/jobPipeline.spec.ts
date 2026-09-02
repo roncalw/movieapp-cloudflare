@@ -13,6 +13,7 @@ import {
 import {
 	classifyProviderLookupOutcome,
 	enqueueTmdbProviderRefreshJob,
+	getProviderRelationshipChanges,
 } from "../src/imports/tmdbProviderRefresh";
 import { promotePendingMovieWatchProviders } from "../src/imports/movieRelationshipPromotions";
 import { insertImdbRatingQueueRows } from "../src/imports/imdbRatings";
@@ -141,7 +142,7 @@ describe("weekly import job safety", () => {
 			imdb: "0 1 * * 1",
 			tmdbPrimary: "0 3 * * 1",
 			newMovieDetails: "0 5 * * 1",
-			provider: "0 19,20 * * TUE,THU,SAT",
+			provider: "0 19,20 * * TUE,FRI",
 			popularity: "0 7 * * 1",
 			movieList: "0 10 * * 1",
 			cacheWarm: "0 11 * * 1",
@@ -149,13 +150,24 @@ describe("weekly import job safety", () => {
 		});
 	});
 
-	it("starts the independent provider refresh at 3 PM Eastern in summer and winter", () => {
+	it("starts the independent provider refresh on Tuesday and Friday at 3 PM Eastern", () => {
 		// Tuesday, August 4, 2026: New York is on daylight time (UTC-4).
 		expect(
 			isIndependentProviderRefreshTime(Date.parse("2026-08-04T19:00:00Z")),
 		).toBe(true);
 		expect(
 			isIndependentProviderRefreshTime(Date.parse("2026-08-04T20:00:00Z")),
+		).toBe(false);
+		// Friday uses the same daylight-saving hour.
+		expect(
+			isIndependentProviderRefreshTime(Date.parse("2026-08-07T19:00:00Z")),
+		).toBe(true);
+		// The former Thursday and Saturday run days no longer start a refresh.
+		expect(
+			isIndependentProviderRefreshTime(Date.parse("2026-08-06T19:00:00Z")),
+		).toBe(false);
+		expect(
+			isIndependentProviderRefreshTime(Date.parse("2026-08-08T19:00:00Z")),
 		).toBe(false);
 
 		// Tuesday, December 1, 2026: New York is on standard time (UTC-5).
@@ -279,7 +291,7 @@ describe("weekly import job safety", () => {
 		expect(allBindings).not.toContain("tmdb-new-movie-details");
 	});
 
-	it("applies provider rows from the exact completed refresh run", async () => {
+	it("applies provider changes from the exact completed refresh run", async () => {
 		type FakeStatement = {
 			sql: string;
 			bindings: unknown[];
@@ -309,14 +321,10 @@ describe("weekly import job safety", () => {
 							}
 
 							return {
-								pendingMovieCount: 80_000,
-								pendingProviderCount: 190_000,
-								pendingAvailabilityRelationshipCount: 260_000,
-								adsSupportedMovieCount: 70_000,
-								fullRefreshPendingMovieCount: 80_000,
-								fullRefreshPendingProviderCount: 190_000,
-								fullRefreshPendingAvailabilityRelationshipCount: 260_000,
-								fullRefreshAdsSupportedMovieCount: 70_000,
+								pendingMovieCount: 120,
+								providerRelationshipAdditionCount: 75,
+								providerRelationshipRemovalCount: 50,
+								pendingAvailabilityRelationshipCount: 125,
 							};
 						},
 						async run() {
@@ -336,17 +344,46 @@ describe("weekly import job safety", () => {
 			env,
 			"cron",
 			exactRefreshRunId,
+			{
+				subscriptionRelationshipCount: 190_025,
+				subscriptionMovieCount: 80_010,
+				adsMovieCount: 70_000,
+				totalAvailabilityRelationshipCount: 260_025,
+				availabilityMovieCount: 117_000,
+			},
 		);
 		const insert = batchStatements.find(({ sql }) =>
-			sql.includes("INSERT OR REPLACE INTO movie_watch_providers"),
+			sql.includes("INSERT OR IGNORE INTO movie_watch_providers"),
 		);
 		const markApplied = batchStatements.find(({ sql }) =>
-			sql.includes("UPDATE movie_watch_providers_staging"),
+			sql.includes("UPDATE movie_watch_provider_changes_staging"),
+		);
+		const remove = batchStatements.find(
+			({ sql }) =>
+				sql.includes("DELETE FROM movie_watch_providers") &&
+				sql.includes("change_type = 'remove'"),
 		);
 
 		expect(insert?.sql).toContain("load_run_id = ?");
 		expect(insert?.bindings.at(-1)).toBe(exactRefreshRunId);
 		expect(markApplied?.bindings).toEqual([exactRefreshRunId]);
+		expect(remove?.bindings).toEqual([exactRefreshRunId]);
+		expect(remove?.sql).toContain("IN (");
+	});
+
+	it("stages only changed provider relationships", () => {
+		expect(getProviderRelationshipChanges([10, 20, 30], [10, 30, 40])).toEqual({
+			additions: [40],
+			removals: [20],
+		});
+		expect(getProviderRelationshipChanges([10, 20], [10, 20])).toEqual({
+			additions: [],
+			removals: [],
+		});
+		expect(getProviderRelationshipChanges([10, 20], [])).toEqual({
+			additions: [],
+			removals: [10, 20],
+		});
 	});
 
 	it("discovers US ad-supported movies without making per-movie provider requests", async () => {

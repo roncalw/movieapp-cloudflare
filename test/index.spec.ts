@@ -481,6 +481,22 @@ describe('MovieApp Worker', () => {
 		expect(mock.getPreparedSql()).toContain('INDEXED BY idx_movie_list_items_search_imdb_v2_cover');
 	});
 
+	it('matches any selected genre instead of requiring every selected genre', async () => {
+		const mock = createMockEnv([]);
+		const request = new IncomingRequest(
+			'http://example.com/movies/search?genreIds=28,12,18&pageSize=20',
+		);
+		const response = await worker.fetch(request, mock.env);
+		const searchCall = mock
+			.getPreparedCalls()
+			.find(({ sql }) => sql.includes('FROM movie_list_items AS movie'));
+
+		expect(response.status).toBe(200);
+		expect(searchCall?.sql).toContain('genre.genre_id IN (?, ?, ?)');
+		expect(searchCall?.sql.match(/FROM movie_genres AS genre/g)).toHaveLength(1);
+		expect(searchCall?.bindings.slice(2, 5)).toEqual([28, 12, 18]);
+	});
+
 	it('calculates subscription availability for an unfiltered movie search', async () => {
 		const mock = createMockEnv([]);
 		const response = await worker.fetch(

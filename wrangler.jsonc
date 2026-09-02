@@ -185,11 +185,11 @@
 			"0 5 * * 1",
 			//============================================
 			// Independent TMDB Watch Providers Staging
-				// Tuesday, Thursday, and Saturday at 3:00 PM Eastern.
+				// Tuesday and Friday at 3:00 PM Eastern.
 				// Cloudflare schedules in UTC. Both possible UTC hours are
 				// registered so the scheduled handler can select the one that
 				// is actually 3:00 PM in New York after a daylight-saving change.
-			"0 19,20 * * TUE,THU,SAT",
+			"0 19,20 * * TUE,FRI",
 			//============================================
 			// TMDB Popularity File Staging
 				// 07:00 UTC Sunday (3:00 AM EDT Sunday)

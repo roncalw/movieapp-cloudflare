@@ -156,20 +156,20 @@ async function cleanupOldPopularityStagingRuns(
 	while (true) {
 		const result = await env.DB.prepare(
 			`DELETE FROM tmdb_movie_popularity_staging
-			 WHERE load_run_id <> ?
-			   AND load_run_id <> ?
-			   AND load_run_id NOT IN (
+			 WHERE load_run_id IN (
 			     SELECT job_run_id
 			     FROM import_job_runs
 			     WHERE job_name = ?
-			       AND status IN ('queued', 'running')
+			       AND status NOT IN ('queued', 'running')
+			       AND job_run_id <> ?
+			       AND job_run_id <> ?
 			   )
 			 LIMIT ?`,
 		)
 			.bind(
+				TMDB_POPULARITY_REFRESH_JOB_NAME,
 				selectedRunId,
 				previousAppliedRunId ?? selectedRunId,
-				TMDB_POPULARITY_REFRESH_JOB_NAME,
 				MOVIE_LIST_BUILD_STAGING_CLEANUP_CHUNK_ROWS,
 			)
 			.run();
@@ -213,20 +213,20 @@ async function cleanupOldImdbStagingRuns(
 	while (true) {
 		const result = await env.DB.prepare(
 			`DELETE FROM imdb_ratings_staging_by_run
-			 WHERE load_run_id <> ?
-			   AND load_run_id <> ?
-			   AND load_run_id NOT IN (
+			 WHERE load_run_id IN (
 			     SELECT job_run_id
 			     FROM import_job_runs
 			     WHERE job_name = ?
-			       AND status IN ('queued', 'running')
+			       AND status NOT IN ('queued', 'running')
+			       AND job_run_id <> ?
+			       AND job_run_id <> ?
 			   )
 			 LIMIT ?`,
 		)
 			.bind(
+				IMDB_RATINGS_JOB_NAME,
 				selectedRunId,
 				previousAppliedRunId ?? selectedRunId,
-				IMDB_RATINGS_JOB_NAME,
 				MOVIE_LIST_BUILD_STAGING_CLEANUP_CHUNK_ROWS,
 			)
 			.run();

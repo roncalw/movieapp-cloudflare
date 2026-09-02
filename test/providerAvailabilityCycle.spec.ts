@@ -12,13 +12,17 @@ async function resetProviderCycleTables() {
 	/*
 		This test uses the local, isolated D1 database supplied by the Cloudflare
 		test runner. Only the columns exercised by the provider cycle are required.
-		Using real SQLite statements here verifies the delete-and-replace transaction,
+		Using real SQLite statements here verifies the changed-relationship apply,
 		the exact job-run links, and the JSON-backed cache source together.
 	*/
 	await testEnv.DB.batch([
 		testEnv.DB.prepare("DROP TABLE IF EXISTS import_job_locks"),
 		testEnv.DB.prepare("DROP TABLE IF EXISTS import_job_runs"),
-		testEnv.DB.prepare("DROP TABLE IF EXISTS movie_watch_providers_staging"),
+		testEnv.DB.prepare(
+			"DROP TABLE IF EXISTS movie_watch_provider_changes_staging",
+		),
+		testEnv.DB.prepare("DROP TABLE IF EXISTS tmdb_us_flatrate_movies_staging"),
+		testEnv.DB.prepare("DROP TABLE IF EXISTS tmdb_us_ads_refresh_candidates"),
 		testEnv.DB.prepare("DROP TABLE IF EXISTS movie_watch_providers"),
 		testEnv.DB.prepare(`CREATE TABLE import_job_locks (
 			job_name TEXT PRIMARY KEY,
@@ -47,15 +51,25 @@ async function resetProviderCycleTables() {
 		)`),
 		testEnv.DB.prepare(`CREATE INDEX idx_import_job_runs_job_status
 			ON import_job_runs (job_name, status, started_at)`),
-		testEnv.DB.prepare(`CREATE TABLE movie_watch_providers_staging (
-			tmdb_id INTEGER NOT NULL,
-			provider_id INTEGER,
-			region TEXT NOT NULL,
+		testEnv.DB.prepare(`CREATE TABLE tmdb_us_flatrate_movies_staging (
+			tmdb_id INTEGER PRIMARY KEY,
 			load_run_id TEXT NOT NULL,
-			is_full_refresh INTEGER NOT NULL DEFAULT 0,
+			discovered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`),
+		testEnv.DB.prepare(`CREATE TABLE tmdb_us_ads_refresh_candidates (
+			tmdb_id INTEGER PRIMARY KEY,
+			load_run_id TEXT NOT NULL,
+			discovered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`),
+		testEnv.DB.prepare(`CREATE TABLE movie_watch_provider_changes_staging (
+			load_run_id TEXT NOT NULL,
+			tmdb_id INTEGER NOT NULL,
+			provider_id INTEGER NOT NULL,
+			region TEXT NOT NULL,
 			staged_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			promoted_at TEXT,
-			PRIMARY KEY (tmdb_id, provider_id, region)
+			change_type TEXT NOT NULL,
+			applied_at TEXT,
+			PRIMARY KEY (load_run_id, tmdb_id, provider_id, region)
 		)`),
 		testEnv.DB.prepare(`CREATE TABLE movie_watch_providers (
 			tmdb_id INTEGER NOT NULL,
@@ -101,16 +115,32 @@ describe("independent provider availability cycle", () => {
 		await testEnv.DB.prepare(
 			`INSERT INTO movie_watch_providers (
 				tmdb_id, provider_id, region, promotion_run_id, promoted_at
-			 ) VALUES (999, 999, 'US', 'previous-provider-apply', CURRENT_TIMESTAMP)`,
+			 ) VALUES
+				(101, 10, 'US', 'previous-provider-apply', CURRENT_TIMESTAMP),
+				(101, 99, 'US', 'previous-provider-apply', CURRENT_TIMESTAMP),
+				(303, -1, 'US', 'previous-provider-apply', CURRENT_TIMESTAMP),
+				(999, 999, 'US', 'previous-provider-apply', CURRENT_TIMESTAMP)`,
 		).run();
 
 		await testEnv.DB.prepare(
-			`INSERT INTO movie_watch_providers_staging (
-				tmdb_id, provider_id, region, load_run_id, is_full_refresh
-			) VALUES
-				(101, 10, 'US', ?, 1),
-				(101, 11, 'US', ?, 1),
-				(202, -1, 'US', ?, 1)`,
+			`INSERT INTO tmdb_us_flatrate_movies_staging (tmdb_id, load_run_id)
+			 VALUES (101, ?), (404, ?)`,
+		)
+			.bind(PROVIDER_REFRESH_JOB_RUN_ID, PROVIDER_REFRESH_JOB_RUN_ID)
+			.run();
+		await testEnv.DB.prepare(
+			`INSERT INTO tmdb_us_ads_refresh_candidates (tmdb_id, load_run_id)
+			 VALUES (202, ?)`,
+		)
+			.bind(PROVIDER_REFRESH_JOB_RUN_ID)
+			.run();
+		await testEnv.DB.prepare(
+			`INSERT INTO movie_watch_provider_changes_staging (
+				load_run_id, tmdb_id, provider_id, region, change_type
+			 ) VALUES
+				(?, 101, 11, 'US', 'add'),
+				(?, 101, 99, 'US', 'remove'),
+				(?, 404, 12, 'US', 'add')`,
 		)
 			.bind(
 				PROVIDER_REFRESH_JOB_RUN_ID,
@@ -144,7 +174,7 @@ describe("independent provider availability cycle", () => {
 			{
 				tmdb_id: 101,
 				provider_id: 10,
-				promotion_run_id: started.providerPromotionJobRunId,
+				promotion_run_id: "previous-provider-apply",
 			},
 			{
 				tmdb_id: 101,
@@ -154,6 +184,11 @@ describe("independent provider availability cycle", () => {
 			{
 				tmdb_id: 202,
 				provider_id: -1,
+				promotion_run_id: started.providerPromotionJobRunId,
+			},
+			{
+				tmdb_id: 404,
+				provider_id: 12,
 				promotion_run_id: started.providerPromotionJobRunId,
 			},
 		]);
@@ -223,6 +258,91 @@ describe("independent provider availability cycle", () => {
 			issueCount: 0,
 		});
 		expect(remainingLocks?.count).toBe(0);
+	});
+
+	it("completes without rewriting live relationships when TMDB has not changed", async () => {
+		const sendBatch = vi.fn().mockResolvedValue(undefined);
+		const env = {
+			DB: testEnv.DB,
+			CACHE_WARM_QUEUE: { sendBatch },
+			JOB_NOTIFICATION_EMAIL_ENABLED: "false",
+		} as unknown as Env;
+
+		await testEnv.DB.prepare(
+			`INSERT INTO import_job_runs (
+				job_run_id,
+				job_name,
+				status,
+				trigger,
+				selected_count,
+				queued_count,
+				processed_count,
+				error_count,
+				ended_at,
+				result_json
+			 ) VALUES (?, 'tmdb-provider-refresh', 'complete', 'cron', 1, 1, 1, 0, CURRENT_TIMESTAMP, '{}')`,
+		)
+			.bind(PROVIDER_REFRESH_JOB_RUN_ID)
+			.run();
+		await testEnv.DB.prepare(
+			`INSERT INTO movie_watch_providers (
+				tmdb_id, provider_id, region, promotion_run_id, promoted_at
+			 ) VALUES
+				(101, 10, 'US', 'last-good-provider-apply', CURRENT_TIMESTAMP),
+				(202, -1, 'US', 'last-good-provider-apply', CURRENT_TIMESTAMP)`,
+		).run();
+		await testEnv.DB.prepare(
+			`INSERT INTO tmdb_us_flatrate_movies_staging (tmdb_id, load_run_id)
+			 VALUES (101, ?)`,
+		)
+			.bind(PROVIDER_REFRESH_JOB_RUN_ID)
+			.run();
+		await testEnv.DB.prepare(
+			`INSERT INTO tmdb_us_ads_refresh_candidates (tmdb_id, load_run_id)
+			 VALUES (202, ?)`,
+		)
+			.bind(PROVIDER_REFRESH_JOB_RUN_ID)
+			.run();
+
+		const started = await continueIndependentProviderAvailabilityCycle(
+			env,
+			PROVIDER_REFRESH_JOB_RUN_ID,
+		);
+		const promotion = await testEnv.DB.prepare(
+			`SELECT updated_count, result_json
+			 FROM import_job_runs
+			 WHERE job_run_id = ?`,
+		)
+			.bind(started.providerPromotionJobRunId)
+			.first<{ updated_count: number; result_json: string }>();
+		const promotionResult = JSON.parse(
+			promotion?.result_json ?? "{}",
+		) as Record<string, unknown>;
+		const { results: liveRows } = await testEnv.DB.prepare(
+			`SELECT tmdb_id, provider_id, promotion_run_id
+			 FROM movie_watch_providers
+			 ORDER BY tmdb_id, provider_id`,
+		).all();
+
+		expect(started.started).toBe(true);
+		expect(promotion?.updated_count).toBe(0);
+		expect(promotionResult).toMatchObject({
+			providerRelationshipAdditionCount: 0,
+			providerRelationshipRemovalCount: 0,
+			pendingAvailabilityRelationshipCount: 0,
+		});
+		expect(liveRows).toEqual([
+			{
+				tmdb_id: 101,
+				provider_id: 10,
+				promotion_run_id: "last-good-provider-apply",
+			},
+			{
+				tmdb_id: 202,
+				provider_id: -1,
+				promotion_run_id: "last-good-provider-apply",
+			},
+		]);
 	});
 
 	it("records a failed refresh without changing live providers or warming cache", async () => {

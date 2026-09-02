@@ -51,6 +51,8 @@ const MOVIE_SEARCH_CACHE_GENERATION_PARAM = '__movieListBuild';
 const MOVIE_SEARCH_PROVIDER_GENERATION_PARAM = '__providerApply';
 const MOVIE_SEARCH_RESPONSE_VERSION_PARAM = '__responseVersion';
 const MOVIE_SEARCH_RESPONSE_VERSION = 'subscription-or-ads-availability-v2';
+const MOVIE_SEARCH_GENRE_MATCH_PARAM = '__genreMatch';
+const MOVIE_SEARCH_GENRE_MATCH_VERSION = 'any-v1';
 
 type MovieSearchCacheGenerationRow = {
 	movie_list_job_run_id: string | null;
@@ -535,16 +537,17 @@ async function searchMovieListItems(env: Env, url: URL) {
 		bindings.push(minImdbVotes);
 	}
 
-	for (const genreId of genreIds) {
+	if (genreIds.length > 0) {
+		const placeholders = genreIds.map(() => '?').join(', ');
 		sqlParts.push(
 			`AND EXISTS (
 			   SELECT 1
 			   FROM movie_genres AS genre
 			   WHERE genre.tmdb_id = movie.tmdb_id
-			     AND genre.genre_id = ?
+			     AND genre.genre_id IN (${placeholders})
 			 )`,
 		);
-		bindings.push(genreId);
+		bindings.push(...genreIds);
 	}
 
 	if (providerIds.length > 0) {
@@ -694,6 +697,16 @@ export async function getCachedMovieSearchResponse(request: Request, env: Env, u
 	const cacheUrl = new URL(searchUrl.toString());
 	cacheUrl.searchParams.set(MOVIE_SEARCH_CACHE_GENERATION_PARAM, cacheGeneration.movieListJobRunId);
 	cacheUrl.searchParams.set(MOVIE_SEARCH_PROVIDER_GENERATION_PARAM, cacheGeneration.providerApplyJobRunId);
+	/*
+		Older Worker versions required a movie to match every selected genre. A
+		multi-genre search now means "match any selected genre." Give only those
+		requests a new internal cache key so a previously cached empty response
+		cannot survive this correction. Single-genre and no-genre cache entries are
+		still valid and remain warm.
+	*/
+	if (parseIntegerListParam(searchUrl.searchParams.get('genreIds'), 'genreIds').length > 1) {
+		cacheUrl.searchParams.set(MOVIE_SEARCH_GENRE_MATCH_PARAM, MOVIE_SEARCH_GENRE_MATCH_VERSION);
+	}
 	/*
 		A cache entry stores the complete JSON response. When that response gains a
 		new field, an entry saved by the previous Worker cannot supply it. Including

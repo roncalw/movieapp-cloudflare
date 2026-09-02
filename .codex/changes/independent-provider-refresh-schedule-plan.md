@@ -1,5 +1,10 @@
 # Independent Provider Availability Refresh Plan
 
+> Historical design record: this file describes the August 5 implementation.
+> The current Tuesday/Friday schedule, change-only provider apply, production
+> measurements, and D1 cost expectations are documented in
+> [D1 Provider and Weekend Pipeline Cost Reduction](d1-provider-and-weekend-cost-reduction.md).
+
 > Implementation status: Implemented, tested, and deployed on August 5, 2026.
 > The first automatically scheduled independent provider cycle is Thursday,
 > August 6, 2026 at 3:00 PM Eastern and still requires first-run monitoring.

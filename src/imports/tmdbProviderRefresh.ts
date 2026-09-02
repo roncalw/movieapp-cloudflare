@@ -46,6 +46,11 @@ type TmdbProviderRefreshRow = {
 	tmdb_id: number;
 };
 
+type CurrentProviderRelationshipRow = {
+	tmdb_id: number;
+	provider_id: number;
+};
+
 type TmdbProviderRefreshOptions = {
 	trigger: ImportJobTrigger;
 	useLock?: boolean;
@@ -117,7 +122,6 @@ const TMDB_PROVIDER_DISCOVERY_MAX_ATTEMPTS = 10;
 const TMDB_PROVIDER_DISCOVERY_RETRY_DELAY_SECONDS = 10;
 const TMDB_PROVIDER_REFRESH_IDS_PER_QUEUE_MESSAGE = 25;
 const TMDB_PROVIDER_REFRESH_QUEUE_MESSAGES_PER_SEND_BATCH = 100;
-const TMDB_PROVIDER_REFRESH_D1_BATCH_MOVIES = 25;
 const TMDB_PROVIDER_REFRESH_TMDB_CONCURRENCY = 25;
 const TMDB_ENRICHMENT_QUEUE_NAME = "movieapp-tmdb-enrichment-queue";
 const TMDB_PROVIDER_DISCOVER_RETRY_OPTIONS: TmdbFetchRetryOptions = {
@@ -189,32 +193,99 @@ export function isTmdbProviderRefreshDiscoveryQueueMessage(
 	return "kind" in body && body.kind === "tmdb-provider-refresh-discovery";
 }
 
-function buildProviderRefreshStatements(
+async function getCurrentSubscriptionProviderIdsByMovie(
+	env: Env,
+	tmdbIds: number[],
+) {
+	const providerIdsByMovie = new Map<number, Set<number>>();
+
+	for (const tmdbId of tmdbIds) {
+		providerIdsByMovie.set(tmdbId, new Set());
+	}
+
+	if (tmdbIds.length === 0) {
+		return providerIdsByMovie;
+	}
+
+	const placeholders = tmdbIds.map(() => "?").join(", ");
+	const { results } = await env.DB.prepare(
+		`SELECT tmdb_id, provider_id
+		 FROM movie_watch_providers
+		 WHERE region = 'US'
+		   AND provider_id <> ?
+		   AND tmdb_id IN (${placeholders})`,
+	)
+		.bind(STREAMS_WITH_ADS_PROVIDER_ID, ...tmdbIds)
+		.all<CurrentProviderRelationshipRow>();
+
+	for (const row of results) {
+		providerIdsByMovie.get(row.tmdb_id)?.add(row.provider_id);
+	}
+
+	return providerIdsByMovie;
+}
+
+function buildProviderChangeStatements(
 	tmdbId: number,
-	providerIds: number[],
+	currentProviderIds: Set<number>,
+	nextProviderIds: number[],
 	env: Env,
 	loadRunId: string,
 ) {
 	const statements: D1PreparedStatement[] = [];
+	const { additions, removals } = getProviderRelationshipChanges(
+		currentProviderIds,
+		nextProviderIds,
+	);
 
-	for (const providerId of providerIds) {
+	for (const providerId of additions) {
 		statements.push(
 			env.DB.prepare(
-				`INSERT OR REPLACE INTO movie_watch_providers_staging (
+				`INSERT OR REPLACE INTO movie_watch_provider_changes_staging (
+					load_run_id,
 					tmdb_id,
 					provider_id,
 					region,
-					load_run_id,
-					is_full_refresh,
+					change_type,
 					staged_at,
-					promoted_at
+					applied_at
 				)
-				VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP, NULL)`,
-			).bind(tmdbId, providerId, "US", loadRunId),
+				VALUES (?, ?, ?, 'US', 'add', CURRENT_TIMESTAMP, NULL)`,
+			).bind(loadRunId, tmdbId, providerId),
+		);
+	}
+
+	for (const providerId of removals) {
+		statements.push(
+			env.DB.prepare(
+				`INSERT OR REPLACE INTO movie_watch_provider_changes_staging (
+					load_run_id,
+					tmdb_id,
+					provider_id,
+					region,
+					change_type,
+					staged_at,
+					applied_at
+				)
+				VALUES (?, ?, ?, 'US', 'remove', CURRENT_TIMESTAMP, NULL)`,
+			).bind(loadRunId, tmdbId, providerId),
 		);
 	}
 
 	return statements;
+}
+
+export function getProviderRelationshipChanges(
+	currentProviderIds: Iterable<number>,
+	nextProviderIds: Iterable<number>,
+) {
+	const current = new Set(currentProviderIds);
+	const next = new Set(nextProviderIds);
+
+	return {
+		additions: [...next].filter((providerId) => !current.has(providerId)),
+		removals: [...current].filter((providerId) => !next.has(providerId)),
+	};
 }
 
 function buildInitialDiscoveryCheckpoint(
@@ -386,17 +457,13 @@ async function saveDiscoveryCheckpoint(
 	const statements = candidateIds.map((tmdbId) => {
 		if (checkpoint.monetizationType === "ads") {
 			return env.DB.prepare(
-				`INSERT OR REPLACE INTO movie_watch_providers_staging (
+				`INSERT OR REPLACE INTO tmdb_us_ads_refresh_candidates (
 					tmdb_id,
-					provider_id,
-					region,
 					load_run_id,
-					is_full_refresh,
-					staged_at,
-					promoted_at
+					discovered_at
 				)
-				VALUES (?, ?, 'US', ?, 1, CURRENT_TIMESTAMP, NULL)`,
-			).bind(tmdbId, STREAMS_WITH_ADS_PROVIDER_ID, jobRunId);
+				VALUES (?, ?, CURRENT_TIMESTAMP)`,
+			).bind(tmdbId, jobRunId);
 		}
 
 		return env.DB.prepare(
@@ -435,19 +502,16 @@ async function countProviderRefreshCandidateRows(env: Env, jobRunId: string) {
 	return row?.candidateCount ?? 0;
 }
 
-async function countAdsMarkerRows(env: Env, jobRunId: string) {
+async function countAdsCandidateRows(env: Env, jobRunId: string) {
 	const row = await env.DB.prepare(
-		`SELECT COUNT(*) AS markerCount
-		 FROM movie_watch_providers_staging
-		 WHERE load_run_id = ?
-		   AND region = 'US'
-		   AND provider_id = ?
-		   AND is_full_refresh = 1`,
+		`SELECT COUNT(*) AS candidateCount
+		 FROM tmdb_us_ads_refresh_candidates
+		 WHERE load_run_id = ?`,
 	)
-		.bind(jobRunId, STREAMS_WITH_ADS_PROVIDER_ID)
-		.first<{ markerCount: number }>();
+		.bind(jobRunId)
+		.first<{ candidateCount: number }>();
 
-	return row?.markerCount ?? 0;
+	return row?.candidateCount ?? 0;
 }
 
 async function processDiscoveryChunk(
@@ -608,7 +672,7 @@ async function queueProviderRefreshCandidateRows(
 	discovery: TmdbProviderRefreshDiscoveryProgress,
 ) {
 	const rows = await getProviderRefreshCandidateRows(env, jobRunId);
-	const adsMarkerCount = await countAdsMarkerRows(env, jobRunId);
+	const adsCandidateCount = await countAdsCandidateRows(env, jobRunId);
 	let queueMessages: TmdbProviderRefreshQueueMessage[] = [];
 	let rowsQueued = 0;
 	let messagesQueued = 0;
@@ -625,29 +689,6 @@ async function queueProviderRefreshCandidateRows(
 
 		messagesQueued += queueMessages.length;
 		queueMessages = [];
-	}
-
-	if (adsMarkerCount > 0) {
-		/*
-			Ads markers are written while Discover pages are read, so they do not
-			have their own per-movie queue messages. This one idempotent accounting
-			record includes those staged rows in the parent job's final totals without
-			pretending that a second per-movie provider lookup occurred.
-		*/
-		await recordImportJobQueueMessageCompletion(env, {
-			jobRunId,
-			messageId: `${jobRunId}-ads-marker-summary`,
-			jobName: TMDB_PROVIDER_REFRESH_JOB_NAME,
-			queueName: TMDB_ENRICHMENT_QUEUE_NAME,
-			stats: {
-				processed: 0,
-				updated: 0,
-				errors: 0,
-				providerRowsInserted: adsMarkerCount,
-				tmdbIDNotFoundSkippedCount: 0,
-			},
-			lastError: null,
-		});
 	}
 
 	for (
@@ -688,6 +729,12 @@ async function queueProviderRefreshCandidateRows(
 	)
 		.bind(jobRunId)
 		.run();
+	await env.DB.prepare(
+		`DELETE FROM tmdb_us_ads_refresh_candidates
+		 WHERE load_run_id <> ?`,
+	)
+		.bind(jobRunId)
+		.run();
 
 	const adsDiscovery = summarizeDiscovery(discovery);
 	const flatrateDiscovery = discovery.flatrateDiscovery ?? {
@@ -703,7 +750,7 @@ async function queueProviderRefreshCandidateRows(
 		endDate,
 		candidateCount,
 		flatrateCandidateCount: candidateCount,
-		adsSupportedMovieCount: adsMarkerCount,
+		adsSupportedMovieCount: adsCandidateCount,
 		flatrateDiscovery,
 		adsDiscovery,
 		pagesRead: flatrateDiscovery.pagesRead + adsDiscovery.pagesRead,
@@ -727,7 +774,7 @@ async function queueProviderRefreshCandidateRows(
 	if (rows.length === 0) {
 		await finishImportJobRun(env, jobRunId, {
 			status: "complete",
-			providerRowsInserted: adsMarkerCount,
+			providerRowsInserted: 0,
 			result,
 		});
 	} else {
@@ -1167,7 +1214,6 @@ export async function processTmdbProviderRefreshRows(
 	let tmdbIDNotFoundSkippedCount = 0;
 	let lastError: string | null = null;
 	let pendingStatements: D1PreparedStatement[] = [];
-	let pendingStatementMovies = 0;
 	const activeJobRun = await getImportJobRunById(env, jobRunId);
 
 	if (
@@ -1190,16 +1236,6 @@ export async function processTmdbProviderRefreshRows(
 		};
 	}
 
-	async function flushStatements() {
-		if (pendingStatements.length === 0) {
-			return;
-		}
-
-		await env.DB.batch(pendingStatements);
-		pendingStatements = [];
-		pendingStatementMovies = 0;
-	}
-
 	logEvent("tmdb-provider-refresh-queue-message-start", {
 		trigger,
 		jobRunId,
@@ -1217,28 +1253,34 @@ export async function processTmdbProviderRefreshRows(
 			index,
 			index + TMDB_PROVIDER_REFRESH_TMDB_CONCURRENCY,
 		);
-		const providerResults = await Promise.all(
-			rowChunk.map(async (row) => {
-				try {
-					const watchProviders = await getTmdbMovieWatchProviders(
-						row.tmdb_id,
-						env,
-					);
-					return {
-						row,
-						providerIds:
-							getUsFlatrateProviderIdsFromWatchProviders(watchProviders),
-						error: null,
-					};
-				} catch (error) {
-					return {
-						row,
-						providerIds: null,
-						error,
-					};
-				}
-			}),
-		);
+		const [providerResults, currentProviderIdsByMovie] = await Promise.all([
+			Promise.all(
+				rowChunk.map(async (row) => {
+					try {
+						const watchProviders = await getTmdbMovieWatchProviders(
+							row.tmdb_id,
+							env,
+						);
+						return {
+							row,
+							providerIds:
+								getUsFlatrateProviderIdsFromWatchProviders(watchProviders),
+							error: null,
+						};
+					} catch (error) {
+						return {
+							row,
+							providerIds: null,
+							error,
+						};
+					}
+				}),
+			),
+			getCurrentSubscriptionProviderIdsByMovie(
+				env,
+				rowChunk.map((row) => row.tmdb_id),
+			),
+		]);
 		const retryableErrorResult = providerResults.find(
 			(result) =>
 				classifyProviderLookupOutcome(result.providerIds, result.error).kind ===
@@ -1246,8 +1288,6 @@ export async function processTmdbProviderRefreshRows(
 		);
 
 		if (retryableErrorResult?.error) {
-			await flushStatements();
-
 			lastError =
 				retryableErrorResult.error instanceof Error
 					? retryableErrorResult.error.message
@@ -1292,33 +1332,47 @@ export async function processTmdbProviderRefreshRows(
 			};
 		}
 
+		const chunkPlaceholders = rowChunk.map(() => "?").join(", ");
+		pendingStatements.push(
+			env.DB.prepare(
+				`DELETE FROM movie_watch_provider_changes_staging
+				 WHERE load_run_id = ?
+				   AND provider_id <> ?
+				   AND tmdb_id IN (${chunkPlaceholders})`,
+			).bind(
+				jobRunId,
+				STREAMS_WITH_ADS_PROVIDER_ID,
+				...rowChunk.map((row) => row.tmdb_id),
+			),
+		);
+
 		for (const result of providerResults) {
 			const outcome = classifyProviderLookupOutcome(
 				result.providerIds,
 				result.error,
 			);
+			const currentProviderIds =
+				currentProviderIdsByMovie.get(result.row.tmdb_id) ?? new Set<number>();
+			const nextProviderIds =
+				outcome.kind === "providers" ? outcome.providerIds : [];
+			const changeStatements = buildProviderChangeStatements(
+				result.row.tmdb_id,
+				currentProviderIds,
+				nextProviderIds,
+				env,
+				jobRunId,
+			);
 
-			if (outcome.kind === "providers") {
-				pendingStatements.push(
-					...buildProviderRefreshStatements(
-						result.row.tmdb_id,
-						outcome.providerIds,
-						env,
-						jobRunId,
-					),
-				);
-				pendingStatementMovies += 1;
-				updated += 1;
-				providerRowsInserted += outcome.providerIds.length;
+			pendingStatements.push(...changeStatements);
+			providerRowsInserted += changeStatements.length;
 
-				if (pendingStatementMovies > TMDB_PROVIDER_REFRESH_D1_BATCH_MOVIES) {
-					await flushStatements();
-				}
-			} else if (outcome.kind === "movie_unavailable") {
-				// A missing TMDB provider resource is an accepted result. The full
-				// refresh promotion rebuilds the live US provider table from this
-				// run, so inserting no provider rows removes any obsolete providers.
+			if (changeStatements.length > 0) {
 				updated += 1;
+			}
+
+			if (outcome.kind === "movie_unavailable") {
+				// This accepted empty result stages removals for every provider that
+				// the movie had in the last successfully applied provider snapshot.
 				tmdbIDNotFoundSkippedCount += 1;
 
 				logEvent("tmdb-provider-refresh-movie-unavailable", {
@@ -1355,7 +1409,6 @@ export async function processTmdbProviderRefreshRows(
 		dataStatements: pendingStatements,
 	});
 	pendingStatements = [];
-	pendingStatementMovies = 0;
 	await continueIndependentProviderAvailabilityCycle(env, jobRunId);
 
 	const endedAtMs = Date.now();

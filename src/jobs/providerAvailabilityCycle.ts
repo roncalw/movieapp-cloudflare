@@ -14,7 +14,13 @@
  */
 import { enqueueCacheWarmSearchJob } from "../cache/cacheWarmJob";
 import { CACHE_WARM_SEARCH_JOB_NAME } from "../cache/cacheWarmTypes";
-import { promotePendingMovieWatchProviders } from "../imports/movieRelationshipPromotions";
+import {
+	countUnappliedMovieWatchProviderChanges,
+	getProjectedMovieWatchProviderCounts,
+	preparePendingMovieWatchProviderChanges,
+	promotePendingMovieWatchProviders,
+	type ProviderAvailabilityCounts,
+} from "../imports/movieRelationshipPromotions";
 import { logEvent } from "../shared/logging";
 import type { Env } from "../shared/types";
 import { STREAMS_WITH_ADS_PROVIDER_ID } from "../shared/watchProviderAvailability";
@@ -43,13 +49,7 @@ const PROVIDER_AVAILABILITY_VALIDATION_LOCK_NAME =
 const PROVIDER_AVAILABILITY_VALIDATION_LOCK_MINUTES = 10;
 const PROVIDER_COUNT_DROP_THRESHOLD_PERCENT = 10;
 
-export type ProviderAvailabilityCounts = {
-	subscriptionRelationshipCount: number;
-	subscriptionMovieCount: number;
-	adsMovieCount: number;
-	totalAvailabilityRelationshipCount: number;
-	availabilityMovieCount: number;
-};
+export type { ProviderAvailabilityCounts } from "../imports/movieRelationshipPromotions";
 
 type ProviderCycleSource = {
 	providerRefreshJobRunId: string;
@@ -85,10 +85,7 @@ function isCompleteWithoutErrors(
 	);
 }
 
-async function getStagedProviderCounts(
-	env: Env,
-	providerRefreshJobRunId: string,
-) {
+async function getLiveProviderCounts(env: Env) {
 	const row = await env.DB.prepare(
 		`SELECT
 		   COUNT(CASE WHEN provider_id <> ? THEN 1 END) AS subscriptionRelationshipCount,
@@ -96,54 +93,40 @@ async function getStagedProviderCounts(
 		   COUNT(CASE WHEN provider_id = ? THEN 1 END) AS adsMovieCount,
 		   COUNT(*) AS totalAvailabilityRelationshipCount,
 		   COUNT(DISTINCT tmdb_id) AS availabilityMovieCount
-		 FROM movie_watch_providers_staging
-		 WHERE region = 'US'
-		   AND is_full_refresh = 1
-		   AND provider_id IS NOT NULL
-		   AND load_run_id = ?`,
+		 FROM movie_watch_providers
+		 WHERE region = 'US'`,
 	)
 		.bind(
 			STREAMS_WITH_ADS_PROVIDER_ID,
 			STREAMS_WITH_ADS_PROVIDER_ID,
 			STREAMS_WITH_ADS_PROVIDER_ID,
-			providerRefreshJobRunId,
 		)
 		.first<ProviderAvailabilityCounts>();
 
 	return normalizeCounts(row);
 }
 
-async function getLiveProviderCounts(
-	env: Env,
-	providerPromotionJobRunId?: string,
-) {
-	const promotionFilter = providerPromotionJobRunId
-		? " AND promotion_run_id = ?"
-		: "";
-	const statement = env.DB.prepare(
-		`SELECT
-		   COUNT(CASE WHEN provider_id <> ? THEN 1 END) AS subscriptionRelationshipCount,
-		   COUNT(DISTINCT CASE WHEN provider_id <> ? THEN tmdb_id END) AS subscriptionMovieCount,
-		   COUNT(CASE WHEN provider_id = ? THEN 1 END) AS adsMovieCount,
-		   COUNT(*) AS totalAvailabilityRelationshipCount,
-		   COUNT(DISTINCT tmdb_id) AS availabilityMovieCount
-		 FROM movie_watch_providers
-		 WHERE region = 'US'${promotionFilter}`,
-	);
-	const bound = providerPromotionJobRunId
-		? statement.bind(
-				STREAMS_WITH_ADS_PROVIDER_ID,
-				STREAMS_WITH_ADS_PROVIDER_ID,
-				STREAMS_WITH_ADS_PROVIDER_ID,
-				providerPromotionJobRunId,
-			)
-		: statement.bind(
-				STREAMS_WITH_ADS_PROVIDER_ID,
-				STREAMS_WITH_ADS_PROVIDER_ID,
-				STREAMS_WITH_ADS_PROVIDER_ID,
-			);
+function parseProviderAvailabilityCounts(
+	value: unknown,
+): ProviderAvailabilityCounts | null {
+	if (!value || typeof value !== "object") {
+		return null;
+	}
 
-	return normalizeCounts(await bound.first<ProviderAvailabilityCounts>());
+	const counts = value as Partial<ProviderAvailabilityCounts>;
+	const properties: Array<keyof ProviderAvailabilityCounts> = [
+		"subscriptionRelationshipCount",
+		"subscriptionMovieCount",
+		"adsMovieCount",
+		"totalAvailabilityRelationshipCount",
+		"availabilityMovieCount",
+	];
+
+	if (properties.some((property) => typeof counts[property] !== "number")) {
+		return null;
+	}
+
+	return counts as ProviderAvailabilityCounts;
 }
 
 function normalizeCounts(
@@ -315,27 +298,38 @@ async function validateProviderAvailabilityCycleUnlocked(
 		issues.push("Provider-triggered search cache warming did not complete without errors.");
 	}
 
-	let stagedCounts: ProviderAvailabilityCounts | null = null;
+	let expectedCounts: ProviderAvailabilityCounts | null = null;
 	let liveCounts: ProviderAvailabilityCounts | null = null;
+	let unappliedChangeCount: number | null = null;
 
 	if (providerPromotionRun) {
-		stagedCounts = await getStagedProviderCounts(
+		expectedCounts = parseProviderAvailabilityCounts(
+			parseResultJson(providerPromotionRun.result_json).projectedCounts,
+		);
+		liveCounts = await getLiveProviderCounts(env);
+		unappliedChangeCount = await countUnappliedMovieWatchProviderChanges(
 			env,
 			source.providerRefreshJobRunId,
 		);
-		liveCounts = await getLiveProviderCounts(
-			env,
-			providerPromotionRun.job_run_id,
-		);
 
-		for (const property of Object.keys(
-			stagedCounts,
-		) as Array<keyof ProviderAvailabilityCounts>) {
-			if (stagedCounts[property] !== liveCounts[property]) {
-				issues.push(
-					`Live ${property} is ${liveCounts[property]}, but the completed staging snapshot contains ${stagedCounts[property]}.`,
-				);
+		if (!expectedCounts) {
+			issues.push("Provider Apply did not record its expected final live counts.");
+		} else {
+			for (const property of Object.keys(
+				expectedCounts,
+			) as Array<keyof ProviderAvailabilityCounts>) {
+				if (expectedCounts[property] !== liveCounts[property]) {
+					issues.push(
+						`Live ${property} is ${liveCounts[property]}, but Provider Apply expected ${expectedCounts[property]}.`,
+					);
+				}
 			}
+		}
+
+		if (unappliedChangeCount > 0) {
+			issues.push(
+				`${unappliedChangeCount} provider relationship change(s) were not reflected in the live table.`,
+			);
 		}
 	}
 
@@ -348,8 +342,9 @@ async function validateProviderAvailabilityCycleUnlocked(
 		cacheWarmJobRunId: source.cacheWarmJobRunId,
 		issueCount: issues.length,
 		issues,
-		stagedCounts,
+		expectedCounts,
 		liveCounts,
+		unappliedChangeCount,
 		endedAt,
 	};
 
@@ -505,13 +500,20 @@ export async function continueIndependentProviderAvailabilityCycle(
 
 	try {
 		if (!promotionRun) {
-			const [currentCounts, stagedCounts] = await Promise.all([
+			await preparePendingMovieWatchProviderChanges(
+				env,
+				providerRefreshJobRunId,
+			);
+			const [currentCounts, projectedCounts] = await Promise.all([
 				getLiveProviderCounts(env),
-				getStagedProviderCounts(env, providerRefreshJobRunId),
+				getProjectedMovieWatchProviderCounts(
+					env,
+					providerRefreshJobRunId,
+				),
 			]);
 			const countIssues = getProviderAvailabilityCountIssues(
 				currentCounts,
-				stagedCounts,
+				projectedCounts,
 			);
 
 			if (countIssues.length > 0) {
@@ -524,6 +526,7 @@ export async function continueIndependentProviderAvailabilityCycle(
 				env,
 				trigger,
 				providerRefreshJobRunId,
+				projectedCounts,
 			);
 			promotionRun = await getImportJobRunById(env, promotion.jobRunId);
 		}

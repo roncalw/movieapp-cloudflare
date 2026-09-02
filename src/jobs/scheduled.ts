@@ -40,7 +40,7 @@ type JobPauseFlagName =
 
 const PROVIDER_REFRESH_TIME_ZONE = "America/New_York";
 const PROVIDER_REFRESH_LOCAL_HOUR = 15;
-const PROVIDER_REFRESH_LOCAL_WEEKDAYS = new Set(["Tue", "Thu", "Sat"]);
+const PROVIDER_REFRESH_LOCAL_WEEKDAYS = new Set(["Tue", "Fri"]);
 
 /**
  * Cloudflare evaluates Cron Triggers in UTC, while the provider refresh must

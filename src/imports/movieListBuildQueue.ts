@@ -548,21 +548,21 @@ export async function processMovieListBuildCleanupMessage(
 		message.stage === "imdb-cleanup"
 			? env.DB.prepare(
 					`DELETE FROM imdb_ratings_staging_by_run
-					 WHERE load_run_id <> ?
-					   AND load_run_id <> ?
-					   AND load_run_id NOT IN (
+					 WHERE load_run_id IN (
 					     SELECT job_run_id
 					     FROM import_job_runs
 					     WHERE job_name = ?
-					       AND status IN ('queued', 'running')
+					       AND status NOT IN ('queued', 'running')
+					       AND job_run_id <> ?
+					       AND job_run_id <> ?
 					   )
 					   AND (? IS NULL OR imdb_id >= ?)
 					   AND (? IS NULL OR imdb_id < ?)`,
 				)
 					.bind(
+						activeJobName,
 						message.selectedRunId,
 						message.previousAppliedRunId ?? message.selectedRunId,
-						activeJobName,
 						message.lowerImdbIdInclusive ?? null,
 						message.lowerImdbIdInclusive ?? null,
 						message.upperImdbIdExclusive ?? null,
@@ -570,21 +570,21 @@ export async function processMovieListBuildCleanupMessage(
 					)
 			: env.DB.prepare(
 					`DELETE FROM tmdb_movie_popularity_staging
-					 WHERE load_run_id <> ?
-					   AND load_run_id <> ?
-					   AND load_run_id NOT IN (
+					 WHERE load_run_id IN (
 					     SELECT job_run_id
 					     FROM import_job_runs
 					     WHERE job_name = ?
-					       AND status IN ('queued', 'running')
+					       AND status NOT IN ('queued', 'running')
+					       AND job_run_id <> ?
+					       AND job_run_id <> ?
 					   )
 					   AND tmdb_id > ?
 					   AND tmdb_id <= ?`,
 				)
 					.bind(
+						activeJobName,
 						message.selectedRunId,
 						message.previousAppliedRunId ?? message.selectedRunId,
-						activeJobName,
 						message.firstTmdbIdExclusive ?? 0,
 						message.lastTmdbIdInclusive ?? 0,
 					);

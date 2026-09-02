@@ -17,16 +17,112 @@ type PendingGenrePromotionCounts = {
 	pendingGenreCount: number;
 };
 
-type PendingProviderPromotionCounts = {
+export type PendingProviderPromotionCounts = {
 	pendingMovieCount: number;
-	pendingProviderCount: number;
+	providerRelationshipAdditionCount: number;
+	providerRelationshipRemovalCount: number;
 	pendingAvailabilityRelationshipCount: number;
-	adsSupportedMovieCount: number;
-	fullRefreshPendingMovieCount: number;
-	fullRefreshPendingProviderCount: number;
-	fullRefreshPendingAvailabilityRelationshipCount: number;
-	fullRefreshAdsSupportedMovieCount: number;
 };
+
+export type ProviderAvailabilityCounts = {
+	subscriptionRelationshipCount: number;
+	subscriptionMovieCount: number;
+	adsMovieCount: number;
+	totalAvailabilityRelationshipCount: number;
+	availabilityMovieCount: number;
+};
+
+function normalizeProviderAvailabilityCounts(
+	row: ProviderAvailabilityCounts | null,
+): ProviderAvailabilityCounts {
+	return {
+		subscriptionRelationshipCount:
+			row?.subscriptionRelationshipCount ?? 0,
+		subscriptionMovieCount: row?.subscriptionMovieCount ?? 0,
+		adsMovieCount: row?.adsMovieCount ?? 0,
+		totalAvailabilityRelationshipCount:
+			row?.totalAvailabilityRelationshipCount ?? 0,
+		availabilityMovieCount: row?.availabilityMovieCount ?? 0,
+	};
+}
+
+export async function getProjectedMovieWatchProviderCounts(
+	env: Env,
+	providerRefreshJobRunId: string,
+) {
+	const row = await env.DB.prepare(
+		`WITH projected AS (
+			SELECT live.tmdb_id, live.provider_id
+			FROM movie_watch_providers AS live
+			WHERE live.region = 'US'
+			  AND NOT EXISTS (
+				SELECT 1
+				FROM movie_watch_provider_changes_staging AS changes
+				WHERE changes.load_run_id = ?
+				  AND changes.change_type = 'remove'
+				  AND changes.tmdb_id = live.tmdb_id
+				  AND changes.provider_id = live.provider_id
+				  AND changes.region = live.region
+			  )
+			UNION ALL
+			SELECT changes.tmdb_id, changes.provider_id
+			FROM movie_watch_provider_changes_staging AS changes
+			WHERE changes.load_run_id = ?
+			  AND changes.region = 'US'
+			  AND changes.change_type = 'add'
+		)
+		SELECT
+			COUNT(CASE WHEN provider_id <> ? THEN 1 END) AS subscriptionRelationshipCount,
+			COUNT(DISTINCT CASE WHEN provider_id <> ? THEN tmdb_id END) AS subscriptionMovieCount,
+			COUNT(CASE WHEN provider_id = ? THEN 1 END) AS adsMovieCount,
+			COUNT(*) AS totalAvailabilityRelationshipCount,
+			COUNT(DISTINCT tmdb_id) AS availabilityMovieCount
+		FROM projected`,
+	)
+		.bind(
+			providerRefreshJobRunId,
+			providerRefreshJobRunId,
+			STREAMS_WITH_ADS_PROVIDER_ID,
+			STREAMS_WITH_ADS_PROVIDER_ID,
+			STREAMS_WITH_ADS_PROVIDER_ID,
+		)
+		.first<ProviderAvailabilityCounts>();
+
+	return normalizeProviderAvailabilityCounts(row);
+}
+
+export async function countUnappliedMovieWatchProviderChanges(
+	env: Env,
+	providerRefreshJobRunId: string,
+) {
+	const row = await env.DB.prepare(
+		`SELECT COUNT(*) AS mismatchCount
+		 FROM movie_watch_provider_changes_staging AS changes
+		 WHERE changes.load_run_id = ?
+		   AND changes.region = 'US'
+		   AND (
+			(changes.change_type = 'add' AND NOT EXISTS (
+				SELECT 1
+				FROM movie_watch_providers AS live
+				WHERE live.tmdb_id = changes.tmdb_id
+				  AND live.provider_id = changes.provider_id
+				  AND live.region = changes.region
+			))
+			OR
+			(changes.change_type = 'remove' AND EXISTS (
+				SELECT 1
+				FROM movie_watch_providers AS live
+				WHERE live.tmdb_id = changes.tmdb_id
+				  AND live.provider_id = changes.provider_id
+				  AND live.region = changes.region
+			))
+		   )`,
+	)
+		.bind(providerRefreshJobRunId)
+		.first<{ mismatchCount: number }>();
+
+	return row?.mismatchCount ?? 0;
+}
 
 async function getPendingGenrePromotionCounts(
 	env: Env,
@@ -52,15 +148,11 @@ async function getPendingProviderPromotionCounts(
 	const row = await env.DB.prepare(
 		`SELECT
 		    COUNT(DISTINCT tmdb_id) AS pendingMovieCount,
-		    COUNT(CASE WHEN provider_id <> ${STREAMS_WITH_ADS_PROVIDER_ID} THEN provider_id END) AS pendingProviderCount,
-		    COUNT(provider_id) AS pendingAvailabilityRelationshipCount,
-		    COUNT(CASE WHEN provider_id = ${STREAMS_WITH_ADS_PROVIDER_ID} THEN 1 END) AS adsSupportedMovieCount,
-		    COUNT(DISTINCT CASE WHEN is_full_refresh = 1 THEN tmdb_id END) AS fullRefreshPendingMovieCount,
-		    COUNT(CASE WHEN is_full_refresh = 1 AND provider_id <> ${STREAMS_WITH_ADS_PROVIDER_ID} THEN provider_id END) AS fullRefreshPendingProviderCount,
-		    COUNT(CASE WHEN is_full_refresh = 1 THEN provider_id END) AS fullRefreshPendingAvailabilityRelationshipCount,
-		    COUNT(CASE WHEN is_full_refresh = 1 AND provider_id = ${STREAMS_WITH_ADS_PROVIDER_ID} THEN 1 END) AS fullRefreshAdsSupportedMovieCount
-		 FROM movie_watch_providers_staging
-		 WHERE promoted_at IS NULL
+		    COUNT(CASE WHEN change_type = 'add' THEN 1 END) AS providerRelationshipAdditionCount,
+		    COUNT(CASE WHEN change_type = 'remove' THEN 1 END) AS providerRelationshipRemovalCount,
+		    COUNT(*) AS pendingAvailabilityRelationshipCount
+		 FROM movie_watch_provider_changes_staging
+		 WHERE applied_at IS NULL
 		   AND region = 'US'
 		   AND load_run_id = ?`,
 	)
@@ -69,17 +161,133 @@ async function getPendingProviderPromotionCounts(
 
 	return {
 		pendingMovieCount: row?.pendingMovieCount ?? 0,
-		pendingProviderCount: row?.pendingProviderCount ?? 0,
+		providerRelationshipAdditionCount:
+			row?.providerRelationshipAdditionCount ?? 0,
+		providerRelationshipRemovalCount:
+			row?.providerRelationshipRemovalCount ?? 0,
 		pendingAvailabilityRelationshipCount:
 			row?.pendingAvailabilityRelationshipCount ?? 0,
-		adsSupportedMovieCount: row?.adsSupportedMovieCount ?? 0,
-		fullRefreshPendingMovieCount: row?.fullRefreshPendingMovieCount ?? 0,
-		fullRefreshPendingProviderCount: row?.fullRefreshPendingProviderCount ?? 0,
-		fullRefreshPendingAvailabilityRelationshipCount:
-			row?.fullRefreshPendingAvailabilityRelationshipCount ?? 0,
-		fullRefreshAdsSupportedMovieCount:
-			row?.fullRefreshAdsSupportedMovieCount ?? 0,
 	};
+}
+
+/**
+ * Completes the change list after every per-movie TMDB lookup succeeded.
+ *
+ * Per-movie queue messages compare providers for movies in the new flatrate
+ * candidate set. This final step also covers movies that disappeared from that
+ * candidate set entirely, plus the ad-supported candidate set that TMDB
+ * Discover supplies without per-movie requests.
+ */
+export async function preparePendingMovieWatchProviderChanges(
+	env: Env,
+	providerRefreshJobRunId: string,
+) {
+	await env.DB.batch([
+		env.DB.prepare(
+			`DELETE FROM movie_watch_provider_changes_staging
+			 WHERE load_run_id = ?
+			   AND provider_id = ?`,
+		).bind(providerRefreshJobRunId, STREAMS_WITH_ADS_PROVIDER_ID),
+		env.DB.prepare(
+			`INSERT OR REPLACE INTO movie_watch_provider_changes_staging (
+				load_run_id,
+				tmdb_id,
+				provider_id,
+				region,
+				change_type,
+				staged_at,
+				applied_at
+			)
+			SELECT
+				?,
+				live.tmdb_id,
+				live.provider_id,
+				live.region,
+				'remove',
+				CURRENT_TIMESTAMP,
+				NULL
+			FROM movie_watch_providers AS live
+			WHERE live.region = 'US'
+			  AND live.provider_id <> ?
+			  AND NOT EXISTS (
+				SELECT 1
+				FROM tmdb_us_flatrate_movies_staging AS candidate
+				WHERE candidate.load_run_id = ?
+				  AND candidate.tmdb_id = live.tmdb_id
+			  )`,
+		).bind(
+			providerRefreshJobRunId,
+			STREAMS_WITH_ADS_PROVIDER_ID,
+			providerRefreshJobRunId,
+		),
+		env.DB.prepare(
+			`INSERT OR REPLACE INTO movie_watch_provider_changes_staging (
+				load_run_id,
+				tmdb_id,
+				provider_id,
+				region,
+				change_type,
+				staged_at,
+				applied_at
+			)
+			SELECT
+				?,
+				candidate.tmdb_id,
+				?,
+				'US',
+				'add',
+				CURRENT_TIMESTAMP,
+				NULL
+			FROM tmdb_us_ads_refresh_candidates AS candidate
+			WHERE candidate.load_run_id = ?
+			  AND NOT EXISTS (
+				SELECT 1
+				FROM movie_watch_providers AS live
+				WHERE live.tmdb_id = candidate.tmdb_id
+				  AND live.provider_id = ?
+				  AND live.region = 'US'
+			  )`,
+		).bind(
+			providerRefreshJobRunId,
+			STREAMS_WITH_ADS_PROVIDER_ID,
+			providerRefreshJobRunId,
+			STREAMS_WITH_ADS_PROVIDER_ID,
+		),
+		env.DB.prepare(
+			`INSERT OR REPLACE INTO movie_watch_provider_changes_staging (
+				load_run_id,
+				tmdb_id,
+				provider_id,
+				region,
+				change_type,
+				staged_at,
+				applied_at
+			)
+			SELECT
+				?,
+				live.tmdb_id,
+				live.provider_id,
+				live.region,
+				'remove',
+				CURRENT_TIMESTAMP,
+				NULL
+			FROM movie_watch_providers AS live
+			WHERE live.region = 'US'
+			  AND live.provider_id = ?
+			  AND NOT EXISTS (
+				SELECT 1
+				FROM tmdb_us_ads_refresh_candidates AS candidate
+				WHERE candidate.load_run_id = ?
+				  AND candidate.tmdb_id = live.tmdb_id
+			  )`,
+		).bind(
+			providerRefreshJobRunId,
+			STREAMS_WITH_ADS_PROVIDER_ID,
+			providerRefreshJobRunId,
+		),
+	]);
+
+	return getPendingProviderPromotionCounts(env, providerRefreshJobRunId);
 }
 
 export async function promotePendingMovieGenres(
@@ -175,6 +383,7 @@ export async function promotePendingMovieWatchProviders(
 	env: Env,
 	trigger: ImportJobTrigger,
 	providerRefreshJobRunId: string,
+	expectedLiveCounts?: ProviderAvailabilityCounts,
 ) {
 	const startedAtMs = Date.now();
 	const jobRunId = createImportJobRunId(
@@ -207,19 +416,31 @@ export async function promotePendingMovieWatchProviders(
 			);
 		}
 
-		const counts = await getPendingProviderPromotionCounts(
-			env,
-			providerRefreshJobRunId,
-		);
+		const counts = expectedLiveCounts
+			? await getPendingProviderPromotionCounts(env, providerRefreshJobRunId)
+			: await preparePendingMovieWatchProviderChanges(
+					env,
+					providerRefreshJobRunId,
+				);
+		const projectedCounts =
+			expectedLiveCounts ??
+			(await getProjectedMovieWatchProviderCounts(
+				env,
+				providerRefreshJobRunId,
+			));
 
-		if (counts.fullRefreshPendingMovieCount > 0) {
-			await env.DB.batch([
-				env.DB.prepare(
-					`DELETE FROM movie_watch_providers
-					 WHERE region = 'US'`,
-				),
-				env.DB.prepare(
-					`INSERT OR REPLACE INTO movie_watch_providers (
+		await env.DB.batch([
+			env.DB.prepare(
+				`DELETE FROM movie_watch_providers
+				 WHERE (tmdb_id, provider_id, region) IN (
+					SELECT tmdb_id, provider_id, region
+					FROM movie_watch_provider_changes_staging
+					WHERE load_run_id = ?
+					  AND change_type = 'remove'
+				 )`,
+			).bind(providerRefreshJobRunId),
+			env.DB.prepare(
+				`INSERT OR IGNORE INTO movie_watch_providers (
 						tmdb_id,
 						provider_id,
 						region,
@@ -232,38 +453,30 @@ export async function promotePendingMovieWatchProviders(
 						region,
 						?,
 						CURRENT_TIMESTAMP
-						FROM movie_watch_providers_staging
-						WHERE promoted_at IS NULL
-						  AND region = 'US'
-						  AND is_full_refresh = 1
-						  AND load_run_id = ?
-						  AND provider_id IS NOT NULL`,
-					).bind(jobRunId, providerRefreshJobRunId),
-					env.DB.prepare(
-						`UPDATE movie_watch_providers_staging
-						 SET promoted_at = CURRENT_TIMESTAMP
-						 WHERE promoted_at IS NULL
-						   AND region = 'US'
-						   AND is_full_refresh = 1
-						   AND load_run_id = ?`,
-					).bind(providerRefreshJobRunId),
-					env.DB.prepare(
-						`DELETE FROM movie_watch_providers_staging
-						 WHERE region = 'US'
-						   AND is_full_refresh = 1
-						   AND load_run_id <> ?`,
-					).bind(providerRefreshJobRunId),
-				]);
-		} else {
-			throw new Error(
-				`Cannot apply watch providers because ${providerRefreshJobRunId} has no pending full-refresh provider rows.`,
-			);
-		}
+					FROM movie_watch_provider_changes_staging
+					WHERE applied_at IS NULL
+					  AND region = 'US'
+					  AND change_type = 'add'
+					  AND load_run_id = ?`,
+			).bind(jobRunId, providerRefreshJobRunId),
+			env.DB.prepare(
+				`UPDATE movie_watch_provider_changes_staging
+				 SET applied_at = CURRENT_TIMESTAMP
+				 WHERE applied_at IS NULL
+				   AND region = 'US'
+				   AND load_run_id = ?`,
+			).bind(providerRefreshJobRunId),
+			env.DB.prepare(
+				`DELETE FROM movie_watch_provider_changes_staging
+				 WHERE load_run_id <> ?`,
+			).bind(providerRefreshJobRunId),
+		]);
 
 		const result = {
 			jobRunId,
 			providerRefreshJobRunId,
 			...counts,
+			projectedCounts,
 			durationMs: Date.now() - startedAtMs,
 		};
 

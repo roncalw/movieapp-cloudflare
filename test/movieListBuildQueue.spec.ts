@@ -4,12 +4,14 @@ import {
 	buildMovieListPopularityRangeMessages,
 	enqueueMovieListPopularityQueueWork,
 	finalizeMovieListBuildQueuePhase,
+	processMovieListBuildCleanupMessage,
 	processMovieListPopularitySyncMessage,
 } from "../src/imports/movieListBuildQueue";
 import type { ImportJobRunRow } from "../src/jobs/importJobRuns";
 import { handleQueue } from "../src/jobs/queueHandler";
 import type {
 	Env,
+	MovieListBuildCleanupQueueMessage,
 	MovieListBuildFinalizeQueueMessage,
 	MovieListBuildQueueContext,
 	MovieListPopularitySyncQueueMessage,
@@ -118,6 +120,84 @@ describe("queued Movie List popularity synchronization", () => {
 			upperImdbIdExclusive: null,
 		});
 	});
+
+	it.each([
+		{
+			stage: "imdb-cleanup" as const,
+			expectedTable: "imdb_ratings_staging_by_run",
+			expectedJobName: "imdb-ratings",
+			range: {
+				lowerImdbIdInclusive: "tt100",
+				upperImdbIdExclusive: "tt101",
+			},
+		},
+		{
+			stage: "popularity-cleanup" as const,
+			expectedTable: "tmdb_movie_popularity_staging",
+			expectedJobName: "tmdb-popularity-refresh",
+			range: {
+				firstTmdbIdExclusive: 10_000,
+				lastTmdbIdInclusive: 20_000,
+			},
+		},
+	])(
+		"selects stale $stage runs before applying the primary-key range",
+		async ({ stage, expectedTable, expectedJobName, range }) => {
+			const batchStatements: Array<{ sql: string; bindings: unknown[] }> = [];
+			const env = {
+				DB: {
+					prepare(sql: string) {
+						return {
+							sql,
+							bindings: [] as unknown[],
+							bind(...bindings: unknown[]) {
+								this.bindings = bindings;
+								return this;
+							},
+							async first() {
+								return buildActiveMovieListRun();
+							},
+						};
+					},
+					async batch(statements: Array<{ sql: string; bindings: unknown[] }>) {
+						batchStatements.push(...statements);
+						return [
+							{ meta: { changes: 25 } },
+							{ meta: { changes: 1 } },
+							{ meta: { changes: 1 } },
+							{ meta: { changes: 1 } },
+						];
+					},
+				},
+			} as unknown as Env;
+			const message: MovieListBuildCleanupQueueMessage = {
+				kind: "movie-list-build-cleanup",
+				jobRunId: "movie-list-build-cron-current",
+				messageId: `movie-list-build-cron-current-${stage}-range`,
+				lockOwner: "cron-lock-owner",
+				stage,
+				selectedRunId: `${expectedJobName}-cron-current`,
+				previousAppliedRunId: `${expectedJobName}-cron-previous`,
+				...range,
+			};
+
+			const result = await processMovieListBuildCleanupMessage(env, message);
+
+			expect(result).toEqual({ deletedRows: 25, completionRecorded: true });
+			const cleanup = batchStatements[0];
+			expect(cleanup.sql).toContain(`DELETE FROM ${expectedTable}`);
+			expect(cleanup.sql).toContain("WHERE load_run_id IN");
+			expect(cleanup.sql).toContain(
+				"status NOT IN ('queued', 'running')",
+			);
+			expect(cleanup.sql).toContain("AND job_run_id <> ?");
+			expect(cleanup.bindings.slice(0, 3)).toEqual([
+				expectedJobName,
+				`${expectedJobName}-cron-current`,
+				`${expectedJobName}-cron-previous`,
+			]);
+		},
+	);
 
 	it("adds a completion sentinel before sending popularity ranges", async () => {
 		const prepared: Array<{ sql: string; bindings: unknown[] }> = [];
